@@ -1,0 +1,192 @@
+# NOTICE
+
+Third-party material in this repository, and how each claim was checked.
+map144 is released under the GNU General Public License, version 3
+(GPL-3.0). The license text is in [LICENSE](LICENSE).
+
+Labels used below:
+
+- **Verified in this repository** — read from a file in this tree.
+- **Verified against upstream** — compared with a public upstream tree on
+  2026-11-10. Those trees are not vendored here except where a file says so.
+- **Inferred** — a conclusion beyond the text that was read.
+
+## Project license text
+
+**Verified against upstream.** [LICENSE](LICENSE) is the unmodified
+`https://www.gnu.org/licenses/gpl-3.0.txt` retrieved 2026-11-10
+(35149 bytes, SHA-256
+`3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`).
+The gnu.org response `Content-Length` was 35149 and `Last-Modified` was
+Sat, 30 Sep 2017 07:16:26 GMT.
+
+## WSJT-X, MSK144, and MAP65
+
+Upstream project: <https://github.com/WSJTX/wsjtx>
+
+### Decoder ports in this repository
+
+**Verified in this repository.** The Python decoder describes itself as a
+port of WSJT-X MSK144 routines:
+
+- `map144_app/msk144_spd.py` opens with "Python port of WSJT-X msk144spd /
+  msk144sync coherent frame-averaging decoder" and names `msk144spd.f90`,
+  `msk144sync.f90`, and `msk144_freq_search.f90`.
+- `map144_app/msk144_decode.py` names `msk144decodeframe.f90`,
+  `bpdecode128_90.f90`, `ldpc_128_90_reordered_parity.f90`,
+  `chkcrc13a.f90`, `crc13.cpp`, and `packjt77.f90`. Its LDPC matrix comment
+  says the table was "Translated directly from
+  ldpc_128_90_reordered_parity.f90".
+- `map144_app/sq_det.py` opens with "WSJT-X sq_det formula for MSK144,
+  ported from msk144spd.f90 lines 23-138."
+
+`msk144_decode.py` and `msk144_spd.py` have no copyright or SPDX header.
+`sq_det.py` carries "Copyright (C) 2026 Jeff Millar, WA1HCO" and
+`SPDX-License-Identifier: GPL-3.0-or-later` together with the port statement.
+
+`docs/notes/2026-05-15_wsjtx_sq_det_port.md` says three `msk144spd.f90`
+detection choices (rectangular window, max of the two tones, and the
+threshold) were brought into `map144_app/processing.py` and
+`map144_app/blocks/detector_block.py`. That note is a design write-up.
+Those Python files were not diffed against the Fortran for this notice.
+
+**Verified against upstream** WSJT-X `master` on 2026-11-10:
+
+- `README.md` says "Licensed under the GNU General Public License v3.0 —
+  see COPYING" and lists WSJT-X, MAP65, and QMAP under the GNU General
+  Public License.
+- `widgets/about.cpp` says WSJT-X is "licensed under the terms of Version 3
+  of the GNU General Public License (GPL)" and links to
+  `https://www.gnu.org/licenses/gpl-3.0.txt`. The copyright line names
+  Joe Taylor, K1JT; Bill Somerville, G4WJS; Steve Franke, K9AN; Nico
+  Palermo, IV3NWV; Uwe Risse, DG2YCB; Brian Moran, N9ADG; Roger Rehr, W3SZ;
+  John Nelson, G4KLA; Charlie Suckling, DL3WDG; and Terrell Deppe, KJ5HST.
+  That dialog and the README do not add "or any later version". This was
+  not an exhaustive read of every WSJT-X source file.
+- `AUTHORS` names "Joe Taylor, K1JT" and points at the About dialog for
+  other contributions.
+- `map65/about.cpp` credits "Joe Taylor, K1JT, and the WSJT Development
+  Group". The source string spells the middle word "Develolpment".
+
+The QEX PDF in this repository (below) bylines the MSK144 article as
+Steven J. Franke, K9AN and Joseph H. Taylor, K1JT. The WSJT-X About dialog
+uses "Joe Taylor, K1JT" and "Steve Franke, K9AN".
+
+**Inferred.** The header comment "Copyright the WSJT Development Team and
+the original authors" on the Fortran extracts is a collective credit for
+that group. It is not a line copied from the upstream copies of those
+files: those copies have no per-file copyright line. Which person holds
+copyright in each extract is not stated in the extract.
+
+### Fortran files in `fortran_bp_test/`
+
+**Verified against upstream** on 2026-11-10. After normalizing newlines,
+these files match WSJT-X `master`. A derivation header was added here.
+The code body was not otherwise changed.
+
+| File in this repository | Upstream path |
+| --- | --- |
+| `fortran_bp_test/bpdecode128_90.f90` | `lib/bpdecode128_90.f90` |
+| `fortran_bp_test/chkcrc13a.f90` | `lib/ft8/chkcrc13a.f90` |
+| `fortran_bp_test/crc.f90` | `lib/crc.f90` |
+| `fortran_bp_test/crc13.cpp` | `lib/crc13.cpp` |
+| `fortran_bp_test/ldpc_128_90_reordered_parity.f90` | `lib/ldpc_128_90_reordered_parity.f90` |
+| `fortran_bp_test/platanh.f90` | `lib/platanh.f90` |
+
+**Verified by reading both files.** `fortran_bp_test/mf_test.f90` is a
+local stdin/stdout harness. Its phase correction, half-sine matched
+filter, sync-word check, soft-bit normalization, and LLR scaling follow
+`lib/msk144decodeframe.f90`. It is not a verbatim extract: it does not
+call `unpack77`.
+
+**Verified in this repository.** `fortran_bp_test/bp_test.f90` describes
+itself as a standalone test wrapper around `bpdecode128_90`. It is a
+local harness, not an upstream extract, and has no WSJT-X copyright banner.
+
+### MAP65
+
+**Verified in this repository.** `map144_app/map65_export.py` builds
+Linrad timf2 UDP packets for MAP65. Its copyright header is Jeff Millar,
+WA1HCO, with the GPL-3.0-or-later boilerplate. The module docstring says
+the 24-byte header layout was checked against Linrad `NET_RX_STRUCT`, and
+that the UDP framing MAP65 uses for stream continuity is best confirmed
+against Linrad/MAP65 C source. No MAP65 or Linrad source tree is in this
+repository.
+
+**Inferred.** `map65_export.py` implements that packet format independently
+rather than by copying MAP65 decoder source. MAP65 as a program is part of
+the WSJT-X project and is under GPL-3.0 as stated in the WSJT-X README
+(verified against upstream, above).
+
+`map144_app/router/` can send a wideband TIMF2 stream toward MAP65 or QMAP
+(`map144_app/router/__init__.py`). That package's copyright header is Jeff
+Millar, WA1HCO. It was not compared with QMAP source.
+
+## WDSP noise blanker (Warren Pratt, NR0V)
+
+**Verified in this repository.** `vendor/wdsp/nob.c` and `vendor/wdsp/nob.h`
+carry this grant:
+
+> Copyright (C) 2013, 2014 Warren Pratt, NR0V
+>
+> ... either version 2 of the License, or (at your option) any later version.
+
+`vendor/wdsp/SOURCE.md` records the provenance as Thetis,
+<https://github.com/TAPR/OpenHPSDR-Thetis>, commit
+`619b13f3d57b4e2261974db859d6dcf14b455214`, directory
+`Project Files/Source/wdsp/`.
+
+**Verified against upstream** on 2026-11-10. `nob.c` and `nob.h` in this
+repository are byte-identical to those two files at that commit.
+
+**Verified in this repository.** `vendor/wdsp/comm.h`, `nob_shim.c`, and
+`Makefile` describe themselves as MAP144 code, not upstream WDSP.
+`comm.h` and `nob_shim.c` have no separate copyright line. Their headers
+were not rewritten here.
+
+GPL-2.0-or-later can be combined with GPL-3.0. `nob.c` and `nob.h` stay
+under their own header.
+
+## QEX article PDF
+
+**Verified in this repository.** `docs/FrankeTaylor.pdf` is 7 pages. PDF
+metadata: CreationDate `D:20170809094937-04'00'`, Creator Adobe InDesign
+CS6. Page 1 is the running header "QEX September/October 2017", byline
+"Steven J. Franke, K9AN" and "Joseph H. Taylor, K1JT", title "The MSK144
+Protocol for Meteor-Scatter Communication". The extracted text has no
+copyright line, no license, and no redistribution grant.
+`docs/detection_baseline.md` cites the same article as "QEX 2017, Franke &
+Taylor, *The MSK144 Protocol for Meteor-Scatter Communication*".
+
+Redistribution rights for this PDF are **unverified**. Nothing in the
+extracted text grants the right to ship it with this repository.
+
+## Removed file
+
+**Verified in this repository before removal.** `FlexQMAP2.py` was a root
+script. Its header said it was derived from `qmap_flex.py` by Thomas S.
+Knutsen, LA3PNA, and "Private use only. Not licensed for redistribution."
+No other file imported or launched it. The router package has its own
+MAP65/QMAP TIMF2 path. The script was deleted so this GPL-3.0 tree would
+not ship a file that forbids redistribution.
+
+`docs/notes/flex_pan_fc_investigation.md` is a 2026-05-12 investigation
+note. One sentence mentions a "FlexQMAP bridge". It was left as history.
+`docs/figures/burst_freq_afc_corpus/map144.code-workspace` points at an
+external `FlexQMAP` directory, not at `FlexQMAP2.py`.
+
+## Headers on map144's own Python files
+
+**Verified in this repository.** Python files whose first 30 lines contain
+a copyright notice name Jeff Millar, WA1HCO. After `FlexQMAP2.py` was
+removed, every such header grants GPL-3.0-or-later, written as the FSF
+"any later version" boilerplate (92 files), `SPDX-License-Identifier:
+GPL-3.0-or-later` (24 files), or a "Licensed under GPL-3.0-or-later" line
+(32 files). Those headers were not edited.
+
+The repository [LICENSE](LICENSE) is GPL-3.0, the version-3 text, with no
+project-level "or any later version" grant. Whether the per-file grants
+should stay "or later" is unresolved. That question is sharper for a file
+that is also a WSJT-X port (`sq_det.py`), because the WSJT-X README and
+About dialog checked above name version 3 and do not say "or any later
+version".

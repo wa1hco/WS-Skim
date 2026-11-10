@@ -1,3 +1,13 @@
+/* Derived from WSJT-X lib/crc13.cpp (https://github.com/WSJTX/wsjtx).
+ * Copyright the WSJT Development Team and the original authors.
+ * Licensed under the GNU General Public License, version 3 (GPL-3.0).
+ * https://www.gnu.org/licenses/gpl-3.0.txt
+ *
+ * Checked 2026-11-10 against WSJT-X master: the code matches lib/crc13.cpp
+ * aside from newline convention. That upstream file has no per-file
+ * copyright line, so no individual author is named here. See NOTICE.
+ */
+
 #include <boost/crc.hpp>
 #include <boost/config.hpp>
 

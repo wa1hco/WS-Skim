@@ -59,7 +59,8 @@ less soak testing.
 
 ## License
 
-GNU General Public License v3 — see [LICENSE](LICENSE) or
-<https://www.gnu.org/licenses/gpl-3.0.html>.
+map144 is released under the GNU General Public License, version 3
+(GPL-3.0). The license text is [LICENSE](LICENSE). Third-party
+copyrights and provenance are in [NOTICE](NOTICE).
 
 Copyright © 2026 Jeff Millar, WA1HCO \<wa1hco@gmail.com\>
