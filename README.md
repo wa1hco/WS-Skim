@@ -1,65 +1,120 @@
-# map144 — MSK144 Meteor Scatter Decoder
+# ws-skimmer
 
-map144 is a real-time MSK144 meteor scatter decoder for amateur radio. It monitors
-the MSK144 calling frequency and ±20 kHz either side, detects signals and decodes
-them using the `jt9` engine from [WSJT-X](https://wsjt.sourceforge.io/).
+Wideband weak-signal skimmer for amateur radio. Today it is a working
+MSK144 meteor-scatter decoder (formerly map144). It is being extended
+with FT8/FT4 decoding and a WSJT-X-style UDP spot feed to WIMS, the
+planned "WS HUB" console. It is part of the wa1hco WS series.
 
-Decoded contacts are reported to [PSKReporter](https://pskreporter.info),
-[GridTracker](https://gridtracker.org), N1MM Logger+, and DX cluster nodes via
-the standard WSJT-X UDP protocol.
+## Install
 
-## Install / run by platform
+Windows and Linux are supported. There is no macOS installer yet.
 
-| Platform | Guide | Install | Run |
-|----------|--------|---------|-----|
-| **Linux** (primary) | **[README-Linux.md](README-Linux.md)** | `./install.sh` | `./run.sh` |
-| **Windows** | **[README-Windows.md](README-Windows.md)** | `.\install.ps1` | `.\run.bat` |
+There is no ws-skimmer release yet. The
+[Releases](https://github.com/wa1hco/ws-skimmer/releases) page currently
+has only the older map144 prerelease. A ws-skimmer test prerelease is
+planned. When it appears, download the Windows or Linux installer from
+that page and run the file (on Windows, double-click `install.ps1` or
+choose Run with PowerShell; on Linux, run `install.sh`). Start the app
+with the launcher the install provides. The test prerelease is intended
+to place a desktop icon, plus a Start-menu entry on Windows.
 
-Linux is the best-tested path (Ubuntu 22.04 / 24.04). Windows works but has had
-less soak testing.
+Until then, if you already have a copy of the repository, run
+`install.ps1` on Windows or `install.sh` on Linux, then start the app
+with `run.bat` or `run.sh`.
 
-## Features
+You will need [WSJT-X](https://wsjt.sourceforge.io/) (it provides the
+`jt9` decoder) and Python 3.10 or newer. On Windows, use the installer
+from [python.org](https://www.python.org/downloads/). Linux is the
+best-tested path (Ubuntu 22.04 / 24.04); Windows works but has had
+less soak testing. Radio source and sample rate are chosen in the app
+under the **Source** menu. Reporting is set up under **View → Reporting**.
 
-- **48-channel polyphase channelizer** — resolves ±24 kHz into 1 kHz-spaced channels
-- **Paired-tone detection** — identifies MSK144 bursts by their squared-domain signature
-- **Coincidence gate** — suppresses broadband noise events (lightning, static crashes)
-- **Noise blanker** — removes impulsive interference before channelization
-- **Live spectrogram** — accumulated and real-time IQ spectrograms with colour scale
-- **Detection heatmap** — SNR history across all 48 channels with decode markers
-- **Reporting** — PSKReporter (IPFIX UDP), WSJT-X UDP (GridTracker / N1MM / JTAlert), DX cluster (telnet)
-- **WAV playback** — replay saved IQ files from the **Source** menu for testing and development
+## Status
 
-## Supported Radio Sources
+### What works today
 
-| Source                  | Interface                          | Notes |
-| ----------------------- | ---------------------------------- | ----- |
-| FlexRadio 6000 series   | DAXIQ via TCP/UDP (SmartSDR)       | Linux + Windows |
-| USRP (Ettus Research)   | UHD Python API (`python3-uhd`)     | Linux (system UHD) |
-| Airspy HF+              | libairspyhf (ctypes)               | Linux primarily |
-| RTL-SDR (NooElec NESDR) | librtlsdr (ctypes)                 | Linux primarily |
-| IQ WAV file             | stereo float32 WAV, left=I right=Q | Linux + Windows |
+- Real-time MSK144 detection and decoding around the calling frequency
+  (±20 kHz) on 48 kHz IQ, with a 48-channel polyphase channelizer,
+  paired-tone detection, a coincidence gate, an optional noise
+  blanker, and a GUI (live spectrogram, detection heatmap, decode
+  panel). A 15-second IQ window is passed to the decoder when a
+  channel exceeds the threshold. Saved IQ files can be replayed from
+  the **Source** menu.
+- Reporting of decodes to PSKReporter, GridTracker, N1MM Logger+,
+  JTAlert, and DX cluster nodes via the WSJT-X UDP protocol (plus
+  PSKReporter IPFIX and DX cluster telnet).
+- FlexRadio DAX IQ and USRP B210 radio sources.
+- A B210 audio/IQ router (`run-router.sh` / `run-router.bat`) that
+  feeds selected WSJT-X dials as virtual audio, with optional MAP65 /
+  QMAP IQ export. MAP65 I/Q export is also available in the GUI
+  (**View → MAP65 Export**); see [CHANGELOG.md](CHANGELOG.md)
+  (Unreleased).
+- Analysis and comparison tools, including `compare_decoders.py` and
+  the scripts under `tools/`.
 
-## How It Works
+The latest published tag is still the map144 prerelease
+[v0.1.3-alpha](https://github.com/wa1hco/ws-skimmer/releases/tag/v0.1.3-alpha)
+(7 Sep 2026). `main` is ahead of that tag.
 
-1. IQ samples arrive from the radio at 48 kHz
-2. An optional noise blanker removes impulsive interference
-3. A 48-channel polyphase channelizer splits the band into 1 kHz-spaced channels at 12 kHz each
-4. Each channel is squared to produce a double-frequency tone; an FFT detects the
-   paired tones that characterise an MSK144 burst
-5. When a channel exceeds the SNR threshold the surrounding 15-second IQ window is
-   saved and passed to `jt9` for decoding
-6. Decoded messages are displayed in the GUI decode panel and forwarded to reporting services
+### In progress and planned
 
-## Related docs
+These items are documented on the `prep/ft8-ft4-wims-udp` branch in
+[PR #2](https://github.com/wa1hco/ws-skimmer/pull/2). They are not on
+`main` yet.
 
-- [README-Linux.md](README-Linux.md) — Linux install, update, run
-- [README-Windows.md](README-Windows.md) — Windows install, update, run
-- [docs/ALPHA_NOTES.md](docs/ALPHA_NOTES.md) — alpha tester notes
-- [CHANGELOG.md](CHANGELOG.md)
+- FT8 and FT4 modes, and a receive-only WSJT-X-style UDP Status/Decode
+  feed to WIMS
+  ([plan](https://github.com/wa1hco/ws-skimmer/blob/prep/ft8-ft4-wims-udp/docs/plan/ft8-ft4-wims-udp.md))
+- An installer with a desktop-icon launcher; only a version tag will
+  update what users install
+  ([plan](https://github.com/wa1hco/ws-skimmer/blob/prep/ft8-ft4-wims-udp/docs/plan/installer-and-release.md))
+- Moving launchers into `scripts/` and developer tools into `tools/dev/`
+- A first CI workflow (the repository has none today)
+- A GPLv3 `LICENSE` file and attribution headers for WSJT-X-derived
+  code, before the first ws-skimmer release
+
+## Supported hardware
+
+| Source | Interface | Notes |
+| ------ | --------- | ----- |
+| FlexRadio | DAX IQ via SmartSDR (TCP/UDP) | Linux and Windows. Documented for the 6000 series. |
+| USRP B210 (Ettus) | UHD | Primarily Linux. |
+| IQ WAV file | stereo float32, left=I, right=Q | Linux and Windows, for testing. |
+
+There is no macOS support for the main application.
+
+## Project layout
+
+Install and launch files currently sit at the repository root (they
+are planned to move into `scripts/`): `install.sh` / `install.ps1`,
+`run.sh` / `run.bat` (the GUI, `map144.py`), `run-router.sh` /
+`run-router.bat` and `router_app.py` (B210 router), and `run-b210.bat`.
+
+- `map144_app/` — decoder, GUI, reporting, and router library
+- `flexclient/` — FlexRadio client
+- `tests/` — automated tests
+- `docs/` — design notes, alpha notes, and router guides
+- `vendor/` — vendored third-party code (including WDSP)
+- `fortran_bp_test/` — WSJT-X-derived Fortran and C++ sources
+
+Developer and analysis scripts live at the repository root
+(`analyze_*.py`, `compare_decoders.py`, `generate_msk144.py`, and
+others) and under `tools/` (including B210/UHD install helpers). The
+plan is to gather developer scripts under `tools/dev/`.
+
+Older platform notes are in [README-Linux.md](README-Linux.md),
+[README-Windows.md](README-Windows.md), and
+[README_GUI.md](README_GUI.md). They still use the map144 name and
+describe command-line flags and environment variables; those
+instructions are being removed from user-facing docs. See also
+[CHANGELOG.md](CHANGELOG.md) and
+[docs/ALPHA_NOTES.md](docs/ALPHA_NOTES.md).
 
 ## License
 
-GNU General Public License v3 — see [LICENSE](LICENSE) or
+GNU General Public License v3 is intended. A `LICENSE` file and
+attribution for WSJT-X-derived code are being added before the first
+release; they are currently missing. The GPLv3 text is at
 <https://www.gnu.org/licenses/gpl-3.0.html>.
 
 Copyright © 2026 Jeff Millar, WA1HCO \<wa1hco@gmail.com\>
