@@ -74,9 +74,37 @@ Continue from the existing `v0.1.3-alpha` tag:
    runners.
 7. Once CI exists, require status checks on `main`. `main` currently
    blocks force-push and deletion only.
+8. Generate multi-size `.ico` (16–256) and Linux PNG sizes from the
+   1024 px sources in `assets/icons/` with a dev script in
+   `tools/dev/`.
+9. Cut a test prerelease (for example `v0.1.4-test`) and verify a
+   clean install on a clean machine creates the desktop icon, and the
+   Start-menu entry on Windows.
 
 ## Prerequisite
 
 Add a GPLv3 `LICENSE` file and the missing attribution headers before
 the first public release. The repo has no `LICENSE` file, even though
 the README claims GPLv3.
+
+## Icons
+
+The wa1hco WS series icons use a shared look: a rounded square in
+WIMS blue (RGB 11, 92, 173) with white letters only. The "WS"
+lettering is identical in size and position on every icon. The second
+line names the tool, for example SKIM or HUB.
+
+Source artwork lives at `assets/icons/ws-skim.png` and
+`assets/icons/ws-hub.png` (1024 px). A dev script in `tools/dev/`
+generates the sizes the installers need: a multi-size Windows `.ico`
+(16–256 px) and the PNG sizes used by a Linux `.desktop` file.
+
+The installer must create a desktop icon, plus a Start-menu entry on
+Windows, using the WS SKIM icon. The test release is a prerelease
+(for example `v0.1.4-test`). It is a clean install on a clean
+machine — there is no migration path, because nobody runs map144 —
+and it must verify that the desktop icon appears.
+
+WS HUB is the proposed name for the WIMS console and is not final.
+The HUB icon is included so the series rule can be checked across
+more than one tool.
