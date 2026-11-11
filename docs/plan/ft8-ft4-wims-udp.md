@@ -14,6 +14,7 @@ instance's own decode.
 Related: this repo's copy of [docs/flex-daxiq-interface.md](../flex-daxiq-interface.md)
 (imported from [wa1hco/ws-skimmer-placeholder#1](https://github.com/wa1hco/ws-skimmer-placeholder/pull/1));
 WIMS-side design in [WIMS PR #39](https://github.com/wa1hco/WIMS/blob/docs/wideband-skimmer/docs/plan/wims_wideband_skimmer.md).
+Installer and release plan: [docs/plan/installer-and-release.md](installer-and-release.md).
 
 ## Prerequisites (separate PRs, before feature work)
 
