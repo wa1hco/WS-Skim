@@ -111,6 +111,23 @@ Once per UTC period (15 s FT8, 7.5 s FT4):
 
 The 1 kHz MSK144 channelizer grid is not the FT8/FT4 sectioner.
 
+**Status (5.1, 5.2 started):** `map144_app/costas_search.py` has the
+wideband sync search and the section grouping, as a standalone DSP
+module with synthetic tests (`tests/test_costas_search.py`) and a
+developer scan tool (`tools/dev/costas_scan.py`). Not wired into the
+live engine yet. Measured on synthetic white noise at 48 kHz IQ:
+
+| Mode | Search time / period | Noise candidates / period (±24 kHz) | Found by the search |
+|------|----------------------|--------------------------------------|---------------------|
+| FT8 (threshold 1.7) | ~0.25 s | ~2.6 | 10/10 at -20 dB, ~7/10 at -22 dB |
+| FT4 (threshold 1.5) | ~0.1 s | ~30 | 10/10 at -10 dB, ~7/10 at -16 dB |
+
+FT4 is about 2 dB short of jt9's FT4 limit (~-17.5 dB) because it has
+6.4 dB less sync energy than FT8; coherent correlation within each
+4-symbol Costas array (as WSJT-X `sync4d` does) is the planned fix.
+The FT4 DT reference (`nominal_start_s = 0.5`) still needs checking
+against jt9 on a real FT4 capture.
+
 ### 6. Alternative decoder (cross-check)
 
 Borrow [ka9q/ft8_lib](https://github.com/ka9q/ft8_lib) `decode_ft8`
