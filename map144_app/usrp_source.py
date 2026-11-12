@@ -86,8 +86,8 @@ logger = logging.getLogger(__name__)
 # is setdefault, so an explicit operator UHD_LOG_* env always wins.
 os.environ.setdefault('UHD_LOG_LEVEL',         'info')      # allow info into the sinks
 os.environ.setdefault('UHD_LOG_CONSOLE_LEVEL', 'warning')   # …but keep the console quiet
-from pathlib import Path as _Path
-_uhd_log_dir = _Path(__file__).resolve().parent.parent / 'MSK144' / 'logs'
+from .user_paths import log_dir as _user_log_dir
+_uhd_log_dir = _user_log_dir()
 try:
     _uhd_log_dir.mkdir(parents=True, exist_ok=True)
 except OSError:

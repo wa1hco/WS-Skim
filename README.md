@@ -9,27 +9,13 @@ planned "WS HUB" console. It is part of the wa1hco WS series.
 
 Windows and Linux are supported. There is no macOS installer yet.
 
-There is no ws-skimmer release yet. The
-[Releases](https://github.com/wa1hco/ws-skimmer/releases) page currently
-has only the older map144 prerelease. A ws-skimmer test prerelease is
-planned. When it appears, download the Windows or Linux installer from
-that page and run the file (on Windows, double-click
-`scripts/windows/install.ps1` or choose Run with PowerShell; on Linux,
-run `scripts/install.sh`). Start the app with the launcher the install
-provides. The test prerelease is intended to place a desktop icon, plus
-a Start-menu entry on Windows.
-
-Until then, if you already have a copy of the repository, run
-`scripts/windows/install.ps1` on Windows or `scripts/install.sh` on
-Linux, then start the app with `scripts/windows/run.bat` or
-`scripts/run.sh`.
+The steps are in [INSTALL.md](INSTALL.md). On Linux, double-click
+**Install WS Skim**. On Windows, extract the folder to `C:\WS-Skim` and
+double-click **Install-WsSkim.cmd**. Then double-click **WS Skim**.
 
 You will need [WSJT-X](https://wsjt.sourceforge.io/) (it provides the
-`jt9` decoder) and Python 3.10 or newer. On Windows, use the installer
-from [python.org](https://www.python.org/downloads/). Linux is the
-best-tested path (Ubuntu 22.04 / 24.04); Windows works but has had
-less soak testing. Radio source and sample rate are chosen in the app
-under the **Source** menu. Reporting is set up under **View → Reporting**.
+jt9 decoder). Radio source and sample rate are chosen in the app under
+the **Source** menu. Reporting is set up under **View → Reporting**.
 
 ## Status
 

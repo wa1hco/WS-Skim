@@ -385,8 +385,13 @@ class TestChannelizerCarry(unittest.TestCase):
             # Wait until the block has taken the short record off the
             # input (JIT of the first hop can take several seconds).
             deadline = time.monotonic() + 15.0
-            while in_stream._q.qsize() > 0 and time.monotonic() < deadline:
+            while time.monotonic() < deadline:
+                carry = getattr(ch, "_carry", None)
+                if in_stream._q.qsize() == 0 and carry is not None and len(carry) == 3:
+                    break
                 time.sleep(0.05)
+            self.assertEqual(len(getattr(ch, "_carry", ())), 3,
+                             "expected the 3-sample record to be held as carry")
             recs_partial = _drain_records(out_stream, timeout=0.02)
             self.assertEqual(len(recs_partial), 0,
                              "expected no output yet; carry should be holding 3 samples")

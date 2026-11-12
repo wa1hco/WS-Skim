@@ -18,12 +18,21 @@ ROOT = Path(__file__).resolve().parent.parent
 
 LINUX_SCRIPTS = (
     "scripts/install.sh",
+    "scripts/install-linux.sh",
     "scripts/run.sh",
     "scripts/run-router.sh",
+    "scripts/start-ws-skim.sh",
+    "scripts/add-ws-skim-to-desktop.sh",
+    "scripts/Install WS Skim.desktop",
 )
 
 WINDOWS_SCRIPTS = (
     "scripts/windows/install.ps1",
+    "scripts/windows/Install-WsSkim.cmd",
+    "scripts/windows/Install-WsSkim.ps1",
+    "scripts/windows/Install-WsSkimDesktopShortcut.ps1",
+    "scripts/windows/Start-WsSkim.vbs",
+    "scripts/windows/Start-WsSkim.cmd",
     "scripts/windows/run.bat",
     "scripts/windows/run-router.bat",
     "scripts/windows/run-b210.bat",
@@ -50,7 +59,8 @@ def test_linux_scripts_exist_and_are_executable():
     for rel in LINUX_SCRIPTS:
         path = ROOT / rel
         assert path.is_file(), f"missing {rel}"
-        assert path.stat().st_mode & stat.S_IXUSR, f"{rel} is not executable"
+        if sys.platform != "win32":
+            assert path.stat().st_mode & stat.S_IXUSR, f"{rel} is not executable"
 
 
 def test_windows_scripts_exist():

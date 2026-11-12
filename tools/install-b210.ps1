@@ -229,13 +229,20 @@ try {
     $programs = [Environment]::GetFolderPath('CommonPrograms')
     $lnkPath  = Join-Path $programs 'map144.lnk'
     $target   = Join-Path $InstallPath 'scripts\windows\run-b210.bat'
+    $legacyTarget = Join-Path $InstallPath 'run-b210.bat'
 
     $wsh = New-Object -ComObject WScript.Shell
     # Remove any stale shortcut here that points at this install's launcher
-    # (e.g. an older map144-b210.lnk), so we end up with one canonical entry.
+    # (e.g. an older map144-b210.lnk, or one aimed at the former repo-root
+    # run-b210.bat), so we end up with one canonical entry.
     Get-ChildItem -LiteralPath $programs -Filter '*.lnk' -ErrorAction SilentlyContinue | ForEach-Object {
         if ($_.FullName -ne $lnkPath) {
-            try { if ($wsh.CreateShortcut($_.FullName).TargetPath -eq $target) { Remove-Item -LiteralPath $_.FullName -Force } } catch { }
+            try {
+                $tp = $wsh.CreateShortcut($_.FullName).TargetPath
+                if ($tp -eq $target -or $tp -eq $legacyTarget) {
+                    Remove-Item -LiteralPath $_.FullName -Force
+                }
+            } catch { }
         }
     }
     $sc = $wsh.CreateShortcut($lnkPath)

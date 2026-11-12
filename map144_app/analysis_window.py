@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 from PyQt5 import QtCore, QtWidgets
+from .visualizer import _SETTINGS as _SHARED_SETTINGS
 import pyqtgraph as pg
 
 from .channelizer import N_CHANNELS
@@ -169,7 +170,7 @@ def _audio_spectrogram(audio: np.ndarray, win_size: int = 256, hop: int = 128) -
 class AnalysisWindow(QtWidgets.QWidget):
     """Standalone offline analysis window for a single IQ capture file."""
 
-    _SETTINGS = QtCore.QSettings('RadioIQ', 'RadioIQVisualizer')
+    _SETTINGS = _SHARED_SETTINGS
 
     def __init__(self, wav_path: Path, reporter=None, parent=None):
         super().__init__(None, QtCore.Qt.Window)

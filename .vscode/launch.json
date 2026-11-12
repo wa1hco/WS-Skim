@@ -40,7 +40,7 @@
             "name": "Python Debugger: decode_sensitivity SPD",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/decode_sensitivity.py",
+            "program": "${workspaceFolder}/tools/dev/decode_sensitivity.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "python": "${workspaceFolder}/.venv/bin/python",

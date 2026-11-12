@@ -60,7 +60,7 @@ pulling the full GUI/DSP stack — hence the lazy ``MAP144Visualizer`` load.
 #:   - the main-window title bar (map144_app.displays / map144_app.ui)
 #:   - the startup log line in map144.py
 #:   - the "ready" banner printed by scripts/install.sh / scripts/windows/install.ps1
-#:   - bug reports (lands in MSK144/logs/map144_*.log automatically)
+#:   - bug reports (lands in the user log folder automatically)
 #: Bumped together with a git tag at each release.  See CHANGELOG.md.
 __version__ = "0.1.4"
 

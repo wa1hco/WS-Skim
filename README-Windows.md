@@ -1,101 +1,16 @@
-# map144 on Windows
+# WS Skim on Windows
 
-Windows is supported but has had **less soak testing** than Linux. Prefer the
-python.org installer (not the Microsoft Store stub).
+Windows is supported but has had **less soak testing** than Linux.
 
 Product overview and radio sources: see the top-level [README.md](README.md).
 
-## Requirements
+## Install and run
 
-- Python **3.10–3.14** from [python.org](https://www.python.org/downloads/)  
-  - `scripts/windows/install.ps1` **prefers 3.14**, then 3.13 → 3.12 → 3.11 → 3.10  
-  - Requirements pin **`numpy==1.26.4`** (UHD ABI). Official PyPI builds of
-    1.26.4 have **no cp314 wheels**, so a 3.14 attempt usually fails and
-    `scripts/windows/install.ps1` automatically retries with 3.13/3.12  
-  - Tick **Add python.exe to PATH**  
-  - Avoid the Microsoft Store `WindowsApps\python.exe` stub  
-- [WSJT-X](https://wsjt.sourceforge.io/) (provides `jt9.exe`)
-- Git for Windows (for `git clone` / `git pull`)
-- PowerShell 5.1+ (built into Windows 10/11)
+Follow [INSTALL.md](INSTALL.md). Extract the folder to `C:\WS-Skim`, open `scripts\windows`, and double-click **Install-WsSkim.cmd**. Click **Yes** if Windows asks for permission. Then double-click **WS Skim**.
 
-FlexRadio + WAV playback are the best-exercised Windows paths. USRP / Airspy /
-RTL-SDR are primarily Linux-oriented.
+You will need [WSJT-X](https://wsjt.sourceforge.io/) for its jt9 decoder. If it is not installed yet, the installer warns you and still finishes. Prefer the official Python installer from python.org, not the Microsoft Store stub. The WS Skim installer will find or install official Python 3.12 for you. Python 3.10, 3.11, or 3.12 works.
 
-## Install (first time)
-
-In **PowerShell** or **cmd** (from the folder you want the tree in):
-
-```powershell
-git clone https://github.com/wa1hco/map144.git C:\WSJT\map144
-cd C:\WSJT\map144
-.\scripts\windows\install.ps1
-```
-
-If execution policy blocks scripts, either:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\install.ps1
-```
-
-or right-click → **Run with PowerShell**. `install.ps1` / `run.bat` call
-`.venv\Scripts\python.exe` directly — you do **not** need to activate the venv
-or change execution policy permanently.
-
-What `scripts/windows/install.ps1` does (re-runnable = update):
-
-- Creates/reuses `.venv`
-- Upgrades pip and installs `requirements.txt` (`numpy==1.26.4`)
-- Installs / verifies **Ettus UHD** (WinUSB driver + B210 FPGA/FX3 firmware
-  images under `C:\Program Files\UHD\share\uhd\images\`). First time needs
-  admin + internet (~233 MB). Pass `-SkipUhd` to skip.
-- Verifies `jt9` discovery (warning only if missing)
-
-B210 **Python** bindings (`import uhd`) are not installed into `.venv` (no
-Windows pip wheels). For `scripts/windows/run-router.bat` / USRP, also use either:
-
-- the offline B210 kit `env\` (`tools\install-b210.bat`), or
-- `conda install -c conda-forge uhd` in a `map144` conda env
-
-Firmware/driver alone (from `scripts/windows/install.ps1`) is still required either way.
-
-## Update
-
-```powershell
-cd C:\WSJT\map144
-git pull
-.\scripts\windows\install.ps1
-```
-
-## Run
-
-```powershell
-.\scripts\windows\run.bat
-```
-
-Or:
-
-```powershell
-.venv\Scripts\python.exe map144.py
-```
-
-Optional arguments:
-
-```powershell
-.venv\Scripts\python.exe map144.py --bind-client-id <uuid> --log-level DEBUG
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--bind-client-id UUID` | — | FlexRadio `client bind` when required |
-| `--bind-client UUID` | — | Deprecated alias |
-| `--log-level LEVEL` | INFO | `DEBUG` … `CRITICAL` |
-
-Sample rate and source type are chosen in the app (**Source** menu).
-
-First launch may take ~10 s while numba JIT-compiles hot paths.
-
-Also available: `scripts/windows/run-b210.bat`, `scripts/windows/run-router.bat` for specialized station layouts
-(see [docs/router-windows.md](docs/router-windows.md) if you use the router kit).
+FlexRadio and WAV playback are the best-exercised Windows paths. USRP / Airspy / RTL-SDR are primarily Linux-oriented. UHD / B210 is a separate optional step; see [INSTALL.md](INSTALL.md#usrp-b210-optional).
 
 ## Reporting setup
 
@@ -106,34 +21,20 @@ Open **View → Reporting**:
 - **PSKReporter** — IPFIX to `report.pskreporter.info:4739`
 - **DX Cluster** — telnet (default `dxc.ve7cc.net:7373`)
 
-## Test signals
+## Developer
+
+Typed commands are for people changing WS Skim or installing from a shell. See [INSTALL.md](INSTALL.md#developer).
+
+The default install does not include Ettus UHD. Use `tools\Install-UhdWindows.ps1` and `tools\install-b210.bat` only if you need a B210.
+
+Test signals:
 
 ```powershell
 .venv\Scripts\python.exe tools\dev\generate_msk144.py --count 10
-.venv\Scripts\python.exe tools\dev\generate_msk144.py --count 10 --callsigns
 ```
 
 Output under `MSK144\simulations\`. Load with **Source → WAV File**.
 
-## jt9 not found
+The first start may pause for about ten seconds while the program prepares itself.
 
-Install WSJT-X so `jt9.exe` is discoverable, or set before launch:
-
-```powershell
-$env:MAP144_JT9 = "C:\Path\To\jt9.exe"
-.\scripts\windows\run.bat
-```
-
-## Common Windows pitfalls
-
-| Symptom | Fix |
-|---------|-----|
-| `python` opens the Microsoft Store | Install python.org build; fix PATH so it wins over `WindowsApps` |
-| pip “Building wheel for numpy” on 3.14 | Expected — `numpy==1.26.4` has no cp314 wheel. Re-run `.\scripts\windows\install.ps1` (it falls back to 3.13/3.12), or install Python 3.12 and `rmdir /s /q .venv` first |
-| `install.ps1` “cannot be loaded” | `powershell -ExecutionPolicy Bypass -File .\scripts\windows\install.ps1` |
-| Missing `jt9` | Install WSJT-X or set `MAP144_JT9` |
-| First start feels hung | Wait for numba JIT (~10 s) |
-
-## Linux?
-
-Use **[README-Linux.md](README-Linux.md)** (`./scripts/install.sh` / `./scripts/run.sh`).
+Linux: [README-Linux.md](README-Linux.md).

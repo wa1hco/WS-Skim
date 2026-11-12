@@ -62,3 +62,64 @@ jobs:
           # runner happens to have one; tests that need jt9 skip.
           MAP144_GPU: "0"
         run: python -m pytest tests/ -q --tb=short
+
+  windows:
+    name: test (Windows, Python 3.12)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version pin check
+        run: python tools/dev/check-version.py
+
+      - name: Parse PowerShell install scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "scripts/windows/Install-WsSkim.ps1",
+            "scripts/windows/Install-WsSkimDesktopShortcut.ps1",
+            "scripts/windows/install.ps1",
+            "tools/install-b210.ps1",
+            "tools/Install-UhdWindows.ps1",
+            "tools/install-shortcut.ps1"
+          )
+          $failed = $false
+          foreach ($f in $files) {
+            $errs = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count -gt 0) {
+              Write-Host "PARSE ERROR: $f"
+              $errs | ForEach-Object { Write-Host $_.ToString() }
+              $failed = $true
+            } else {
+              Write-Host "OK $f"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Install Python requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+          python -c "import numpy; print('numpy', numpy.__version__)"
+          python -c "import PyQt5; print('PyQt5 ok')"
+
+      - name: Pytest (tests that apply on Windows)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          MAP144_GPU: "0"
+        run: >
+          python -m pytest -q --tb=short
+          tests/test_layout_and_icons.py
+          tests/test_install_tree.py
+          tests/test_user_paths.py
+          tests/test_jt9_missing_message.py
+          tests/test_user_facing_docs.py
+          tests/test_linux_desktop_install.py

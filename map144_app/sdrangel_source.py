@@ -292,7 +292,7 @@ def _save_sdrangel_layout() -> None:
     if src is None:
         logger.warning("[sdrangel] Layout auto-save: SDRangel.conf not found")
         return
-    dst_dir = os.path.expanduser('~/.config/map144')
+    dst_dir = str(_ws_skim_config_dir())
     dst = os.path.join(dst_dir, 'sdrangel_layout.conf')
     try:
         os.makedirs(dst_dir, exist_ok=True)
@@ -309,7 +309,7 @@ def _restore_sdrangel_layout() -> None:
     window arrangement.  No-op if no backup exists yet.
     """
     import os
-    src = os.path.expanduser('~/.config/map144/sdrangel_layout.conf')
+    src = str(_ws_skim_config_dir() / 'sdrangel_layout.conf')
     if not os.path.isfile(src):
         return
     dst = _sdrangel_conf_restore_path()
@@ -1186,8 +1186,9 @@ class SDRAngelSource:
     def _preset_file_path(self) -> str:
         """Return MAP144's local copy path for this stream's preset file."""
         from pathlib import Path
+from .user_paths import config_dir as _ws_skim_config_dir
         desc = _PRESET_DESC.get(self.stream_index, f"B210-S{self.stream_index}")
-        cfg_dir = Path.home() / '.config' / 'map144'
+        cfg_dir = _ws_skim_config_dir()
         cfg_dir.mkdir(parents=True, exist_ok=True)
         return str(cfg_dir / f"sdrangel_{desc.lower().replace('-', '_')}.sdrangel")
 
@@ -1225,7 +1226,7 @@ class SDRAngelSource:
     def _layout_backup_path() -> str:
         """Path where MAP144 keeps its backup of the SDRangel Qt settings file."""
         from pathlib import Path
-        cfg_dir = Path.home() / '.config' / 'map144'
+        cfg_dir = _ws_skim_config_dir()
         cfg_dir.mkdir(parents=True, exist_ok=True)
         return str(cfg_dir / 'sdrangel_layout.conf')
 

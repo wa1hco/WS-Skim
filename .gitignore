@@ -134,3 +134,7 @@ tools/decoded.txt
 # Local Claude settings backups
 .claude/*.bak*
 
+
+# Windows installer output (per-machine)
+scripts/windows/install-log.txt
+scripts/windows/python-path.txt

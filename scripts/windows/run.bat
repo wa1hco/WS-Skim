@@ -1,9 +1,9 @@
+\
 @echo off
-REM run.bat — launch MAP144 from its venv (Windows).
-REM Re-runnable; passes any args straight through to map144.py.
-cd /d "%~dp0..\.."
-if not exist ".venv\Scripts\python.exe" (
-    echo ERROR: .venv not found.  Run scripts\windows\install.ps1 first. 1>&2
-    exit /b 1
+REM Developer helper. Operators double-click the WS Skim desktop icon.
+cd /d "%~dp0"
+if not exist "%~dp0Start-WsSkim.vbs" (
+  echo Missing Start-WsSkim.vbs
+  exit /b 1
 )
-".venv\Scripts\python.exe" map144.py %*
+wscript //nologo "%~dp0Start-WsSkim.vbs"

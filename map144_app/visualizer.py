@@ -16,7 +16,30 @@
 
 from PyQt5 import QtCore, QtWidgets
 
-_SETTINGS = QtCore.QSettings('RadioIQ', 'RadioIQVisualizer')
+from .user_paths import qsettings
+
+
+class _LazySettings:
+    """Load user settings on first use, after any one-time migration."""
+
+    _inner = None
+
+    def _get(self):
+        if self._inner is None:
+            self._inner = qsettings()
+        return self._inner
+
+    def value(self, *args, **kwargs):
+        return self._get().value(*args, **kwargs)
+
+    def setValue(self, *args, **kwargs):
+        return self._get().setValue(*args, **kwargs)
+
+    def sync(self):
+        return self._get().sync()
+
+
+_SETTINGS = _LazySettings()
 
 from .engine import Engine
 from .ui import (

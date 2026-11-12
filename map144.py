@@ -122,7 +122,9 @@ from map144_app.visualizer import MAP144Visualizer
 
 def _configure_logging(level_name: str):
     level      = getattr(logging, level_name.upper(), logging.INFO)
-    log_dir    = Path(__file__).parent / 'MSK144' / 'logs'
+    from map144_app.user_paths import log_dir as _user_log_dir, migrate_user_data
+    migrate_user_data(Path(__file__).resolve().parent)
+    log_dir    = _user_log_dir()
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path   = log_dir / f"map144_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
@@ -193,21 +195,17 @@ def main():
     _configure_logging(args.log_level)
 
     from map144_app.detection import find_jt9
+    from map144_app.jt9_guide import show_jt9_missing_dialog
     jt9_path = find_jt9()
-    if jt9_path is None:
-        print(
-            "error: jt9 (WSJT-X) not found.\n"
-            "  Install WSJT-X from https://wsjt.sourceforge.io/,\n"
-            "  or set MAP144_JT9 to the full path of jt9 / jt9.exe\n"
-            "  (e.g. MAP144_JT9='C:\\\\WSJT\\\\wsjtx\\\\bin\\\\jt9.exe').",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    logging.getLogger(__name__).info("Using jt9 binary: %s", jt9_path)
 
     from PyQt5 import QtCore, QtWidgets
 
     app = QtWidgets.QApplication(sys.argv)
+    if jt9_path is None:
+        show_jt9_missing_dialog()
+        logging.getLogger(__name__).warning("jt9 (WSJT-X) was not found")
+    else:
+        logging.getLogger(__name__).info("Using jt9 binary: %s", jt9_path)
     app.setQuitOnLastWindowClosed(True)
 
     def _graceful_shutdown(_signum, _frame):

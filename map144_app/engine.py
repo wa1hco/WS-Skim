@@ -647,6 +647,8 @@ class Engine:
         log to ``MSK144/detections/blocks/decode_events.jsonl`` for
         offline analysis of the Block path's own structured output.
         """
+        if getattr(self, "_background_stopping", False):
+            return
         if self._block_runtime is not None:
             return
 
@@ -850,6 +852,9 @@ class Engine:
         import time
         from .blocks.types import Record, StreamClosed
 
+        if getattr(self, "_background_stopping", False):
+            return
+
         self._ensure_block_runtime()
 
         # Reshape to 1-D mono.  Dual-pol splits into H/V columns; we
@@ -932,8 +937,10 @@ class Engine:
             th.join(timeout=remaining)
             if th.is_alive():
                 still_alive.append(th.name)
-        self._tfmf_worker_busy = False
-        self._tfmf_thread = None
+        tfmf = self._tfmf_thread
+        if tfmf is None or not tfmf.is_alive():
+            self._tfmf_worker_busy = False
+            self._tfmf_thread = None
         self._jt9_threads = [th for th in self._jt9_threads if th.is_alive()]
         if still_alive:
             log.warning(
