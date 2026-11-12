@@ -799,6 +799,11 @@ def setup_ui(self):
         if win._view_action is not None:
             win._view_action.setChecked(False)
 
+    # Mode menu (MSK144 / FT8 / FT4) and View → FT8 Sync Map; restores the
+    # saved mode, which also picks that mode's blanker.
+    from .ft8_window import setup_ft8
+    setup_ft8(self, menu_bar, view_menu)
+
     # ── Info panel — vertical stack below decode list ─────────────────────────
     # Four compact rows: receiver | centre freq | channel range | UTC
     # Same font as the decode list so the bottom of the window is visually uniform.
@@ -995,8 +1000,9 @@ def _on_show_raw_power_toggled(self, checked):
 def on_nb_backend_changed(self, name):
     """User picked a blanker backend — apply and persist."""
     from .visualizer import _SETTINGS
+    from .ft8_window import blanker_key
     self.set_blanker(name)
-    _SETTINGS.setValue('nb_backend', name)
+    _SETTINGS.setValue(blanker_key(getattr(self, 'mode', 'MSK144')), name)
 
 
 def on_td_scale_changed(self, value):
