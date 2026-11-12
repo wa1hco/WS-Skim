@@ -66,6 +66,21 @@ HISTORY_ROWS = 16         # small for tests; legacy uses ~705
 PERIOD_S = 15.0
 
 
+def _wait_until(predicate, timeout_s: float = 15.0, message: str = "condition") -> None:
+    """Poll ``predicate`` until it is true, or fail after ``timeout_s``.
+
+    DisplayBlock's tick is metric-blocking, and ``rt.start()`` returns
+    before ``on_start`` runs, so a fixed short sleep is not a reliable
+    barrier on a loaded CI runner.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"timed out waiting for {message}")
+
+
 # --- helpers ---------------------------------------------------------
 
 
@@ -429,6 +444,9 @@ class _WaterfallHarness:
     def settle(self, seconds: float = 0.20) -> None:
         time.sleep(seconds)
 
+    def wait_until(self, predicate, timeout_s: float = 15.0, message: str = "condition") -> None:
+        _wait_until(predicate, timeout_s=timeout_s, message=message)
+
 
 class TestWaterfallIQIngest(unittest.TestCase):
 
@@ -455,16 +473,16 @@ class TestWaterfallIQIngest(unittest.TestCase):
         h = _WaterfallHarness()
         h.rt.start()
         try:
-            # Need at least one metric record for the heartbeat that
-            # drives the IQ drain (tick is metric-blocking).
-            h.push_metric(_metric_record(start_sample=0, wall_clock=0.5,
-                                         fill=1.0))
-            # Push enough IQ for several FFT blocks: fft_size=64,
-            # hop=32, so 5 blocks = 5*32 + 32 = 192 samples (then a
-            # final 32-sample drain).  Push 1024 samples for headroom.
+            # Push IQ first, then the metric heartbeat that drives the
+            # drain, so the tick cannot run against an empty IQ queue.
+            # fft_size=64, hop=32, so 5 blocks = 5*32 + 32 = 192 samples
+            # (then a final 32-sample drain).  Push 1024 samples for headroom.
             h.push_iq(_iq_record(start_sample=0, n=1024,
                                  wall_clock=0.5, fill_complex=0.5+0j))
-            h.settle()
+            h.push_metric(_metric_record(start_sample=0, wall_clock=0.5,
+                                         fill=1.0))
+            h.wait_until(lambda: h.disp.stats()["spec_blocks_written"] > 0,
+                         message="waterfall FFT blocks written")
             stats = h.disp.stats()
         finally:
             h.rt.stop(timeout_s=1.0)
@@ -479,13 +497,14 @@ class TestWaterfallIQIngest(unittest.TestCase):
         h = _WaterfallHarness()
         h.rt.start()
         try:
-            h.push_metric(_metric_record(start_sample=0, wall_clock=0.5,
-                                         fill=1.0))
             for k in range(4):
                 h.push_iq(_iq_record(start_sample=k * 512, n=512,
                                      wall_clock=0.5 + k * 0.01,
                                      fill_complex=0.5+0j))
-            h.settle(seconds=0.30)
+            h.push_metric(_metric_record(start_sample=0, wall_clock=0.5,
+                                         fill=1.0))
+            h.wait_until(lambda: h.disp.stats()["spec_blocks_written"] > 0,
+                         message="waterfall FFT blocks written")
             snap = h.disp.state_snapshot()
         finally:
             h.rt.stop(timeout_s=1.0)
@@ -510,23 +529,26 @@ class TestWaterfallPeriodSnapshot(unittest.TestCase):
         h = _WaterfallHarness()
         h.rt.start()
         try:
-            # Push IQ in period 0, then more in period 1.
-            h.push_metric(_metric_record(start_sample=0, wall_clock=14.0,
-                                         fill=1.0))
+            # Push IQ before the metric heartbeat so the tick cannot
+            # drain an empty IQ queue and miss the period-0 blocks.
             for k in range(3):
                 h.push_iq(_iq_record(start_sample=k * 512, n=512,
                                      wall_clock=14.0 + k * 0.01,
                                      fill_complex=0.5+0j))
-            h.settle(seconds=0.20)
+            h.push_metric(_metric_record(start_sample=0, wall_clock=14.0,
+                                         fill=1.0))
+            h.wait_until(lambda: h.disp.stats()["spec_blocks_written"] > 0,
+                         message="period-0 waterfall FFT blocks")
 
             # Cross boundary into period 1.
-            h.push_metric(_metric_record(start_sample=10_000,
-                                         wall_clock=15.5, fill=2.0))
             for k in range(3):
                 h.push_iq(_iq_record(start_sample=10_000 + k * 512, n=512,
                                      wall_clock=15.5 + k * 0.01,
                                      fill_complex=0.5+0j))
-            h.settle(seconds=0.20)
+            h.push_metric(_metric_record(start_sample=10_000,
+                                         wall_clock=15.5, fill=2.0))
+            h.wait_until(lambda: h.disp.stats()["spec_period_snapshots"] >= 1,
+                         message="period-boundary snapshot")
             snap = h.disp.state_snapshot()
             stats = h.disp.stats()
         finally:

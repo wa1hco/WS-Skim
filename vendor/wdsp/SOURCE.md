@@ -22,8 +22,9 @@ Both files carry Warren Pratt's original copyright headers:
 > the Free Software Foundation; either version 2 of the License, or
 > (at your option) any later version.
 
-MAP144 is GPL-3. GPL-2-or-later is compatible with GPL-3, so vendoring these
-files here under MAP144's GPL-3 license is compliant.
+MAP144 is GPL-3.0 (see [LICENSE](../../LICENSE) and [NOTICE](../../NOTICE)).
+GPL-2-or-later is compatible with GPL-3.0, so vendoring these files here
+under MAP144's GPL-3.0 license is compliant.
 
 ## MAP144 additions
 

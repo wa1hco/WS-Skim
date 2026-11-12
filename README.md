@@ -58,20 +58,15 @@ The latest published tag is still the map144 prerelease
 
 ### In progress and planned
 
-These items are documented on the `prep/ft8-ft4-wims-udp` branch in
-[PR #2](https://github.com/wa1hco/ws-skimmer/pull/2). They are not on
-`main` yet.
+The plans live on `main`. The feature work itself is not done yet.
 
 - FT8 and FT4 modes, and a receive-only WSJT-X-style UDP Status/Decode
-  feed to WIMS
-  ([plan](https://github.com/wa1hco/ws-skimmer/blob/prep/ft8-ft4-wims-udp/docs/plan/ft8-ft4-wims-udp.md))
+  feed to WS Hub (formerly WIMS)
+  ([plan](docs/plan/ft8-ft4-wims-udp.md))
 - An installer with a desktop-icon launcher; only a version tag will
   update what users install
-  ([plan](https://github.com/wa1hco/ws-skimmer/blob/prep/ft8-ft4-wims-udp/docs/plan/installer-and-release.md))
+  ([plan](docs/plan/installer-and-release.md))
 - Moving launchers into `scripts/` and developer tools into `tools/dev/`
-- A first CI workflow (the repository has none today)
-- A GPLv3 `LICENSE` file and attribution headers for WSJT-X-derived
-  code, before the first ws-skimmer release
 
 ## Supported hardware
 
@@ -112,9 +107,8 @@ instructions are being removed from user-facing docs. See also
 
 ## License
 
-GNU General Public License v3 is intended. A `LICENSE` file and
-attribution for WSJT-X-derived code are being added before the first
-release; they are currently missing. The GPLv3 text is at
-<https://www.gnu.org/licenses/gpl-3.0.html>.
+WS Skim is released under the GNU General Public License, version 3
+(GPL-3.0). The license text is [LICENSE](LICENSE). Third-party
+copyrights and provenance are in [NOTICE](NOTICE).
 
 Copyright © 2026 Jeff Millar, WA1HCO \<wa1hco@gmail.com\>

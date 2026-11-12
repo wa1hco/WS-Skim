@@ -1,3 +1,11 @@
+# Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
+#
+# Python port of WSJT-X msk144spd / msk144sync / msk144_freq_search
+# (https://github.com/WSJTX/wsjtx). Copyright also the WSJT Development
+# Team and the original authors (Joe Taylor, K1JT; Steve Franke, K9AN;
+# and others named in NOTICE).
+# Licensed under the GNU General Public License, version 3 (GPL-3.0).
+# See LICENSE and NOTICE.
 """Python port of WSJT-X msk144spd / msk144sync coherent frame-averaging decoder.
 
 Architecture

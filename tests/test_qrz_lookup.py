@@ -6,6 +6,10 @@ import sys
 
 import pytest
 
+# qrz_lookup is an optional tools script; its only extra dep is requests,
+# which is not part of the application requirements.
+pytest.importorskip("requests")
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "tools"))
 import qrz_lookup as q  # noqa: E402
 

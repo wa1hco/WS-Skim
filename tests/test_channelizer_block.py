@@ -83,6 +83,41 @@ def _drain_records(stream: Stream, max_items: int = 200, timeout: float = 0.05):
     return items
 
 
+def _output_samples(recs: list[Record]) -> int:
+    return sum(r.data.shape[-1] for r in recs)
+
+
+def _wait_for_records(stream: Stream, n: int, timeout_s: float = 15.0) -> list[Record]:
+    """Wait until ``n`` output records arrive (or ``timeout_s`` elapses).
+
+    The first ChannelizerBlock hop in a process may spend several seconds
+    in a numba JIT, so a fixed 0.2 s sleep is not enough and is also the
+    cause of a 1 s stop() timeout leaving the output queue empty.
+    """
+    items: list[Record] = []
+    deadline = time.monotonic() + timeout_s
+    while len(items) < n and time.monotonic() < deadline:
+        remaining = max(0.01, deadline - time.monotonic())
+        items.extend(
+            _drain_records(
+                stream,
+                max_items=n - len(items),
+                timeout=min(0.2, remaining),
+            )
+        )
+    return items
+
+
+def _wait_for_output_samples(stream: Stream, n_samples: int, timeout_s: float = 15.0) -> list[Record]:
+    """Wait until at least ``n_samples`` have arrived on ``stream``."""
+    items: list[Record] = []
+    deadline = time.monotonic() + timeout_s
+    while _output_samples(items) < n_samples and time.monotonic() < deadline:
+        remaining = max(0.01, deadline - time.monotonic())
+        items.extend(_drain_records(stream, max_items=16, timeout=min(0.2, remaining)))
+    return items
+
+
 # ---------------------------------------------------------------------
 # Basic shape / contract
 # ---------------------------------------------------------------------
@@ -121,14 +156,17 @@ class TestChannelizerShape(unittest.TestCase):
         ch.outputs["channels"] = out_stream
 
         rt.start()
+        recs: list[Record] = []
         try:
             for arr, ss, wc in zip(in_records, start_samples, wall_clocks):
                 _push_record(in_stream, arr, start_sample=ss, wall_clock=wc)
-            time.sleep(0.2)
+            expected = sum(arr.shape[-1] for arr in in_records) // DECIMATE
+            recs = _wait_for_output_samples(out_stream, expected)
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=5.0)
 
-        return _drain_records(out_stream)
+        recs.extend(_drain_records(out_stream))
+        return recs
 
     def test_basic_shape_and_rate(self):
         # 1024 samples in → 256 samples out, shape (48, 256).
@@ -218,11 +256,11 @@ class TestChannelizerSpectral(unittest.TestCase):
         rt.start()
         try:
             _push_record(in_stream, tone, start_sample=0)
-            time.sleep(0.3)
+            recs = _wait_for_records(out_stream, 1)
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=5.0)
 
-        recs = _drain_records(out_stream)
+        recs.extend(_drain_records(out_stream))
         self.assertEqual(len(recs), 1, f"expected 1 output record, got {len(recs)}")
         ch_out = recs[0].data            # shape (48, n//4)
 
@@ -296,11 +334,11 @@ class TestChannelizerCarry(unittest.TestCase):
                     np.zeros(n_per, dtype=np.complex64),
                     start_sample=i * n_per,
                 )
-            time.sleep(0.2)
+            recs = _wait_for_output_samples(out_stream, (4 * n_per) // DECIMATE)
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=5.0)
 
-        recs = _drain_records(out_stream)
+        recs.extend(_drain_records(out_stream))
 
         # Sum of output sample counts must equal total_input // decim.
         total_out = sum(r.data.shape[-1] for r in recs)
@@ -344,17 +382,21 @@ class TestChannelizerCarry(unittest.TestCase):
         try:
             # 3 samples — less than DECIMATE (4); should hold as carry.
             _push_record(in_stream, np.zeros(3, dtype=np.complex64), start_sample=0)
-            time.sleep(0.10)
+            # Wait until the block has taken the short record off the
+            # input (JIT of the first hop can take several seconds).
+            deadline = time.monotonic() + 15.0
+            while in_stream._q.qsize() > 0 and time.monotonic() < deadline:
+                time.sleep(0.05)
             recs_partial = _drain_records(out_stream, timeout=0.02)
             self.assertEqual(len(recs_partial), 0,
                              "expected no output yet; carry should be holding 3 samples")
             # Push more samples; total now 3+5=8, aligned=8, output=2 samples.
             _push_record(in_stream, np.zeros(5, dtype=np.complex64), start_sample=3)
-            time.sleep(0.10)
+            recs = _wait_for_output_samples(out_stream, 2)
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=5.0)
 
-        recs = _drain_records(out_stream)
+        recs.extend(_drain_records(out_stream))
         self.assertGreater(len(recs), 0)
         total_out = sum(r.data.shape[-1] for r in recs)
         self.assertEqual(total_out, 2,
@@ -411,11 +453,11 @@ class TestSourceToChannelizerEndToEnd(unittest.TestCase):
 
         rt.start()
         try:
-            time.sleep(0.5)
+            recs = _wait_for_records(out_stream, 1)
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=5.0)
 
-        recs = _drain_records(out_stream)
+        recs.extend(_drain_records(out_stream))
         self.assertGreater(len(recs), 0)
 
         # Concatenate per-channel; drop FIR transient.

@@ -1,3 +1,12 @@
+# Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
+#
+# Python port of WSJT-X MSK144 decode routines (msk144decodeframe.f90,
+# bpdecode128_90.f90, ldpc_128_90_reordered_parity.f90, chkcrc13a.f90,
+# crc13.cpp, packjt77.f90) from https://github.com/WSJTX/wsjtx.
+# Copyright also the WSJT Development Team and the original authors
+# (Joe Taylor, K1JT; Steve Franke, K9AN; and others named in NOTICE).
+# Licensed under the GNU General Public License, version 3 (GPL-3.0).
+# See LICENSE and NOTICE.
 """msk144_decode.py — Pure-Python MSK144 frame decoder.
 
 Implements the full soft-decision decode chain:
