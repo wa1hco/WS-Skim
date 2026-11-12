@@ -16,7 +16,7 @@
 
 from PyQt5 import QtCore, QtWidgets
 
-_SETTINGS = QtCore.QSettings('RadioIQ', 'RadioIQVisualizer')
+from .user_paths import SETTINGS as _SETTINGS  # user config folder, not the program folder
 
 from .engine import Engine
 from .ui import (

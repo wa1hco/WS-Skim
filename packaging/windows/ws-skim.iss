@@ -21,7 +21,9 @@
 
 #define AppName "WS Skim"
 #define AppIco "scripts\windows\assets\ws-skim.ico"
-#define Launcher "scripts\windows\run.bat"
+; pythonw.exe: no console window.  Settings and logs live in the user's
+; profile (see map144_app/user_paths.py); stdout/stderr go to console.log.
+#define PyW "{app}\.venv\Scripts\pythonw.exe"
 
 [Setup]
 ; Never change AppId: it is how upgrades find the existing install.
@@ -55,7 +57,7 @@ Name: "uhd"; Description: "Install the Ettus UHD driver for a USRP B210 (asks fo
 
 [InstallDelete]
 ; Upgrades: clear old program files so renamed or removed modules do not
-; linger.  .venv, env (B210 kit) and MSK144 (recordings, logs) are kept.
+; linger.  .venv, env (B210 kit) and MSK144 (recordings) are kept.
 Type: filesandordirs; Name: "{app}\map144_app"
 Type: filesandordirs; Name: "{app}\flexclient"
 Type: filesandordirs; Name: "{app}\experiments"
@@ -68,9 +70,8 @@ Type: filesandordirs; Name: "{app}\fortran_bp_test"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-; run.bat keeps a (minimized) console so startup errors stay readable.
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#Launcher}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Flags: runminimized
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#Launcher}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Flags: runminimized; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"
+Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Tasks: desktopicon
 
 [Run]
 ; Build the Python environment.  Interactive installs show the console and
@@ -78,11 +79,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#Launcher}"; WorkingDir: "{a
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\windows\install.ps1"" -SkipUhd -PauseOnError"; WorkingDir: "{app}"; StatusMsg: "Setting up Python packages (this can take a few minutes)..."; Flags: waituntilterminated; Check: not WizardSilent
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\windows\install.ps1"" -SkipUhd"; WorkingDir: "{app}"; StatusMsg: "Setting up Python packages..."; Flags: runhidden waituntilterminated; Check: WizardSilent
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\Install-UhdWindows.ps1"""; WorkingDir: "{app}"; StatusMsg: "Installing the Ettus UHD driver..."; Flags: waituntilterminated; Tasks: uhd
-Filename: "{app}\{#Launcher}"; WorkingDir: "{app}"; Description: "Start WS Skim"; Flags: postinstall nowait skipifsilent runminimized
+Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; Description: "Start WS Skim"; Flags: postinstall nowait skipifsilent; Check: VenvReady
 
 [UninstallDelete]
 ; Files created after install (Python environment, bytecode caches).
-; MSK144 (recordings and logs) is left in place.
+; MSK144 (recordings) and the user's settings and logs are left in place.
 Type: filesandordirs; Name: "{app}\.venv"
 Type: filesandordirs; Name: "{app}\map144_app"
 Type: filesandordirs; Name: "{app}\flexclient"
@@ -134,22 +135,35 @@ begin
     '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
+function VenvReady: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\.venv\Scripts\pythonw.exe'));
+end;
+
+{ No usable Python: install.ps1 installs CPython 3.12 for this user
+  (winget, else python.org).  Tell interactive users before downloading. }
 function InitializeSetup: Boolean;
 var
+  Answer: Integer;
   Ignored: Integer;
 begin
   Result := True;
   if PythonRegistered or PythonOnPath then
     Exit;
-  Result := False;
   if WizardSilent then
   begin
-    Log('Python 3.10-3.14 not found; aborting.');
+    Log('Python not found; install.ps1 will install Python 3.12 for this user.');
     Exit;
   end;
-  if MsgBox('WS Skim needs Python 3.12 (3.10 to 3.13 also work) from python.org.' + #13#10#13#10 +
-            'Install it first, ticking "Add python.exe to PATH", then run this installer again.' + #13#10#13#10 +
-            'Open the Python download page now?',
-            mbConfirmation, MB_YESNO) = IDYES then
+  Answer := MsgBox('WS Skim needs Python, and none was found on this computer.' + #13#10#13#10 +
+    'Setup can download and install Python 3.12 from python.org for you ' +
+    '(about 26 MB, this user only, no administrator rights).' + #13#10#13#10 +
+    'Yes: install Python automatically.' + #13#10 +
+    'No: open the Python download page and stop.',
+    mbConfirmation, MB_YESNOCANCEL);
+  if Answer = IDYES then
+    Exit;
+  Result := False;
+  if Answer = IDNO then
     ShellExec('open', PythonUrl, '', '', SW_SHOWNORMAL, ewNoWait, Ignored);
 end;

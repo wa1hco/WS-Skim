@@ -52,7 +52,8 @@ def test_linux_scripts_exist_and_are_executable():
     for rel in LINUX_SCRIPTS:
         path = ROOT / rel
         assert path.is_file(), f"missing {rel}"
-        assert path.stat().st_mode & stat.S_IXUSR, f"{rel} is not executable"
+        if sys.platform != "win32":  # Windows has no executable bit
+            assert path.stat().st_mode & stat.S_IXUSR, f"{rel} is not executable"
 
 
 def test_windows_scripts_exist():

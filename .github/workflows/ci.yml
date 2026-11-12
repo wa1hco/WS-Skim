@@ -62,3 +62,54 @@ jobs:
           # runner happens to have one; tests that need jt9 skip.
           MAP144_GPU: "0"
         run: python -m pytest tests/ -q --tb=short
+
+  windows:
+    # From PR #6: parse the PowerShell scripts and run the tests that apply
+    # on Windows.  The full Windows install test is in installers.yml.
+    name: test (Windows, Python 3.12)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version pin check
+        run: python tools/dev/check-version.py
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in @(Get-ChildItem -Recurse -Include *.ps1 -Path scripts, tools, packaging)) {
+            $errs = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count -gt 0) {
+              Write-Host "PARSE ERROR: $($f.FullName)"
+              $errs | ForEach-Object { Write-Host $_.ToString() }
+              $failed = $true
+            } else {
+              Write-Host "OK $($f.FullName)"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Install Python requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+
+      - name: Pytest (tests that apply on Windows)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          MAP144_GPU: "0"
+        run: >
+          python -m pytest -q --tb=short
+          tests/test_layout_and_icons.py
+          tests/test_installer.py
+          tests/test_user_paths.py
+          tests/test_user_facing_docs.py

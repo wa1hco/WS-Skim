@@ -37,6 +37,10 @@ Verified from the repo root:
   `scripts/install-desktop.sh` adds the menu entry and desktop icon).
 - `.github/workflows/installers.yml` builds both, installs them on clean
   runners, and on a `v*` tag publishes a GitHub release.
+- Settings and logs live in the user profile (`map144_app/user_paths.py`,
+  from PR #6), so reinstalling never touches them. The Windows installer
+  installs Python 3.12 per-user when none is found, and its shortcuts use
+  `pythonw.exe` (no console).
 - Developer scripts from the repo root now live under `tools/dev/`.
 - The old `README-Windows.md` and `README-Linux.md` are now developer
   notes in `docs/dev/`; the user-facing README has no CLI flags or

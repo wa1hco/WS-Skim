@@ -13,7 +13,8 @@
 #   --no-desktop    skip the menu entry and desktop icon
 #   --extract-only  unpack the files and stop (for testing)
 #   --uninstall     remove the menu entry, desktop icon and install folder
-#                   (including recordings and logs in its MSK144 folder)
+#                   (including recordings in its MSK144 folder; settings
+#                   and logs in ~/.config and ~/.local/state are kept)
 set -euo pipefail
 
 VERSION="@VERSION@"
@@ -30,7 +31,7 @@ while [ $# -gt 0 ]; do
         --no-desktop) DESKTOP=0; shift ;;
         --extract-only) EXTRACT_ONLY=1; shift ;;
         --uninstall) UNINSTALL=1; shift ;;
-        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "Unknown option: $1 (try --help)" >&2; exit 2 ;;
     esac
 done

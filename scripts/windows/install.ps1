@@ -99,6 +99,14 @@ function Get-PythonCandidates {
             }
         } catch { }
     }
+    # Per-user python.org location (where Install-PythonForUser puts it).
+    foreach ($exe in @((Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'))) {
+        $info = Test-PythonCandidate $exe
+        if ($info -and -not $seen.ContainsKey($info.Exe)) {
+            $seen[$info.Exe] = $true
+            $found += $info
+        }
+    }
     foreach ($name in @('python', 'python3')) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
         if (-not $cmd) { continue }
@@ -112,7 +120,62 @@ function Get-PythonCandidates {
     return @($found | Sort-Object -Property Minor -Descending)
 }
 
+# -- 1b. No usable Python: install official CPython 3.12 for this user ------
+# Adapted from PR #6.  Per-user (no admin), so it works from the per-user
+# WS-Skim-Setup.exe.  Tries winget first, then the python.org installer.
+# 3.12.10 is the last 3.12 release with Windows installers, and 3.12 has
+# numpy==1.26.4 wheels.
+$PyUserDir = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312'
+
+function Update-SessionPath {
+    $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $user    = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path = (@($machine, $user) | Where-Object { $_ }) -join ';'
+}
+
+function Install-PythonForUser {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Host 'Installing Python 3.12 with winget (this user only) ...' -ForegroundColor Cyan
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & winget install -e --id Python.Python.3.12 --scope user --source winget `
+            --accept-package-agreements --accept-source-agreements --disable-interactivity
+        Write-Host "  winget exit code: $LASTEXITCODE"
+        $ErrorActionPreference = $prev
+        Update-SessionPath
+        if (@(Get-PythonCandidates).Count -gt 0) { return $true }
+    } else {
+        Write-Host 'winget is not available; using the python.org installer.' -ForegroundColor Yellow
+    }
+
+    $ver = '3.12.10'
+    $url = "https://www.python.org/ftp/python/$ver/python-$ver-amd64.exe"
+    $exe = Join-Path $env:TEMP "ws-skim-python-$ver-amd64.exe"
+    Write-Host "Downloading Python $ver from python.org (~26 MB) ..." -ForegroundColor Cyan
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+    } catch {
+        Write-Host "  download failed: $_" -ForegroundColor Red
+        return $false
+    }
+    if (-not (Test-Path $exe) -or (Get-Item $exe).Length -lt 10MB) {
+        Write-Host '  download incomplete' -ForegroundColor Red
+        return $false
+    }
+    Write-Host "Installing Python $ver for this user ..." -ForegroundColor Cyan
+    $pyArgs = "/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_test=0 Include_doc=0 TargetDir=`"$PyUserDir`""
+    $p = Start-Process -FilePath $exe -ArgumentList $pyArgs -Wait -PassThru
+    Write-Host "  installer exit code: $($p.ExitCode)"
+    Update-SessionPath
+    return (@(Get-PythonCandidates).Count -gt 0)
+}
+
 $candidates = @(Get-PythonCandidates)
+if ($candidates.Count -eq 0) {
+    if (Install-PythonForUser) { $candidates = @(Get-PythonCandidates) }
+}
 if ($candidates.Count -eq 0) {
     Write-Host 'ERROR: no suitable Python 3.10-3.14 found on PATH.' -ForegroundColor Red
     Write-Host '  Install Python 3.14 or 3.12 from https://www.python.org/downloads/' -ForegroundColor Red

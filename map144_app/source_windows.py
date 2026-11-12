@@ -37,6 +37,8 @@ import numpy as np
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 
+from .user_paths import config_dir as _ws_skim_config_dir
+
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -1088,7 +1090,7 @@ def setup_sdrangel_window(self, view_action):
         "Save SDRangel's current device set layout as the MAP144 preset.\n"
         "Next time MAP144 starts, SDRangel will be restored to this exact\n"
         "layout including sub-window positions and channel configuration.\n"
-        "Also exports a backup file to ~/.config/map144/."
+        "Also exports a backup file to the WS Skim settings folder."
     )
     save_layout_btn.clicked.connect(lambda: _sdrangel_save_layout(self))
     layout.addWidget(save_layout_btn)
@@ -1290,7 +1292,7 @@ def _sdrangel_save_layout(self):
 
     # Copy the now-flushed conf file.
     _save_sdrangel_layout()
-    dst = os.path.expanduser('~/.config/map144/sdrangel_layout.conf')
+    dst = str(_ws_skim_config_dir() / 'sdrangel_layout.conf')
     if os.path.isfile(dst):
         print(f"[sdrangel] Layout saved → {dst}", flush=True)
         _setlbl(self, "_sdrangel_layout_status_val", "Saved — SDRangel relaunching…")
