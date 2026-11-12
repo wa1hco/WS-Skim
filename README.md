@@ -25,7 +25,10 @@ Then download the installer for your system from the
 Both add a **WS Skim** icon to the desktop (and the Start menu or
 application menu); start the app from there. On Ubuntu, if the desktop
 icon shows a gear instead of the WS SKIM icon, right-click it and choose
-**Allow Launching**. To update, run a newer installer the same way. No
+**Allow Launching**. WS Skim checks GitHub for a newer release shortly
+after it starts and offers to install it: click **Update Now** and it
+closes, updates itself and starts again. **Help → Check for Updates**
+checks on demand. You can also update by running a newer installer. No
 administrator rights are needed.
 
 Your settings and logs are kept in your user profile, not in the program

@@ -59,8 +59,12 @@ def git_short_hash(root: Path = ROOT) -> str:
     ).strip()
 
 
-def stage(out: Path, root: Path = ROOT) -> list[str]:
-    """Extract HEAD into ``out`` minus EXCLUDE_TOP; return top-level names."""
+def stage(out: Path, root: Path = ROOT, tag: str = "") -> list[str]:
+    """Extract HEAD into ``out`` minus EXCLUDE_TOP; return top-level names.
+
+    With ``tag``, also write ``RELEASE`` holding it: the installed app reads
+    it to know which release it is when it checks GitHub for updates.
+    """
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -75,6 +79,8 @@ def stage(out: Path, root: Path = ROOT) -> list[str]:
         except TypeError:  # Python without extraction filters (< 3.10.12)
             tar.extractall(out, members=members)  # trusted: our own git tree
     (out / "BUILD").write_text(git_short_hash(root) + "\n", encoding="utf-8")
+    if tag:
+        (out / "RELEASE").write_text(tag + "\n", encoding="utf-8")
     return sorted(p.name for p in out.iterdir())
 
 
@@ -87,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     version = app_version()
     if args.tag:
         check_tag(args.tag, version)
-    names = stage(args.out.resolve())
+    names = stage(args.out.resolve(), tag=args.tag)
     print(f"staged {len(names)} top-level entries into {args.out}", file=sys.stderr)
     print(version)
     return 0

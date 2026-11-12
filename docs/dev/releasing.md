@@ -45,6 +45,18 @@ refuses anything else. The build writes the short git hash to a `BUILD`
 file, so the installed app shows `0.1.4 (51b9fd9)` in its startup log line
 and **Help → About**, and the release title carries the same pair.
 
+## Self-update
+
+A tag build also writes `RELEASE` (the tag) into the installer. An
+installed copy compares it with the GitHub releases
+(`ws_skim/update_check.py`) shortly after startup and offers newer ones:
+prereleases only to copies installed from a prerelease. Update Now
+downloads the platform installer, verifies it against `SHA256SUMS.txt`,
+and hands off to a helper script that waits for WS Skim to exit, runs
+the installer silently over the same folder (`/SILENT` on Windows,
+`--dest <folder>` on Linux) and starts WS Skim again. A release only
+counts once both installers and `SHA256SUMS.txt` are attached.
+
 ## Cutting a release
 
 1. Bump the version in both files if needed and update `CHANGELOG.md`.
