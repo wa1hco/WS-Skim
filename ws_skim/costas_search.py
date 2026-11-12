@@ -183,6 +183,24 @@ def spectrogram(x: np.ndarray, fs: float, spec: SyncSpec, t0_s: float = 0.0) -> 
                        bin_hz=fs / nfft, t0_s=t0_s)
 
 
+def normalize_frames(sg: Spectrogram) -> Spectrogram:
+    """Divide each time frame by its median power across frequency.
+
+    Impulsive static is broadband and lasts a few frames: without this, the
+    one or two Costas symbols inside a burst dominate both sums in
+    :func:`sync_map`, the ratio's spread blows up and the max over lags
+    crosses the threshold at hundreds of frequencies (measured: one 30 ms
+    burst 30 dB over the noise → ~170 noise candidates per period at 48 kHz).
+    After it, a burst frame weighs like any other.  FT8/FT4 signals are
+    narrow, so the median across a wide band is the noise level.  Same
+    weak-signal limit on stationary noise (synthetic: -22 dB found 6/6
+    before and after).  In place; returns ``sg``.
+    """
+    med = np.median(sg.power, axis=1, keepdims=True)
+    np.divide(sg.power, np.maximum(med, np.finfo(np.float32).tiny), out=sg.power)
+    return sg
+
+
 def sync_map(sg: Spectrogram, spec: SyncSpec, min_sync_fraction: float = 0.6,
              ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Costas sync ratio for every (start frame, tone-0 bin).
@@ -278,7 +296,7 @@ def search(
     """Like :func:`find_candidates`, but also returns the sync map behind it."""
     if threshold is None:
         threshold = spec.threshold
-    sg = spectrogram(x, fs, spec, t0_s)
+    sg = normalize_frames(spectrogram(x, fs, spec, t0_s))
     sync, start_times, freqs = sync_map(sg, spec)
 
     best_lag = np.argmax(sync, axis=0)

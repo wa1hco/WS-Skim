@@ -10,6 +10,11 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### FT8 decoding fixes
 
+- **Static bursts no longer flood the Sync Map with candidates.**  Each
+  time slice of the search spectrogram is now scaled to its own noise
+  level, so a burst of static weighs like any other moment.  On synthetic
+  data one burst went from ~170 false candidates per period to none, and
+  weak signals are found as before (-22 dB), and better during static.
 - **Period timing follows the radio, not the CPU.**  The FT8/FT4 period
   start was stamped with the time the computer *processed* the samples.
   When processing fell behind the radio (the Flex queue holds up to ~10 s),
