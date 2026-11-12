@@ -93,12 +93,20 @@ else
     fi
 fi
 if [ "$WANT_GPU" = "1" ]; then
+    # Optional, so pip's output goes to a log instead of the terminal: a
+    # missing CuPy wheel (e.g. none yet for this Python) is not an install
+    # failure and its ERROR lines read like one.
+    GPU_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ws-skim/logs"
+    mkdir -p "$GPU_LOG_DIR"
+    GPU_LOG="$GPU_LOG_DIR/install-gpu.log"
     echo "Installing GPU extras (requirements-gpu.txt) ..."
-    "$VENV_PY" -m pip install -r requirements-gpu.txt || {
-        echo "WARNING: GPU extras failed to install.  CuPy needs a healthy NVIDIA" >&2
-        echo "         driver; after a driver update you must reboot so the kernel" >&2
-        echo "         module matches.  WS Skim will use the CPU fallback meanwhile." >&2
-    }
+    if "$VENV_PY" -m pip install -r requirements-gpu.txt >"$GPU_LOG" 2>&1; then
+        echo "GPU extras installed."
+    else
+        echo "Note: GPU acceleration is not available on this computer, so WS Skim"
+        echo "      will use the CPU instead. Everything else is installed."
+        echo "      (Details: $GPU_LOG)"
+    fi
 fi
 
 # Verify jt9 discovery.  Don't hard-fail — the operator can install
