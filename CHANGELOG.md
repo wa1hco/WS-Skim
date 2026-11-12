@@ -26,6 +26,11 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **FT8/FT4 wideband Costas search (first slice).**  `map144_app/costas_search.py`
+  finds FT8 and FT4 sync across a whole IQ period (or a 12 kHz audio WAV) and
+  groups the hits into ~3 kHz sections for jt9.  Synthetic tests and a
+  developer scan tool (`tools/dev/costas_scan.py`); not yet used by the live
+  decoder.
 - **Installers.**  `WS-Skim-Setup.exe` for Windows (per-user, no admin;
   desktop and Start-menu shortcuts; optional B210 UHD driver) and a
   single-file `ws-skim-linux-install.sh` for Linux (application-menu entry
