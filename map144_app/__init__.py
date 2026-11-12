@@ -62,7 +62,7 @@ pulling the full GUI/DSP stack — hence the lazy ``MAP144Visualizer`` load.
 #:   - the "ready" banner printed by install.sh / install.ps1
 #:   - bug reports (lands in MSK144/logs/map144_*.log automatically)
 #: Bumped together with a git tag at each release.  See CHANGELOG.md.
-__version__ = "0.1.3-alpha"
+__version__ = "0.1.4"
 
 __all__ = ["MAP144Visualizer", "__version__"]
 

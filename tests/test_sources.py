@@ -182,27 +182,29 @@ class TestDualClockContract(unittest.TestCase):
         )
         src.outputs["iq"] = out
 
-        t0 = time.time()
         rt.start()
         try:
             time.sleep(0.5)
             recs = _drain(out, max_items=100, timeout=0.05)
         finally:
             rt.stop(timeout_s=1.0)
-        elapsed = time.time() - t0
 
         self.assertGreater(len(recs), 1)
-        last = recs[-1]
-        # Implied drift = wall_clock_at_production - real_time_at_emission.
-        # With 10 000 ppm = 1% rate skew, after ~0.5 s we expect ~5 ms drift.
-        # Compare against the test's real elapsed for a generous bound.
-        injected_offset = last.wall_clock_at_production - (t0 + last.start_sample / 48_000)
-        # Expect drift to be POSITIVE (wall clock running ahead of sample clock).
+        first, last = recs[0], recs[-1]
+        # Measure drift between the first and last records so start-up
+        # latency between t0 and on_start is not counted as injected
+        # offset.  With 10 000 ppm = 1% rate skew, injected ≈ sample_span * 0.01.
+        sample_span = (last.start_sample - first.start_sample) / 48_000
+        self.assertGreater(sample_span, 0.1,
+                           "need enough records to measure drift")
+        clock_span = last.wall_clock_at_production - first.wall_clock_at_production
+        injected_offset = clock_span - sample_span
+        expected = sample_span * 10_000 * 1e-6
         self.assertGreater(injected_offset, 0.0005,
                            f"injected_offset={injected_offset*1000:.2f} ms, expected > 0.5 ms")
-        # And bounded by roughly elapsed * ppm.
-        self.assertLess(injected_offset, elapsed * 10_000 * 1e-6 * 2,
-                        f"injected_offset={injected_offset*1000:.2f} ms way over expected")
+        self.assertLess(injected_offset, expected * 3 + 0.01,
+                        f"injected_offset={injected_offset*1000:.2f} ms way over "
+                        f"expected {expected*1000:.2f} ms")
 
 
 # ---------------------------------------------------------------------

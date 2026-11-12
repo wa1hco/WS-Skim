@@ -1,3 +1,15 @@
+! The phase correction, half-sine matched filter, sync-word check,
+! soft-bit normalization, and LLR scaling below are derived from
+! WSJT-X lib/msk144decodeframe.f90 (https://github.com/WSJTX/wsjtx).
+! Copyright the WSJT Development Team and the original authors.
+! Licensed under the GNU General Public License, version 3 (GPL-3.0).
+! https://www.gnu.org/licenses/gpl-3.0.txt
+!
+! The stdin/stdout harness is local to map144. This file is not a
+! verbatim extract (it does not call unpack77). The upstream subroutine
+! has no per-file copyright line, so no individual author is named here.
+! See NOTICE.
+
 ! mf_test.f90 — Fortran msk144decodeframe phase correction + matched filter + bpdecode128_90.
 !
 ! Reads n_frames complex64 frames (each 864 complex samples) from stdin in text format.
