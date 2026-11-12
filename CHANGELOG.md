@@ -8,6 +8,24 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### FT8 decoding fixes
+
+- **Period timing follows the radio, not the CPU.**  The FT8/FT4 period
+  start was stamped with the time the computer *processed* the samples.
+  When processing fell behind the radio (the Flex queue holds up to ~10 s),
+  every period was cut late by that backlog and jt9 saw the signals at the
+  wrong time.  Flex packets are now stamped when they arrive and the period
+  start uses that time.
+- **The FT8 sub-band is always decoded.**  Besides the sections chosen from
+  the Costas candidates, jt9 now always runs on the section that starts at
+  the band's dial frequency (e.g. 7.074 MHz), so a busy sub-band is decoded
+  even if stronger candidates elsewhere crowd it out.
+- **Diagnostics.**  The log now shows, per period, the processing backlog,
+  Flex queue depth, dropped/missed packets, where each jt9 section sits and
+  the median DT of the decodes.  Diagnostics → Save FT8 period IQ keeps the
+  last 10 minutes of periods in the output folder (`ft8_iq/`) for analysis.
+- View → FT8 Sync Map is now the first entry in the View menu.
+
 ### Project
 
 - **Renamed to WS Skim** (repository `wa1hco/WS-Skim`, formerly `map144`).

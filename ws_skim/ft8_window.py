@@ -49,7 +49,8 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
 
     view_action = QtWidgets.QAction("FT8 Sync Map", self)
     view_action.setCheckable(True)
-    view_menu.addAction(view_action)
+    first = view_menu.actions()[0] if view_menu.actions() else None
+    view_menu.insertAction(first, view_action)        # top of View, easy to find
     _build_window(self, view_action)
     view_action.triggered.connect(
         lambda checked: self._ft8_win.show() if checked else self._ft8_win.hide())
@@ -65,6 +66,17 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
         group.addAction(act)
         mode_menu.addAction(act)
         self._mode_actions[mode] = act
+
+    # Diagnostics → Save FT8 period IQ (off by default, not remembered).
+    diag = next((a.menu() for a in menu_bar.actions()
+                 if a.menu() is not None and a.text().replace("&", "") == "Diagnostics"), None)
+    if diag is not None:
+        save_act = QtWidgets.QAction("Save FT8 period IQ (last 10 min)", self, checkable=True)
+        save_act.setToolTip("Write each FT8/FT4 period's radio data to the output "
+                            "folder's ft8_iq/ for offline analysis (~7 MB per period)")
+        save_act.toggled.connect(lambda on: setattr(self, "_ft8_save_iq", bool(on)))
+        diag.addAction(save_act)
+        self._ft8_save_iq_action = save_act
 
     saved = str(_SETTINGS.value("mode", ft8_engine.DEFAULT_MODE))
     if saved not in ft8_engine.MODES:

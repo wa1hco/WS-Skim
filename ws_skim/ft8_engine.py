@@ -111,16 +111,48 @@ def downsample_map(sync: np.ndarray, freqs: np.ndarray, baseline: float,
     return out, col_f
 
 
+def dial_section(dial_offset_hz: float | None, fs: float, spec) -> cs.Section | None:
+    """A section with audio 0 Hz at the band's dial frequency (IQ offset), or
+    None if the dial's 200..3200 Hz jt9 range is not inside the search band."""
+    if dial_offset_hz is None:
+        return None
+    lo = dial_offset_hz + ft8_decode.JT9_LOW_HZ
+    hi = dial_offset_hz + ft8_decode.JT9_HIGH_HZ
+    if lo < -EDGE_FRACTION * fs or hi > EDGE_FRACTION * fs:
+        return None
+    return cs.Section(base_hz=float(dial_offset_hz), low_audio_hz=float(ft8_decode.JT9_LOW_HZ),
+                      high_audio_hz=float(ft8_decode.JT9_HIGH_HZ) - spec.bandwidth_hz,
+                      candidates=[])
+
+
+def with_dial_section(sections: list, dial: cs.Section | None,
+                      same_hz: float = 300.0) -> list:
+    """``sections`` with ``dial`` first, unless one already starts within
+    ``same_hz`` of it.  jt9 searches 200..3200 Hz audio in every section, so
+    the dial section decodes the whole FT8 sub-band even when the Costas
+    candidates there are crowded out by stronger ones elsewhere."""
+    if dial is None or any(abs(s.base_hz - dial.base_hz) <= same_hz for s in sections):
+        return list(sections)
+    return [dial] + list(sections)
+
+
 def search_period(iq: np.ndarray, fs: float, mode: str, *, t0_s: float,
                   period_start_utc: float, center_freq_mhz: float,
-                  data_fraction: float = 1.0) -> PeriodResult:
-    """Run the Costas search on one period of complex IQ (pure DSP, no engine)."""
+                  data_fraction: float = 1.0,
+                  dial_offset_hz: float | None = None) -> PeriodResult:
+    """Run the Costas search on one period of complex IQ (pure DSP, no engine).
+
+    ``dial_offset_hz``: the band's FT8/FT4 dial frequency relative to the IQ
+    centre; when inside the band, a jt9 section starting there is always
+    included (see :func:`with_dial_section`).
+    """
     spec = cs.MODES[mode]
     lo = -EDGE_FRACTION * fs
     hi = EDGE_FRACTION * fs - spec.bandwidth_hz
     t = time.perf_counter()
     res = cs.search(iq, fs, spec, t0_s=t0_s, freq_range_hz=(lo, hi))
-    sections = cs.group_into_sections(res.candidates, spec)
+    sections = with_dial_section(cs.group_into_sections(res.candidates, spec),
+                                 dial_section(dial_offset_hz, fs, spec))
     m, mf = downsample_map(res.sync, res.freqs_hz, res.baseline)
     return PeriodResult(
         mode=mode, period_start_utc=period_start_utc,
@@ -168,17 +200,29 @@ def maybe_dispatch_period(eng) -> None:
     t0_s = (have0 - tb.sample_at(p0)) / fs
     frac = n / max(1, want1 - want0)
     center = float(eng.center_freq_mhz)
+    dial = getattr(eng, "calling_freq_mhz", None)
+    dial_off = (float(dial) - center) * 1e6 if dial else None
+    timing = timing_snapshot(eng, tb)
+    if getattr(eng, "_ft8_save_iq", False):
+        save_period_iq(iq, fs=fs, t0_s=t0_s, period_start_utc=p0, mode=mode,
+                       center_freq_mhz=center, timing=timing)
 
     jt9 = _jt9_path(eng)
+    hms = time.strftime("%H:%M:%S", time.gmtime(p0))
 
     def work():
         try:
             r = search_period(iq, fs, mode, t0_s=t0_s, period_start_utc=p0,
-                              center_freq_mhz=center, data_fraction=frac)
+                              center_freq_mhz=center, data_fraction=frac,
+                              dial_offset_hz=dial_off)
             eng._ft8_result = r
-            log.info("[ft8] %s period %s: %d candidates, %d sections, %.2f s",
-                     mode, time.strftime("%H:%M:%S", time.gmtime(p0)),
-                     len(r.candidates), len(r.sections), r.compute_s)
+            log.info("[ft8] %s period %s: %d candidates, %d sections, %.2f s; "
+                     "data %.0f%%, backlog %.2f s, queue %s pkts, drops %s, missed %s",
+                     mode, hms, len(r.candidates), len(r.sections), r.compute_s,
+                     100 * frac, timing["backlog_s"], timing["queue_pkts"],
+                     timing["drops"], timing["missed"])
+            log.info("[ft8] %s period %s: sections at %s kHz", mode, hms,
+                     " ".join(f"{(center * 1e6 + s.base_hz) / 1e3:.1f}" for s in r.sections))
             if not jt9 and r.sections:
                 eng._ft8_result = replace(
                     r, decode_note="jt9 not found: install WSJT-X to decode")
@@ -189,9 +233,10 @@ def maybe_dispatch_period(eng) -> None:
                     center_freq_mhz=center, jt9=jt9,
                     depth=ft8_decode.depth_for(len(r.sections)))
                 eng._ft8_result = replace(r, decodes=ds, decoded=True)
-                log.info("[ft8] %s period %s: %d decodes, jt9 %.2f s", mode,
-                         time.strftime("%H:%M:%S", time.gmtime(p0)), len(ds),
-                         time.perf_counter() - t)
+                dts = sorted(d.dt_s for d in ds)
+                log.info("[ft8] %s period %s: %d decodes, jt9 %.2f s, DT median %s",
+                         mode, hms, len(ds), time.perf_counter() - t,
+                         f"{dts[len(dts) // 2]:+.2f} s" if dts else "-")
                 publish_decodes(eng, ds)
         except Exception:
             log.exception("[ft8] search/decode failed")
@@ -202,6 +247,59 @@ def maybe_dispatch_period(eng) -> None:
     th = threading.Thread(target=work, daemon=True, name="ft8-search")
     eng._ft8_thread = th
     th.start()
+
+
+#: Diagnostics → Save FT8 period IQ keeps at most this many files (~7 MB each
+#: at 48 kHz FT8), oldest deleted first.
+SAVE_IQ_KEEP = 40
+
+
+def timing_snapshot(eng, tb) -> dict:
+    """How far the radio thread runs behind the radio, for the period log.
+
+    ``backlog_s`` = now minus the UTC stamped on the newest processed sample.
+    With arrival-stamped sources (Flex) that is the processing backlog; with
+    "now"-stamped sources it reads ~0 by construction.  ``queue_pkts`` is the
+    Flex packet queue depth; ``drops`` / ``missed`` the VITA receiver's
+    queue-full drops and sequence gaps since connect (None for other sources).
+    """
+    out = {"backlog_s": float("nan"), "queue_pkts": None, "drops": None, "missed": None}
+    try:
+        out["backlog_s"] = time.time() - tb.utc_at(eng._iq_abs_sample)
+    except Exception:
+        pass
+    rc = getattr(eng, "radio_client", None) if getattr(eng, "source_mode", "") == "radio" else None
+    if rc is not None:
+        q = getattr(rc, "sample_queue", None)
+        out["queue_pkts"] = q.qsize() if q is not None else None
+        vita = getattr(rc, "_vita", None)
+        out["drops"] = getattr(vita, "drop_count", None)
+        out["missed"] = getattr(vita, "missed_count", None)
+    return out
+
+
+def save_period_iq(iq, *, fs, t0_s, period_start_utc, mode, center_freq_mhz, timing,
+                   out_dir=None, keep: int = SAVE_IQ_KEEP):
+    """Write one period's search input to ``<output>/ft8_iq/<UTC>.npz`` for
+    offline replay (``search_period`` / ``decode_period`` take the same
+    arguments).  Never raises: a full disk must not stop decoding."""
+    try:
+        if out_dir is None:
+            from .detection import production_output_dir
+            out_dir = production_output_dir() / "ft8_iq"
+        from pathlib import Path
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        name = time.strftime("%Y%m%d_%H%M%S", time.gmtime(period_start_utc))
+        np.savez(out_dir / f"{name}_{mode}.npz", iq=np.asarray(iq, np.complex64),
+                 fs=fs, t0_s=t0_s, period_start_utc=period_start_utc, mode=mode,
+                 center_freq_mhz=center_freq_mhz,
+                 backlog_s=timing.get("backlog_s", float("nan")))
+        files = sorted(out_dir.glob("*.npz"))
+        for f in files[:max(0, len(files) - keep)]:
+            f.unlink(missing_ok=True)
+    except Exception as e:
+        log.warning("[ft8] could not save period IQ: %s", e)
 
 
 def _jt9_path(eng) -> str | None:

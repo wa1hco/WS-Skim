@@ -1024,15 +1024,22 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     # TSI=0, rarely locked — not worth the branch).
     _is_wav_early = getattr(self, 'source_mode', '') == 'wav'
     _chunk_start_sample = self._iq_abs_sample   # first sample of this chunk (pre-increment)
+    # Wall time of this chunk's first sample.  A source that stamps packet
+    # arrival (Flex: ``VitaPacket.rx_wall``) sets ``_chunk_rx_wall`` just
+    # before the call; using it instead of "now" keeps the (sample, wall) pair
+    # right when this thread runs behind the radio (queued packets).  Consumed
+    # here so a stale value never outlives its chunk; 0 → fall back to now.
+    _chunk_wall = getattr(self, '_chunk_rx_wall', 0.0) or time.time()
+    self._chunk_rx_wall = 0.0
     if getattr(self, '_timebase_anchor_pending', False):
         # Every source open re-anchors → a WAV-relative anchor cannot leak into a
         # live run (the 2026-05-31 "1970 TFMF timestamp" bug).
-        self.timebase.reset(sample=_chunk_start_sample, wall=time.time())
+        self.timebase.reset(sample=_chunk_start_sample, wall=_chunk_wall)
         self._timebase_anchor_pending = False
     elif not _is_wav_early:
         # Live: re-pair (sample, wall) at each 15-s UTC boundary so long-run
         # TCXO drift cannot accumulate.
-        _tb_now = time.time()
+        _tb_now = _chunk_wall
         if self.timebase.should_mark_period(_tb_now):
             self.timebase.mark_period_start(sample=_chunk_start_sample, wall=_tb_now)
 
