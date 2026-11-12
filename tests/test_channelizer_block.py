@@ -83,6 +83,10 @@ def _drain_records(stream: Stream, max_items: int = 200, timeout: float = 0.05):
     return items
 
 
+def _output_samples(recs: list[Record]) -> int:
+    return sum(r.data.shape[-1] for r in recs)
+
+
 def _wait_for_records(stream: Stream, n: int, timeout_s: float = 15.0) -> list[Record]:
     """Wait until ``n`` output records arrive (or ``timeout_s`` elapses).
 
@@ -101,6 +105,16 @@ def _wait_for_records(stream: Stream, n: int, timeout_s: float = 15.0) -> list[R
                 timeout=min(0.2, remaining),
             )
         )
+    return items
+
+
+def _wait_for_output_samples(stream: Stream, n_samples: int, timeout_s: float = 15.0) -> list[Record]:
+    """Wait until at least ``n_samples`` have arrived on ``stream``."""
+    items: list[Record] = []
+    deadline = time.monotonic() + timeout_s
+    while _output_samples(items) < n_samples and time.monotonic() < deadline:
+        remaining = max(0.01, deadline - time.monotonic())
+        items.extend(_drain_records(stream, max_items=16, timeout=min(0.2, remaining)))
     return items
 
 
@@ -146,7 +160,8 @@ class TestChannelizerShape(unittest.TestCase):
         try:
             for arr, ss, wc in zip(in_records, start_samples, wall_clocks):
                 _push_record(in_stream, arr, start_sample=ss, wall_clock=wc)
-            recs = _wait_for_records(out_stream, len(in_records))
+            expected = sum(arr.shape[-1] for arr in in_records) // DECIMATE
+            recs = _wait_for_output_samples(out_stream, expected)
         finally:
             rt.stop(timeout_s=5.0)
 
@@ -319,7 +334,7 @@ class TestChannelizerCarry(unittest.TestCase):
                     np.zeros(n_per, dtype=np.complex64),
                     start_sample=i * n_per,
                 )
-            recs = _wait_for_records(out_stream, 1)
+            recs = _wait_for_output_samples(out_stream, (4 * n_per) // DECIMATE)
         finally:
             rt.stop(timeout_s=5.0)
 
@@ -377,7 +392,7 @@ class TestChannelizerCarry(unittest.TestCase):
                              "expected no output yet; carry should be holding 3 samples")
             # Push more samples; total now 3+5=8, aligned=8, output=2 samples.
             _push_record(in_stream, np.zeros(5, dtype=np.complex64), start_sample=3)
-            recs = _wait_for_records(out_stream, 1)
+            recs = _wait_for_output_samples(out_stream, 2)
         finally:
             rt.stop(timeout_s=5.0)
 

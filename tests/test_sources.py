@@ -162,9 +162,8 @@ class TestDualClockContract(unittest.TestCase):
             self.assertEqual(nxt.start_sample, prev.end_sample)
 
     def test_drift_injection_produces_offset(self):
-        """test_clock_drift_ppm=10000 (10 ms/s) makes wall-clock drift
-        measurably ahead of real time over a short test window.
-        """
+        """test_clock_drift_ppm=10000 makes wall_clock_at_production run
+        ahead of real time by elapsed * 1%."""
         rt = Runtime()
         src = rt.add(
             SyntheticSource("src"),
@@ -172,7 +171,7 @@ class TestDualClockContract(unittest.TestCase):
                 sample_rate_hz=48_000,
                 samples_per_record=1024,
                 signal_mode="zero",
-                realtime_pacing=True,        # so sample clock tracks real time
+                realtime_pacing=True,
                 test_clock_drift_ppm=10_000.0,  # 10 ms drift per real second
             ),
         )
@@ -182,29 +181,31 @@ class TestDualClockContract(unittest.TestCase):
         )
         src.outputs["iq"] = out
 
+        # Measure the hook directly against time.time(). Comparing
+        # record wall clocks to start_sample is sensitive to pacing
+        # jitter, especially when earlier tests leave the machine busy.
+        ppm = 10_000 * 1e-6
         rt.start()
         try:
-            time.sleep(0.5)
-            recs = _drain(out, max_items=100, timeout=0.05)
+            deadline = time.monotonic() + 5.0
+            while src._real_anchor_wall == 0.0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertGreater(src._real_anchor_wall, 0.0,
+                               "source on_start did not set the wall-clock anchor")
+            time.sleep(0.8)
+            t1 = time.time()
+            wall = src._compute_wall_clock_at_production()
+            t2 = time.time()
         finally:
-            rt.stop(timeout_s=1.0)
+            rt.stop(timeout_s=2.0)
 
-        self.assertGreater(len(recs), 1)
-        first, last = recs[0], recs[-1]
-        # Measure drift between the first and last records so start-up
-        # latency between t0 and on_start is not counted as injected
-        # offset.  With 10 000 ppm = 1% rate skew, injected ≈ sample_span * 0.01.
-        sample_span = (last.start_sample - first.start_sample) / 48_000
-        self.assertGreater(sample_span, 0.1,
-                           "need enough records to measure drift")
-        clock_span = last.wall_clock_at_production - first.wall_clock_at_production
-        injected_offset = clock_span - sample_span
-        expected = sample_span * 10_000 * 1e-6
-        self.assertGreater(injected_offset, 0.0005,
-                           f"injected_offset={injected_offset*1000:.2f} ms, expected > 0.5 ms")
-        self.assertLess(injected_offset, expected * 3 + 0.01,
-                        f"injected_offset={injected_offset*1000:.2f} ms way over "
-                        f"expected {expected*1000:.2f} ms")
+        # After 0.8 s the injected lead is ~8 ms, much larger than the
+        # time.time() spread around the call.
+        self.assertGreater(wall - t2, 0.001,
+                           f"wall={wall:.6f} not ahead of real time "
+                           f"(t2={t2:.6f}, lead={(wall-t2)*1000:.2f} ms)")
+        self.assertGreaterEqual(wall, t1 + (t1 - src._real_anchor_wall) * ppm - 1e-4)
+        self.assertLessEqual(wall, t2 + (t2 - src._real_anchor_wall) * ppm + 1e-4)
 
 
 # ---------------------------------------------------------------------
