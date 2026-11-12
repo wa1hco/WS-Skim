@@ -76,12 +76,18 @@ def generate_test_signal(
     ).astype(np.complex64) * np.complex64(noise_sigma)
 
     # Lazy import — keeps the module importable even without msk144code.
+    # generate_msk144.py lives in tools/dev/.
+    import sys
+    from pathlib import Path as _Path
+    _dev = _Path(__file__).resolve().parents[2] / "tools" / "dev"
+    if str(_dev) not in sys.path:
+        sys.path.insert(0, str(_dev))
     try:
         from generate_msk144 import generate_ping_msk144code  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError(
             "generate_msk144 module not importable.  Run synthetic.py "
-            "from the repo root or add the repo to PYTHONPATH."
+            "from the repo root or add tools/dev to PYTHONPATH."
         ) from exc
 
     for ping in pings:

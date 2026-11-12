@@ -25,13 +25,13 @@ against the same radio at the same time.
 
 ## 1. Install MAP144 + B210 support
 
-### Option A — `install.ps1` (recommended for router on a networked PC)
+### Option A — `scripts/windows/install.ps1` (recommended for router on a networked PC)
 
 From a git checkout of `main`:
 
 ```powershell
 cd C:\map144
-.\install.ps1
+.\scripts\windows\install.ps1
 ```
 
 This will:
@@ -39,16 +39,16 @@ This will:
 1. Create `.venv` and install Python deps (`numpy==1.26.4`, …)
 2. Download/install **Ettus UHD** (admin UAC) including **B210 firmware**
    images under `C:\Program Files\UHD\share\uhd\images\`  
-   (skip with `.\install.ps1 -SkipUhd` if you only want Flex/audio work)
+   (skip with `.\scripts\windows\install.ps1 -SkipUhd` if you only want Flex/audio work)
 
-**Python `import uhd`:** Windows has no pip wheel. After `install.ps1`, also do
+**Python `import uhd`:** Windows has no pip wheel. After `scripts/windows/install.ps1`, also do
 **one** of:
 
 - Offline kit `env\` (Option B), or  
 - Miniconda: `conda create -n map144 python=3.11` then  
   `conda install -c conda-forge uhd` and `pip install -r requirements.txt`
 
-`run-router.bat` auto-detects `env\`, `.venv\`, or the conda `map144` env.
+`scripts/windows/run-router.bat` auto-detects `env\`, `.venv\`, or the conda `map144` env.
 
 Standalone UHD/firmware only:
 
@@ -71,7 +71,7 @@ Same kit used for MAP144. Details: `docs/ALPHA_NOTES.md` and
 
 ### Option C — already have MAP144 + B210 working
 
-If `run-b210.bat` already works, skip to §2.
+If `scripts/windows/run-b210.bat` already works, skip to §2.
 
 ---
 
@@ -126,10 +126,10 @@ You should see `CABLE Input` or `Cable A Input` in that list.
 
 ```bat
 cd C:\map144
-run-router.bat
+scripts\windows\run-router.bat
 ```
 
-`run-router.bat` finds Python in this order: `env\`, `.venv\`, then
+`scripts/windows/run-router.bat` finds Python in this order: `env\`, `.venv\`, then
 `%USERPROFILE%\miniconda3\envs\map144\`.
 
 The GUI opens: **MAP144 — B210 Audio / IQ Router**.
@@ -174,7 +174,7 @@ Assign cables explicitly if auto-match is wrong:
 
 ```bat
 set MAP144_WSJTX_DEVICE=Cable A Input, Cable B Input
-run-router.bat
+scripts\windows\run-router.bat
 ```
 
 Or per RF port:
@@ -200,7 +200,7 @@ B210 and stops writing to the cables.
 - [ ] `uhd_find_devices` sees the B210 (or kit install said READY)
 - [ ] VB-CABLE (or A+B) installed; Output device visible in Windows Sound
 - [ ] `import sounddevice` works in the map144 env
-- [ ] `run-router.bat` opens the GUI
+- [ ] `scripts/windows/run-router.bat` opens the GUI
 - [ ] Apply with one dial selected succeeds (no PortAudio / device error)
 - [ ] WSJT-X Input = **CABLE Output** (or Cable A Output); meter moves
 - [ ] A known-good signal or strong local decode appears in WSJT-X
@@ -211,7 +211,7 @@ B210 and stops writing to the cables.
 
 | Symptom | What to try |
 |---|---|
-| `run-router.bat` → no Python env | Install the B210 kit, or point at conda `map144` |
+| `scripts/windows/run-router.bat` → no Python env | Install the B210 kit, or point at conda `map144` |
 | Apply fails: device not found | Install VB-CABLE; run the `sounddevice` device list in §3; set `MAP144_WSJTX_DEVICE` |
 | Apply fails: `sounddevice` missing | `env\python.exe -m pip install sounddevice` |
 | WSJT-X meter dead | Wrong side of the cable (use **Output**, not Input); wrong WSJT-X instance; router not Applied |
@@ -220,7 +220,7 @@ B210 and stops writing to the cables.
 | Glitches / warble over time | Clock drift vs virtual cable — known limitation vs Linux PipeWire; restart Apply if needed |
 
 Logs: if MAP144 logging dirs exist, see `C:\map144\MSK144\logs\`. Router
-messages also print in the console window behind `run-router.bat`.
+messages also print in the console window behind `scripts/windows/run-router.bat`.
 
 ---
 

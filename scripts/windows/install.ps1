@@ -5,7 +5,7 @@
 #
 #     git clone https://github.com/wa1hco/map144.git C:\WSJT\map144
 #     cd C:\WSJT\map144
-#     .\install.ps1
+#     .\scripts\windows\install.ps1
 #
 # Re-runnable: existing venv is reused when compatible, requirements
 # re-resolved.  Uses the venv's python.exe directly so there are no
@@ -31,7 +31,7 @@ $ErrorActionPreference = 'Stop'
 
 # Always operate relative to the script's own directory so PowerShell's
 # (frequently-resetting) cwd never confuses us.
-$RepoDir = (Resolve-Path $PSScriptRoot).Path
+$RepoDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $RepoDir
 
 # -- 1. Discover usable Python interpreters --------------------
@@ -237,9 +237,9 @@ Write-Host ""
 Write-Host "MAP144 v$Map144Version ready." -ForegroundColor Green
 Write-Host "To run:"
 Write-Host "    cd $RepoDir"
-Write-Host "    .\run.bat"
+Write-Host "    .\scripts\windows\run.bat"
 Write-Host "Router (needs UHD firmware above + a Python with 'import uhd'):"
-Write-Host "    .\run-router.bat"
+Write-Host "    .\scripts\windows\run-router.bat"
 Write-Host "  B210 Python bindings: use kit env\ or conda install -c conda-forge uhd"
 Write-Host "  (pip .venv alone cannot import uhd on Windows)."
 Write-Host ""

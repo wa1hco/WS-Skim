@@ -23,18 +23,19 @@ GUI, with settings inside the app (zero knowledge, zero memory).
 
 Verified from the repo root:
 
-- **Windows:** `install.ps1`, `run.bat`, `run-router.bat`,
-  `run-b210.bat`.
-- **Linux:** `install.sh`, `install_gui_deps.sh`, `run.sh`,
-  `run-router.sh`.
+- **Windows:** `scripts/windows/install.ps1`, `run.bat`,
+  `run-router.bat`, `run-b210.bat`.
+- **Linux:** `scripts/install.sh`, `run.sh`, `run-router.sh`.
+  (`install_gui_deps.sh` was removed; it targeted a long-gone
+  `flex_gui.py`.)
 - **macOS:** none.
-- Launchers and install scripts sit at the repo root rather than
-  `scripts/`.
-- Developer scripts sit at the repo root rather than `tools/dev/`.
+- Launchers live under `scripts/` (Linux) and `scripts/windows/`
+  (Windows). The double-click desktop installer is still planned.
+- Developer scripts from the repo root now live under `tools/dev/`.
 - `README-Windows.md`, `README-Linux.md`, and `README_GUI.md` document
   `MAP144_*` environment variables and CLI flags.
 - B210/UHD installers live under `tools/`.
-- The repo has no CI.
+- CI runs pytest on Python 3.10 and 3.12 (added in PR 1).
 
 ## Push policy
 
@@ -62,7 +63,7 @@ Continue from the existing `v0.1.3-alpha` tag:
 
 ## Tasks (in order)
 
-1. Move launchers to `scripts/` and developer scripts to `tools/dev/`.
+1. ~~Move launchers to `scripts/` and developer scripts to `tools/dev/`.~~ Done in PR 2 (this layout change). The desktop installer is still later.
 2. Add GUI settings and desktop / Start-menu launchers.
 3. Rename remaining map144 references.
 4. Move the old READMEs (`README-Windows.md`, `README-Linux.md`,
@@ -74,9 +75,9 @@ Continue from the existing `v0.1.3-alpha` tag:
    runners.
 7. Once CI exists, require status checks on `main`. `main` currently
    blocks force-push and deletion only.
-8. Generate multi-size `.ico` (16–256) and Linux PNG sizes from the
+8. ~~Generate multi-size `.ico` (16–256) and Linux PNG sizes from the
    1024 px sources in `assets/icons/` with a dev script in
-   `tools/dev/`.
+   `tools/dev/`.~~ Done in PR 2 (`tools/dev/make_ws_skim_icons.py`).
 9. Cut a test prerelease (for example `v0.1.4-test`) and verify a
    clean install on a clean machine creates the desktop icon, and the
    Start-menu entry on Windows.

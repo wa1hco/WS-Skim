@@ -10,7 +10,7 @@
 Owns the B210 while running (do not start MAP144 against the same radio).
 
 Usage:
-    ./run-router.sh
+    ./scripts/run-router.sh
     python3 router_app.py          # re-execs into .venv when present
 """
 
@@ -26,7 +26,7 @@ def _reexec_into_venv() -> None:
     """If .venv exists and we are not already in it, re-exec with that Python.
 
     Bare ``python router_app.py`` often hits the system interpreter, which
-    lacks the project's numba/uhd/PyQt stack.  Same idea as ``run.sh``.
+    lacks the project's numba/uhd/PyQt stack.  Same idea as ``scripts/run.sh``.
     """
     root = Path(__file__).resolve().parent
     if sys.platform == "win32":

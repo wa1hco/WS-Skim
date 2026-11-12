@@ -30,7 +30,7 @@ to conserve CPU.
   - Detection algorithms (two ways)
   - Noise blanker status and settings
   - Reporting options
-- Side-by-side comparison vs WSJT-X via `compare_decoders.py` tool
+- Side-by-side comparison vs WSJT-X via `tools/dev/compare_decoders.py` tool
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ to conserve CPU.
 2. **Install Git** from [git-scm.com](https://git-scm.com/download/win).  Default options are fine.
 3. **Install WSJT-X** from [wsjt.sourceforge.io](https://wsjt.sourceforge.io/).  MAP144 will auto-find `jt9.exe` at `C:\WSJT\wsjtx\bin\jt9.exe`, `C:\Program Files\WSJT-X\bin\jt9.exe`, or the standard Program Files (x86) path.
 4. **Avoid OneDrive-synced install locations** (e.g. `C:\Users\<you>\OneDrive\Documents\…`).  MAP144 writes WAV captures and JSONL logs continuously; OneDrive sync churn against that volume causes lag.  Recommended location: `C:\map144`.
-5. **PowerShell execution policy** — `install.ps1` and `run.bat` are designed to avoid this concern (they invoke `.venv\Scripts\python.exe` directly, so no `Activate.ps1` step is needed).  No execution-policy change required.
+5. **PowerShell execution policy** — `scripts/windows/install.ps1` and `scripts/windows/run.bat` are designed to avoid this concern (they invoke `.venv\Scripts\python.exe` directly, so no `Activate.ps1` step is needed).  No execution-policy change required.
 
 ### Linux-specific setup
 
@@ -100,7 +100,7 @@ Prerequisites on the target PC: Windows 11 (or Win10 build 17763+), 3 GB free on
 3. Double-click `install-b210.bat`.
 4. Approve the UAC prompt.
 5. Wait ~5 minutes.  The last line will read either `READY` or `FAILED: <reason>`.
-6. Launch with `C:\map144\run-b210.bat`.
+6. Launch with `C:\map144\scripts\windows\run-b210.bat`.
 
 The installer is idempotent — re-running the same kit version is a no-op; re-running a different kit version prompts to overwrite.  Install log is at `C:\map144\install.log` for diagnosing failures after the fact.
 
@@ -139,9 +139,9 @@ If you can't use the kit (no home machine to build it on, conda-pack not working
    ```
    Should print `4.10.0.0-release`.
 
-6. **Launch with the conda env** (`run-b210.bat` auto-detects it):
+6. **Launch with the conda env** (`scripts/windows/run-b210.bat` auto-detects it):
    ```
-   run-b210.bat
+   scripts\windows\run-b210.bat
    ```
 
 ## Install
@@ -160,7 +160,7 @@ You can install elsewhere if you prefer — the install script doesn't care abou
 ```bash
 git clone https://github.com/wa1hco/map144.git ~/map144
 cd ~/map144
-./install.sh
+./scripts/install.sh
 ```
 
 #### Windows (PowerShell)
@@ -168,7 +168,7 @@ cd ~/map144
 ```powershell
 git clone https://github.com/wa1hco/map144.git C:\map144
 cd C:\map144
-.\install.ps1
+.\scripts\windows\install.ps1
 ```
 
 ### Upgrade (existing install)
@@ -180,7 +180,7 @@ Pull the latest source and re-run the install script.  It's idempotent — reuse
 ```bash
 cd ~/map144
 git pull
-./install.sh
+./scripts/install.sh
 ```
 
 #### Windows (PowerShell)
@@ -188,7 +188,7 @@ git pull
 ```powershell
 cd C:\map144
 git pull
-.\install.ps1
+.\scripts\windows\install.ps1
 ```
 
 The install script creates a `.venv/`, installs dependencies, verifies that `jt9` was found, and prints how to launch.
@@ -198,13 +198,13 @@ The install script creates a `.venv/`, installs dependencies, verifies that `jt9
 ### Linux / macOS (from the map144 directory)
 
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 
 ### Windows (from the map144 directory)
 
 ```powershell
-.\run.bat
+.\scripts\windows\run.bat
 ```
 
 That's the default — uses the stable legacy DSP path.  Don't set any env var.
@@ -222,7 +222,7 @@ In order of usefulness:
 1. **Missed MS pings** — a station you saw decoded in WSJT-X on the same
    audio but not in MAP144's decode panel. Include the timestamp +
    callsign + roughly the WSJT-X SNR / dt if you have it. The 15-s period
-   is the unit we compare on. `compare_decoders.py --date YYYYMMDD` will
+   is the unit we compare on. `tools/dev/compare_decoders.py --date YYYYMMDD` will
    produce a side-by-side report you can attach.
 2. **Phantom decodes** — anything in the decode panel that looks like garbage
    (random-character callsigns, impossible grids). MAP144 has zero phantoms
@@ -243,11 +243,11 @@ In order of usefulness:
 
 ## Tools you may find useful
 
-- `compare_decoders.py --date YYYYMMDD` — interactive comparison vs WSJT-X
-- `compare_decoders.py --date YYYYMMDD --utc HH:MM-HH:MM` — narrow the window
-- Right-click a callsign in the comparison GUI to launch `analyze_msk144.py`
+- `tools/dev/compare_decoders.py --date YYYYMMDD` — interactive comparison vs WSJT-X
+- `tools/dev/compare_decoders.py --date YYYYMMDD --utc HH:MM-HH:MM` — narrow the window
+- Right-click a callsign in the comparison GUI to launch `tools/dev/analyze_msk144.py`
   on a specific WAV
-- `analyze_msk144.py <wav>` — single-WAV spectrogram + per-frame analysis
+- `tools/dev/analyze_msk144.py <wav>` — single-WAV spectrogram + per-frame analysis
 
 ## Sending feedback
 

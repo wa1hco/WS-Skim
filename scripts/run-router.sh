@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # run-router.sh — launch the B210 audio/IQ router from the project venv.
 set -euo pipefail
-cd "$(dirname "$0")"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
 if [ ! -x ".venv/bin/python" ]; then
-    echo "ERROR: .venv not found.  Run ./install.sh first." >&2
+    echo "ERROR: .venv not found.  Run ./scripts/install.sh first." >&2
     exit 1
 fi
 exec .venv/bin/python router_app.py "$@"

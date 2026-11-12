@@ -739,7 +739,7 @@ See `project_ml_qso_classifier_plan` memory for the full plan; see
     Reuses `WsjtxAudioExporter` + `Map65Exporter`; new wideband multi-NCO path
     off raw 192 kHz IQ (not channelizer row 0). LO planner auto-covers the
     selection inside 192 kHz IF. v1: Linux, standalone owns B210, no TX.
-    Unit tests: `tests/test_router_*.py`. Windows launcher: `run-router.bat`
+    Unit tests: `tests/test_router_*.py`. Windows launcher: `scripts/windows/run-router.bat`
     (audio via #45). Remaining: live bake on B210, optional MAP144
     View-menu panel, 384 kHz IF unlock.
 

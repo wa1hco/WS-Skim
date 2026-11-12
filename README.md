@@ -13,14 +13,16 @@ There is no ws-skimmer release yet. The
 [Releases](https://github.com/wa1hco/ws-skimmer/releases) page currently
 has only the older map144 prerelease. A ws-skimmer test prerelease is
 planned. When it appears, download the Windows or Linux installer from
-that page and run the file (on Windows, double-click `install.ps1` or
-choose Run with PowerShell; on Linux, run `install.sh`). Start the app
-with the launcher the install provides. The test prerelease is intended
-to place a desktop icon, plus a Start-menu entry on Windows.
+that page and run the file (on Windows, double-click
+`scripts/windows/install.ps1` or choose Run with PowerShell; on Linux,
+run `scripts/install.sh`). Start the app with the launcher the install
+provides. The test prerelease is intended to place a desktop icon, plus
+a Start-menu entry on Windows.
 
 Until then, if you already have a copy of the repository, run
-`install.ps1` on Windows or `install.sh` on Linux, then start the app
-with `run.bat` or `run.sh`.
+`scripts/windows/install.ps1` on Windows or `scripts/install.sh` on
+Linux, then start the app with `scripts/windows/run.bat` or
+`scripts/run.sh`.
 
 You will need [WSJT-X](https://wsjt.sourceforge.io/) (it provides the
 `jt9` decoder) and Python 3.10 or newer. On Windows, use the installer
@@ -44,13 +46,13 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   JTAlert, and DX cluster nodes via the WSJT-X UDP protocol (plus
   PSKReporter IPFIX and DX cluster telnet).
 - FlexRadio DAX IQ and USRP B210 radio sources.
-- A B210 audio/IQ router (`run-router.sh` / `run-router.bat`) that
+- A B210 audio/IQ router (`scripts/run-router.sh` / `scripts/windows/run-router.bat`) that
   feeds selected WSJT-X dials as virtual audio, with optional MAP65 /
   QMAP IQ export. MAP65 I/Q export is also available in the GUI
   (**View → MAP65 Export**); see [CHANGELOG.md](CHANGELOG.md)
   (Unreleased).
-- Analysis and comparison tools, including `compare_decoders.py` and
-  the scripts under `tools/`.
+- Analysis and comparison tools, including `tools/dev/compare_decoders.py` and
+  other scripts under `tools/` and `tools/dev/`.
 
 The latest published tag is still the map144 prerelease
 [v0.1.3-alpha](https://github.com/wa1hco/ws-skimmer/releases/tag/v0.1.3-alpha)
@@ -66,7 +68,6 @@ The plans live on `main`. The feature work itself is not done yet.
 - An installer with a desktop-icon launcher; only a version tag will
   update what users install
   ([plan](docs/plan/installer-and-release.md))
-- Moving launchers into `scripts/` and developer tools into `tools/dev/`
 
 ## Supported hardware
 
@@ -80,8 +81,8 @@ There is no macOS support for the main application.
 
 ## Project layout
 
-Install and launch files currently sit at the repository root (they
-are planned to move into `scripts/`): `install.sh` / `install.ps1`,
+Install and launch files live under `scripts/` (Linux) and
+`scripts/windows/` (Windows): `install.sh` / `install.ps1`,
 `run.sh` / `run.bat` (the GUI, `map144.py`), `run-router.sh` /
 `run-router.bat` and `router_app.py` (B210 router), and `run-b210.bat`.
 
@@ -92,10 +93,9 @@ are planned to move into `scripts/`): `install.sh` / `install.ps1`,
 - `vendor/` — vendored third-party code (including WDSP)
 - `fortran_bp_test/` — WSJT-X-derived Fortran and C++ sources
 
-Developer and analysis scripts live at the repository root
+Developer and analysis scripts live under `tools/dev/`
 (`analyze_*.py`, `compare_decoders.py`, `generate_msk144.py`, and
-others) and under `tools/` (including B210/UHD install helpers). The
-plan is to gather developer scripts under `tools/dev/`.
+others). B210/UHD install helpers stay under `tools/`.
 
 Older platform notes are in [README-Linux.md](README-Linux.md),
 [README-Windows.md](README-Windows.md), and

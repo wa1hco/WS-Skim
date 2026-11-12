@@ -12,7 +12,7 @@ install folder (no conda, no user-profile dependency).
 
 Usage:
     # all-users shortcut to the C:\map144 install (default):
-    powershell -ExecutionPolicy Bypass -File tools\install-shortcut.ps1 -Launcher C:\map144\run-b210.bat
+    powershell -ExecutionPolicy Bypass -File tools\install-shortcut.ps1 -Launcher C:\map144\scripts\windows\run-b210.bat
 
     # per-user, targeting whatever repo this script lives in:
     powershell -ExecutionPolicy Bypass -File tools\install-shortcut.ps1 -CurrentUserOnly
@@ -20,9 +20,9 @@ Usage:
 
 [CmdletBinding()]
 param(
-    # Launcher the shortcut points at.  Default: run-b210.bat one level up from
-    # this script (i.e. the root of the install/repo this script ships in).
-    [string]$Launcher = (Join-Path (Split-Path -Parent $PSScriptRoot) 'run-b210.bat'),
+    # Launcher the shortcut points at.  Default: scripts\windows\run-b210.bat
+    # in the install/repo this script ships in (two levels down from the root).
+    [string]$Launcher = (Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts\windows\run-b210.bat'),
     [string]$Name = 'map144',
     [switch]$CurrentUserOnly
 )
@@ -33,7 +33,9 @@ if (-not (Test-Path -LiteralPath $Launcher)) {
     Write-Error "Launcher not found: $Launcher"
 }
 $Launcher = (Resolve-Path -LiteralPath $Launcher).Path
-$workDir  = Split-Path -Parent $Launcher
+# Working directory is the repository root (map144.py, .venv, env\), not
+# the scripts\windows folder that holds the launcher.
+$workDir = (Resolve-Path (Join-Path (Split-Path -Parent $Launcher) '..\..')).Path
 
 # All-users shortcut writes to the common Start Menu -> needs admin.  Self-elevate.
 if (-not $CurrentUserOnly) {
@@ -73,7 +75,7 @@ $lnk.WorkingDirectory = $workDir
 $lnk.Description       = 'Launch MAP144 (USRP B210)'
 $lnk.WindowStyle      = 1
 
-$ico = Join-Path $workDir 'map144_app\data\map144.ico'
+$ico = Join-Path $workDir 'scripts\windows\assets\ws-skim.ico'
 if (Test-Path -LiteralPath $ico) { $lnk.IconLocation = $ico }
 
 $lnk.Save()

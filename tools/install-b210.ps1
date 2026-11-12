@@ -5,7 +5,7 @@
 #   1. Plug in the USB stick (or unzip the downloaded kit).
 #   2. Double-click install-b210.bat.
 #   3. Approve UAC.  Wait ~5 minutes.  Read READY / FAILED line at end.
-#   4. Double-click C:\map144\run-b210.bat to launch.
+#   4. Double-click C:\map144\scripts\windows\run-b210.bat to launch.
 #
 # What this script does (all from local files in the kit, no internet):
 #   1. Self-elevate to admin via UAC if needed
@@ -113,7 +113,7 @@ if (Test-Path $existingVersionFile) {
         Write-Host ""
         Write-Host "ALREADY INSTALLED at this version. Nothing to do." -ForegroundColor Green
         Write-Host "(Pass -Force to reinstall.)" -ForegroundColor Yellow
-        Write-Host "Launch with: $InstallPath\run-b210.bat" -ForegroundColor Cyan
+        Write-Host "Launch with: $InstallPath\scripts\windows\run-b210.bat" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Press any key to close..." -ForegroundColor Yellow
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
@@ -228,7 +228,7 @@ Write-Step "Start Menu shortcut"
 try {
     $programs = [Environment]::GetFolderPath('CommonPrograms')
     $lnkPath  = Join-Path $programs 'map144.lnk'
-    $target   = Join-Path $InstallPath 'run-b210.bat'
+    $target   = Join-Path $InstallPath 'scripts\windows\run-b210.bat'
 
     $wsh = New-Object -ComObject WScript.Shell
     # Remove any stale shortcut here that points at this install's launcher
@@ -243,7 +243,7 @@ try {
     $sc.WorkingDirectory = $InstallPath
     $sc.Description       = 'Launch MAP144 (USRP B210)'
     $sc.WindowStyle      = 1
-    $ico = Join-Path $InstallPath 'map144_app\data\map144.ico'
+    $ico = Join-Path $InstallPath 'scripts\windows\assets\ws-skim.ico'
     if (Test-Path -LiteralPath $ico) { $sc.IconLocation = $ico }
     $sc.Save()
     Write-Ok "Created '$lnkPath' (type 'map144' in Start search to launch)"
@@ -259,7 +259,7 @@ Write-Host "===============================================================" -Fo
 Write-Host ""
 Write-Host "Launch MAP144 with the B210:" -ForegroundColor Cyan
 Write-Host "  - Type 'map144' in the Windows search bar, or" -ForegroundColor White
-Write-Host "  - Run $InstallPath\run-b210.bat" -ForegroundColor White
+Write-Host "  - Run $InstallPath\scripts\windows\run-b210.bat" -ForegroundColor White
 Write-Host ""
 Write-Host "Install log:  $Script:LogFile"
 Write-Host ""

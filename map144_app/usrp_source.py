@@ -269,7 +269,7 @@ class USRPSource:
         # the requirements.txt pin (numpy<2), fail loudly here with a fix rather
         # than crashing mid-capture some night.
         if int(np.__version__.split('.')[0]) >= 2:
-            rebuild = '.\\install.ps1' if sys.platform == 'win32' else './install.sh'
+            rebuild = '.\\scripts\\windows\\install.ps1' if sys.platform == 'win32' else './scripts/install.sh'
             raise RuntimeError(
                 f"NumPy {np.__version__} breaks UHD streaming (needs <2). "
                 f"Rebuild the environment with:  {rebuild}"
