@@ -31,6 +31,14 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **FT8 / FT4 decoding.**  After each period's Costas search, jt9 decodes
+  every ~2.8 kHz section of the band (audio 200-3200 Hz around each).  The
+  decodes appear in the main decode list and the FT8 Sync Map's new
+  Decodes tab, are written to `decodes.jsonl` (with the mode), and are
+  sent to WSJT-X UDP, PSKReporter and the DX cluster with mode FT8/FT4 and
+  their own frequency.  jt9 runs at depth 3, or 2 when more than 8 sections
+  are busy so the period still finishes in time.
+
 - **Mode menu: MSK144 / FT8 / FT4.**  The choice is remembered.  In FT8 or
   FT4 mode the MSK144 detectors, sync search and decode do not run, the
   MSK144 panels are hidden, and the noise blanker defaults to Bypass (the

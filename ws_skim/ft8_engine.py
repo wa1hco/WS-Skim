@@ -26,23 +26,29 @@ TAIL_S)`` out of the ring on the radio thread and hands it to a worker
 thread that runs :func:`costas_search.search` with ``t0_s = -HEAD_S``.
 
 Output: :class:`PeriodResult` on ``engine._ft8_result`` — the sync score
-map (downsampled for display), candidates, and ~2.8 kHz jt9 sections.  It
-is read by the FT8 Sync Map window and (next slice) by the jt9 decode.
+map (downsampled for display), candidates, and ~2.8 kHz jt9 sections — is
+published as soon as the search ends.  The same worker then runs jt9 on each
+section (:mod:`ft8_decode`) and publishes a second ``PeriodResult`` with the
+decodes.  Each decode also goes to ``engine._decode_queue`` (the main decode
+panel, WSJT-X UDP and PSKReporter, as for MSK144) and to ``decodes.jsonl``.
 
 No change to timing, phase or scaling of the MSK144 path: in FT8/FT4 mode
 that path is skipped entirely (see ``processing.process_iq_data``).
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 
 import numpy as np
 
 from . import costas_search as cs
+from . import ft8_decode
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +81,12 @@ class PeriodResult:
     map_freqs_hz: np.ndarray = field(repr=False)   # column centre, IQ offset
     map_start_s: np.ndarray = field(repr=False)    # row start time vs period start
     data_fraction: float = 1.0                     # share of the period present
+    #: jt9 decodes (``ft8_decode.Decode``), filled in after the search.
+    decodes: list = field(default_factory=list)
+    #: False when jt9 was not run (not found, or the search failed).
+    decoded: bool = False
+    #: Why there is no decode, for the window ("" while decoding or done).
+    decode_note: str = ""
 
 
 def is_period_mode(mode: str) -> bool:
@@ -157,17 +169,32 @@ def maybe_dispatch_period(eng) -> None:
     frac = n / max(1, want1 - want0)
     center = float(eng.center_freq_mhz)
 
+    jt9 = _jt9_path(eng)
+
     def work():
         try:
-            eng._ft8_result = search_period(
-                iq, fs, mode, t0_s=t0_s, period_start_utc=p0,
-                center_freq_mhz=center, data_fraction=frac)
-            r = eng._ft8_result
+            r = search_period(iq, fs, mode, t0_s=t0_s, period_start_utc=p0,
+                              center_freq_mhz=center, data_fraction=frac)
+            eng._ft8_result = r
             log.info("[ft8] %s period %s: %d candidates, %d sections, %.2f s",
                      mode, time.strftime("%H:%M:%S", time.gmtime(p0)),
                      len(r.candidates), len(r.sections), r.compute_s)
+            if not jt9 and r.sections:
+                eng._ft8_result = replace(
+                    r, decode_note="jt9 not found: install WSJT-X to decode")
+            elif jt9 and r.sections:
+                t = time.perf_counter()
+                ds = ft8_decode.decode_period(
+                    iq, fs, mode, r.sections, t0_s=t0_s, period_start_utc=p0,
+                    center_freq_mhz=center, jt9=jt9,
+                    depth=ft8_decode.depth_for(len(r.sections)))
+                eng._ft8_result = replace(r, decodes=ds, decoded=True)
+                log.info("[ft8] %s period %s: %d decodes, jt9 %.2f s", mode,
+                         time.strftime("%H:%M:%S", time.gmtime(p0)), len(ds),
+                         time.perf_counter() - t)
+                publish_decodes(eng, ds)
         except Exception:
-            log.exception("[ft8] search failed")
+            log.exception("[ft8] search/decode failed")
         finally:
             eng._ft8_busy = False
 
@@ -175,3 +202,50 @@ def maybe_dispatch_period(eng) -> None:
     th = threading.Thread(target=work, daemon=True, name="ft8-search")
     eng._ft8_thread = th
     th.start()
+
+
+def _jt9_path(eng) -> str | None:
+    """jt9 to run (``eng._ft8_jt9`` overrides discovery, for tests)."""
+    if hasattr(eng, "_ft8_jt9"):
+        return eng._ft8_jt9
+    from .detection import find_jt9
+    return find_jt9()
+
+
+def decode_record(d) -> dict:
+    """The decode-queue / ``decodes.jsonl`` dict for one ``ft8_decode.Decode``."""
+    when = datetime.fromtimestamp(d.period_start_utc, tz=timezone.utc)
+    return {
+        "outcome": "decoded", "decoded": True, "decoder": "jt9",
+        "marker_id": -1, "mode": d.mode, "message": d.message,
+        "radio_khz": d.rf_hz / 1000.0, "audio_hz": d.audio_hz,
+        "dial_khz": d.dial_hz / 1000.0, "jt9_snr": d.snr_db, "t_sec": d.dt_s,
+        "utc_time": when.strftime("%H:%M:%S"),
+        "timestamp": when.strftime("%Y-%m-%d_%H:%M:%S"),
+    }
+
+
+def publish_decodes(eng, decodes) -> None:
+    """Send decodes to the main decode panel / reporter and ``decodes.jsonl``."""
+    q = getattr(eng, "_decode_queue", None)
+    lines = []
+    for d in decodes:
+        rec = decode_record(d)
+        if q is not None:
+            q.put(rec)
+        lines.append(json.dumps({
+            "timestamp": rec["timestamp"], "period_ts": rec["timestamp"],
+            "mode": d.mode, "radio_khz": round(rec["radio_khz"], 3),
+            "audio_hz": d.audio_hz, "dt_s": d.dt_s, "message": d.message,
+            "jt9_snr_db": d.snr_db,
+        }))
+    if not lines:
+        return
+    try:
+        from .detection import production_output_dir
+        out = production_output_dir()
+        out.mkdir(parents=True, exist_ok=True)
+        with open(out / "decodes.jsonl", "a") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        log.warning("[ft8] could not write decodes.jsonl: %s", e)
