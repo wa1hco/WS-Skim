@@ -81,7 +81,7 @@ from typing import Optional
 
 import numpy as np
 
-from map144_app.sq_det import (
+from ws_skim.sq_det import (
     sq_det, NSPM, FS, DEFAULT_FC, DEFAULT_NTOL,
     DETECT_THRESHOLD_NORM,
 )

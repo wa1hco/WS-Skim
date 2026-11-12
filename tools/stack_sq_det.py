@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import hilbert
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from map144_app.sq_det import (
+from ws_skim.sq_det import (
     NSPM, FS, DEFAULT_FC, DEFAULT_NTOL,
     DETECT_THRESHOLD_NORM_LIN as THR_NORM,
     sq_det, slide_sq_det,

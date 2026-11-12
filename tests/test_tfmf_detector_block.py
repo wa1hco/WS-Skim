@@ -20,10 +20,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import numpy as np                                              # noqa: E402
-import map144_app.processing as proc                            # noqa: E402
-from map144_app.blocks.stream import Stream, make_event_stream  # noqa: E402
-from map144_app.blocks.types import Record                      # noqa: E402
-from map144_app.blocks.tfmf_detector_block import (             # noqa: E402
+import ws_skim.processing as proc                            # noqa: E402
+from ws_skim.blocks.stream import Stream, make_event_stream  # noqa: E402
+from ws_skim.blocks.types import Record                      # noqa: E402
+from ws_skim.blocks.tfmf_detector_block import (             # noqa: E402
     TFMFDetectorBlock, TFMFDetectorBlockConfig,
 )
 from experiments.gpu_tfmf.tfmf import Candidate                 # noqa: E402

@@ -9,8 +9,8 @@ import sys
 import types
 import pytest
 
-import map144_app.runtime as runtime
-import map144_app.wsjtx_audio_export as wae
+import ws_skim.runtime as runtime
+import ws_skim.wsjtx_audio_export as wae
 
 
 class _FakeExporter:

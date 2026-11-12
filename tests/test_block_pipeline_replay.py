@@ -81,7 +81,7 @@ from tests.test_block_pipeline_e2e import (  # noqa: E402
     _FakeReporter,
 )
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     ChannelizerBlock,
     ChannelizerBlockConfig,
     DecoderBlock,
@@ -104,7 +104,7 @@ from map144_app.blocks import (  # noqa: E402
 
 def _save_iq_wav_float32(path: Path, iq: np.ndarray, sample_rate: int) -> None:
     """Write a 2-channel IEEE float32 WAV (L=I, R=Q) that
-    ``map144_app.runtime._load_wav_complex`` accepts.
+    ``ws_skim.runtime._load_wav_complex`` accepts.
 
     Uses the same RIFF/WAVE layout as the legacy capture.save_capture()
     output.  The file is small for our test inputs (~6 s × 48 kHz × 8
@@ -260,7 +260,7 @@ def _run_block_pipeline_on_iq(
 
     # Fake Reporter — no sockets.
     fake = _FakeReporter()
-    import map144_app.reporting as _rep
+    import ws_skim.reporting as _rep
     real_cls = _rep.Reporter
     _rep.Reporter = lambda: fake
     try:
@@ -387,7 +387,7 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
             seed=seed,
         )
 
-        tmpdir = Path(tempfile.mkdtemp(prefix=f"map144_replay_{freq_khz:+d}_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix=f"ws_skim_replay_{freq_khz:+d}_"))
         self.addCleanup(shutil.rmtree, str(tmpdir), ignore_errors=True)
 
         wav_path = tmpdir / "ping.wav"
@@ -584,7 +584,7 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
         gap_at_sample = int(5.0 * 48_000)   # 240,000
 
         # ── Load IQ ───────────────────────────────────────────────────
-        from map144_app.runtime import _load_wav_complex  # noqa: PLC0415
+        from ws_skim.runtime import _load_wav_complex  # noqa: PLC0415
         samples, _ = _load_wav_complex(str(sim_wav), 48_000)
         iq = samples.reshape(-1) if samples.ndim == 2 else samples
 
@@ -617,7 +617,7 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
                 return super().produce()
 
         # ── Build pipeline manually to use the gap-injecting source ───
-        from map144_app.blocks import (  # noqa: PLC0415
+        from ws_skim.blocks import (  # noqa: PLC0415
             ChannelizerBlock, ChannelizerBlockConfig,
             DecoderBlock, DecoderBlockConfig,
             DetectorBlock, DetectorBlockConfig,
@@ -628,14 +628,14 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
         )
         import time
 
-        tmpdir = Path(tempfile.mkdtemp(prefix="map144_gapinj_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix="ws_skim_gapinj_"))
         self.addCleanup(shutil.rmtree, str(tmpdir), ignore_errors=True)
         block_out = tmpdir / "block_out"
         block_out.mkdir()
 
         # Fake Reporter so no sockets open.
         fake = _FakeReporter()
-        import map144_app.reporting as _rep
+        import ws_skim.reporting as _rep
         real_cls = _rep.Reporter
         _rep.Reporter = lambda: fake
         self.addCleanup(setattr, _rep, "Reporter", real_cls)
@@ -813,7 +813,7 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
         # ``MSK144/detections/decodes.jsonl``.  Verified essential
         # 2026-05-19 after this test's legacy-side writes confused a
         # real overnight bake's analysis.
-        sim_outdir = Path(tempfile.mkdtemp(prefix="map144_paritysim_"))
+        sim_outdir = Path(tempfile.mkdtemp(prefix="ws_skim_paritysim_"))
         self.addCleanup(shutil.rmtree, str(sim_outdir), ignore_errors=True)
         prev_outdir = os.environ.pop("MAP144_OUTPUT_DIR", None)
         os.environ["MAP144_OUTPUT_DIR"] = str(sim_outdir)
@@ -837,11 +837,11 @@ class TestLegacyVsBlockReplay(unittest.TestCase):
         )
 
         # ── Shadow Block pipeline on the same IQ ──────────────────────
-        from map144_app.runtime import _load_wav_complex  # noqa: PLC0415
+        from ws_skim.runtime import _load_wav_complex  # noqa: PLC0415
         samples, _ = _load_wav_complex(str(sim_wav), 48_000)
         iq = samples.reshape(-1) if samples.ndim == 2 else samples
 
-        tmpdir = Path(tempfile.mkdtemp(prefix="map144_parity_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix="ws_skim_parity_"))
         self.addCleanup(shutil.rmtree, str(tmpdir), ignore_errors=True)
         block_out = tmpdir / "block_out"
         block_out.mkdir()

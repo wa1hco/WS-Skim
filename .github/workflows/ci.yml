@@ -60,7 +60,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           # Do not pick up a machine jt9 / UHD / GPU stack if the
           # runner happens to have one; tests that need jt9 skip.
-          MAP144_GPU: "0"
+          WS_SKIM_GPU: "0"
         run: python -m pytest tests/ -q --tb=short
 
   windows:
@@ -106,7 +106,7 @@ jobs:
       - name: Pytest (tests that apply on Windows)
         env:
           QT_QPA_PLATFORM: offscreen
-          MAP144_GPU: "0"
+          WS_SKIM_GPU: "0"
         run: >
           python -m pytest -q --tb=short
           tests/test_layout_and_icons.py

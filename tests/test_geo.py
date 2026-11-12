@@ -1,10 +1,10 @@
-"""Unit tests for map144_app/geo.py — pure geographic helpers."""
+"""Unit tests for ws_skim/geo.py — pure geographic helpers."""
 import math
 
 import numpy as np
 import pytest
 
-from map144_app import geo
+from ws_skim import geo
 
 
 # --- Maidenhead ------------------------------------------------------------

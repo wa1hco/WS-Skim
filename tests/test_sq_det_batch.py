@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for ``map144_app.sq_det.sq_det_batch``.
+"""Tests for ``ws_skim.sq_det.sq_det_batch``.
 
 The batched function is the production hot-path entry point — it runs across
 all 48 channels per detection hop.  Correctness check: for each channel,
@@ -26,7 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.sq_det import (
+from ws_skim.sq_det import (
     NSPM, FS, DF, DEFAULT_FC, DEFAULT_NTOL,
     sq_det, sq_det_batch, SqDetBatchResult,
     to_db, to_lin,

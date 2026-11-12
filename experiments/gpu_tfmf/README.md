@@ -206,7 +206,7 @@ parabolic interp proves insufficient.
 WSJT-X's MSK144 message has **two** 8-symbol sync sub-blocks per
 144-symbol message frame — at positions 0–7 and 56–63 (336 samples
 apart at 12 kHz = **1344 samples = 7 × FFT length at 48 kHz**).  The
-legacy sync correlator at `map144_app/msk144_spd.py::_sync_correlate`
+legacy sync correlator at `ws_skim/msk144_spd.py::_sync_correlate`
 correlates both sub-blocks and sums them coherently.
 
 Implemented (`cfg.two_subblock_sum`, default True): after building the
@@ -265,7 +265,7 @@ is:
 
 ### Sync template construction
 
-Ported from `map144_app/msk144_spd.py::_build_sync_template`, retimed from
+Ported from `ws_skim/msk144_spd.py::_build_sync_template`, retimed from
 12 kHz (42 samples) to 48 kHz (168 samples).  See `sync_template.py`.
 
 ## Files

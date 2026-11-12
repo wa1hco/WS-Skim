@@ -141,7 +141,7 @@ class TestSensitivitySmokeGate(unittest.TestCase):
         legacy_decodes_total = 0
         block_decodes_total = 0
 
-        tmproot = Path(tempfile.mkdtemp(prefix="map144_stage3a_"))
+        tmproot = Path(tempfile.mkdtemp(prefix="ws_skim_stage3a_"))
         self.addCleanup(shutil.rmtree, str(tmproot), ignore_errors=True)
 
         for seed in seeds:
@@ -243,7 +243,7 @@ class TestCPURegressionGate(unittest.TestCase):
             seed=42,
         )
 
-        tmpdir = Path(tempfile.mkdtemp(prefix="map144_stage3b_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix="ws_skim_stage3b_"))
         self.addCleanup(shutil.rmtree, str(tmpdir), ignore_errors=True)
         wav_path = tmpdir / "ping.wav"
         _save_iq_wav_float32(wav_path, iq, sample_rate)
@@ -317,7 +317,7 @@ class TestDriftInjectionGate(unittest.TestCase):
             seed=42,
         )
 
-        tmpdir = Path(tempfile.mkdtemp(prefix="map144_stage3c_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix="ws_skim_stage3c_"))
         self.addCleanup(shutil.rmtree, str(tmpdir), ignore_errors=True)
 
         block_out = tmpdir / "block_out"

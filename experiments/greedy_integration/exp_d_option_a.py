@@ -22,8 +22,8 @@ import numpy as np
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root for map144_app
-from map144_app.sq_det import sq_det, slide_sq_det, NSPM, FS, DEFAULT_FC
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root for ws_skim
+from ws_skim.sq_det import sq_det, slide_sq_det, NSPM, FS, DEFAULT_FC
 from algos.tgi import tgi_integrate, TGIConfig
 from exp_a_formula_comparison import make_audio_noise, audio_to_analytic
 from exp_b_tgi_value import (make_audio_buffer_with_burst, find_strongest_anchor,

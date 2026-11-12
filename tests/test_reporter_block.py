@@ -5,7 +5,7 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-"""Tests for ``map144_app.blocks.ReporterBlock`` (Phase 4 #12).
+"""Tests for ``ws_skim.blocks.ReporterBlock`` (Phase 4 #12).
 
 The wrapped :class:`Reporter` does real network I/O (PSKReporter
 IPFIX, DX cluster TCP, WSJT-X UDP).  These tests substitute a fake
@@ -38,7 +38,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     Event,
     ReporterBlock,
     ReporterBlockConfig,
@@ -51,7 +51,7 @@ from map144_app.blocks import (  # noqa: E402
 
 
 class _FakeReporter:
-    """Stub for ``map144_app.reporting.Reporter`` used in tests."""
+    """Stub for ``ws_skim.reporting.Reporter`` used in tests."""
 
     def __init__(self):
         self.my_call = ""
@@ -125,7 +125,7 @@ def _decode_event(outcome: str = "decoded",
 class _Harness:
     """Build a Runtime with one ReporterBlock + fake Reporter.
 
-    ReporterBlock.configure() lazy-imports map144_app.reporting.Reporter
+    ReporterBlock.configure() lazy-imports ws_skim.reporting.Reporter
     and instantiates it.  We monkey-patch that class with a factory that
     returns our fake so configure() picks up the fake, not a real socket
     Reporter.  Restored by stop_and_unpatch().
@@ -136,7 +136,7 @@ class _Harness:
         # Patch reporting.Reporter -> a factory that returns OUR fake.
         # This persists for the harness lifetime; tearDown via the
         # caller's tearDown method or via stop_and_unpatch().
-        import map144_app.reporting as _rep
+        import ws_skim.reporting as _rep
         self._real_reporter_cls = _rep.Reporter
         # Note: ReporterBlock.configure() does ``self._reporter = Reporter()``
         # so the factory must be callable with no args and return our fake.
@@ -159,7 +159,7 @@ class _Harness:
         try:
             self.rt.stop(timeout_s=timeout_s)
         finally:
-            import map144_app.reporting as _rep
+            import ws_skim.reporting as _rep
             _rep.Reporter = self._real_reporter_cls
 
     def start_and_wait_ready(self, timeout: float = 1.0) -> None:

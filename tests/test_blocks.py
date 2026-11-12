@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Contract tests for ``map144_app.blocks``.
+"""Contract tests for ``ws_skim.blocks``.
 
 Validates the invariants laid out in ``docs/block-stream-design.md``:
 
@@ -48,7 +48,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402  (path injection above)
+from ws_skim.blocks import (  # noqa: E402  (path injection above)
     Block,
     BlockConfig,
     CoherentPair,

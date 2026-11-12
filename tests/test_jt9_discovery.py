@@ -1,6 +1,6 @@
 # Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
 # Licensed under GPL-3.0-or-later.
-"""Tests for ``map144_app.detection.find_jt9``.
+"""Tests for ``ws_skim.detection.find_jt9``.
 
 The helper must find jt9 across Linux, macOS, and Windows install
 layouts, honour an explicit env-var override, and return ``None`` when
@@ -13,7 +13,7 @@ import os
 import unittest
 from unittest import mock
 
-from map144_app.detection import find_jt9
+from ws_skim.detection import find_jt9
 
 
 class TestFindJt9(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestFindJt9(unittest.TestCase):
 
     def test_env_var_override_wins_when_file_exists(self):
         with mock.patch.dict(os.environ, {"MAP144_JT9": "/some/custom/jt9"}):
-            with mock.patch("map144_app.detection.Path") as MockPath:
+            with mock.patch("ws_skim.detection.Path") as MockPath:
                 MockPath.return_value.is_file.return_value = True
                 self.assertEqual(find_jt9(), "/some/custom/jt9")
 
@@ -36,24 +36,24 @@ class TestFindJt9(unittest.TestCase):
         # Override set, but the file doesn't exist → fall through to
         # PATH lookup, which we stub to return a found binary.
         with mock.patch.dict(os.environ, {"MAP144_JT9": "/nope/jt9"}):
-            with mock.patch("map144_app.detection.Path") as MockPath:
+            with mock.patch("ws_skim.detection.Path") as MockPath:
                 MockPath.return_value.is_file.return_value = False
-                with mock.patch("map144_app.detection.shutil.which",
+                with mock.patch("ws_skim.detection.shutil.which",
                                 side_effect=["/usr/bin/jt9", None]):
                     self.assertEqual(find_jt9(), "/usr/bin/jt9")
 
     def test_path_lookup_via_shutil_which(self):
-        with mock.patch("map144_app.detection.shutil.which",
+        with mock.patch("ws_skim.detection.shutil.which",
                         side_effect=["/usr/local/bin/jt9", None]):
-            with mock.patch("map144_app.detection.Path") as MockPath:
+            with mock.patch("ws_skim.detection.Path") as MockPath:
                 MockPath.return_value.is_file.return_value = False
                 self.assertEqual(find_jt9(), "/usr/local/bin/jt9")
 
     def test_path_lookup_finds_exe_on_windows(self):
         # shutil.which('jt9') returns None; shutil.which('jt9.exe') hits.
-        with mock.patch("map144_app.detection.shutil.which",
+        with mock.patch("ws_skim.detection.shutil.which",
                         side_effect=[None, r"C:\WSJT\wsjtx\bin\jt9.exe"]):
-            with mock.patch("map144_app.detection.Path") as MockPath:
+            with mock.patch("ws_skim.detection.Path") as MockPath:
                 MockPath.return_value.is_file.return_value = False
                 self.assertEqual(find_jt9(), r"C:\WSJT\wsjtx\bin\jt9.exe")
 
@@ -64,11 +64,11 @@ class TestFindJt9(unittest.TestCase):
         operator_default = r"C:\WSJT\wsjtx\bin\jt9.exe"
         def _isfile_only_operator_default(self_path):
             return str(self_path) == operator_default
-        with mock.patch("map144_app.detection.sys.platform", "win32"):
-            with mock.patch("map144_app.detection.shutil.which",
+        with mock.patch("ws_skim.detection.sys.platform", "win32"):
+            with mock.patch("ws_skim.detection.shutil.which",
                             return_value=None):
                 with mock.patch(
-                    "map144_app.detection.Path.is_file",
+                    "ws_skim.detection.Path.is_file",
                     autospec=True,
                     side_effect=_isfile_only_operator_default,
                 ):
@@ -79,21 +79,21 @@ class TestFindJt9(unittest.TestCase):
         target = "/usr/bin/jt9"
         def _isfile(self_path):
             return str(self_path) == target
-        with mock.patch("map144_app.detection.sys.platform", "linux"):
-            with mock.patch("map144_app.detection.shutil.which",
+        with mock.patch("ws_skim.detection.sys.platform", "linux"):
+            with mock.patch("ws_skim.detection.shutil.which",
                             return_value=None):
                 with mock.patch(
-                    "map144_app.detection.Path.is_file",
+                    "ws_skim.detection.Path.is_file",
                     autospec=True,
                     side_effect=_isfile,
                 ):
                     self.assertEqual(find_jt9(), target)
 
     def test_returns_none_when_nothing_matches(self):
-        with mock.patch("map144_app.detection.shutil.which",
+        with mock.patch("ws_skim.detection.shutil.which",
                         return_value=None):
             with mock.patch(
-                "map144_app.detection.Path.is_file",
+                "ws_skim.detection.Path.is_file",
                 autospec=True,
                 return_value=False,
             ):

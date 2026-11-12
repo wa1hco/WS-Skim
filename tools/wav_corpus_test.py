@@ -50,7 +50,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-# ── Defaults match map144_app/detection.py current values ────────────────────
+# ── Defaults match ws_skim/detection.py current values ────────────────────
 DEFAULT_FTOL  = 200        # post-2026-05-11 widening
 DEFAULT_DEPTH = 1          # post-2026-05-11 phantom-suppression change
 DEFAULT_AF_CENTRE = 1500

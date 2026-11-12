@@ -20,7 +20,7 @@ Installer and release plan: [docs/plan/installer-and-release.md](installer-and-r
 
 1. ~~**GPLv3 `LICENSE` file.**~~ Done in PR #4 (`LICENSE`, `NOTICE`).
 2. ~~**WSJT-X attribution headers.**~~ Done in PR #4: the files in
-   `fortran_bp_test/` and `map144_app/msk144_decode.py` carry WSJT-X
+   `fortran_bp_test/` and `ws_skim/msk144_decode.py` carry WSJT-X
    copyright and GPLv3 notices; `vendor/wdsp` already had them.
 3. **Tag the current MSK144 baseline** on `main` before the mode-abstraction
    branch, so the last MSK144-only tree is recoverable. The latest GitHub
@@ -33,17 +33,17 @@ Installer and release plan: [docs/plan/installer-and-release.md](installer-and-r
 
 ## Current code (facts to change against)
 
-- `map144_app/channelizer.py`: 48 channels × 1 kHz at 12 kHz, an
+- `ws_skim/channelizer.py`: 48 channels × 1 kHz at 12 kHz, an
   MSK144-specific grid. Reusable as a mix/decimate building block, but a
   ~3 kHz FT8/FT4 section is a different design, not a drop-in of that grid.
-- `map144_app/detection.py` `extract_and_decode`: the jt9 wrapper. Current
+- `ws_skim/detection.py` `extract_and_decode`: the jt9 wrapper. Current
   `JT9_BASE_ARGS` are `--msk144 -L 1450 -H 1550 -F 50 -d 2`. It writes a
   short 12 kHz mono burst WAV, runs jt9, and **keeps only the first
   non-empty stdout line** that does not start with `<` or `EOF`. There is
   no `--ft8` / `--ft4` path and no period-length WAV writer.
-- `map144_app/reporting.py` hardcodes `"MSK144"` in `build_status`
+- `ws_skim/reporting.py` hardcodes `"MSK144"` in `build_status`
   (approximately L148–179) and `build_decode` (approximately L214–237).
-- `map144_app/timebase.py` `TimeBase(period_secs=15.0)` is fixed at 15 s.
+- `ws_skim/timebase.py` `TimeBase(period_secs=15.0)` is fixed at 15 s.
 - Live code ignores radio packet timestamps and uses `time.time()`. That
   is a known UTC period-alignment gotcha for both MSK144 and FT8/FT4.
 
@@ -111,7 +111,7 @@ Once per UTC period (15 s FT8, 7.5 s FT4):
 
 The 1 kHz MSK144 channelizer grid is not the FT8/FT4 sectioner.
 
-**Status (5.1, 5.2 started):** `map144_app/costas_search.py` has the
+**Status (5.1, 5.2 started):** `ws_skim/costas_search.py` has the
 wideband sync search and the section grouping, as a standalone DSP
 module with synthetic tests (`tests/test_costas_search.py`) and a
 developer scan tool (`tools/dev/costas_scan.py`). Not wired into the

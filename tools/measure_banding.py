@@ -66,8 +66,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.channelizer import N_CHANNELS                      # noqa: E402
-from map144_app.engine import Engine                                # noqa: E402
+from ws_skim.channelizer import N_CHANNELS                      # noqa: E402
+from ws_skim.engine import Engine                                # noqa: E402
 
 
 @dataclass
@@ -102,7 +102,7 @@ def _capture(engine: Engine, duration_s: float, source: str,
               + 1j * rng.standard_normal(n_total).astype(np.float32)
               ) * np.complex64(0.001)
     else:
-        from map144_app.runtime import _load_wav_complex  # noqa: PLC0415
+        from ws_skim.runtime import _load_wav_complex  # noqa: PLC0415
         if wav_path is None:
             raise ValueError("wav_path required when source='wav'")
         samples, _ = _load_wav_complex(str(wav_path), sample_rate)
@@ -353,8 +353,8 @@ def main() -> int:
 
     # Channelizer hop rate (at 12 kHz channel rate / 256-sample stride =
     # ~46.875 hops/sec).  Compute exactly from settings.
-    from map144_app.processing import CH_DETECT_SIZE
-    from map144_app.channelizer import CH_SAMPLE_RATE
+    from ws_skim.processing import CH_DETECT_SIZE
+    from ws_skim.channelizer import CH_SAMPLE_RATE
     hops_per_sec = CH_SAMPLE_RATE / (CH_DETECT_SIZE // 2)
     window_hops = max(20, int(args.window * hops_per_sec))
 

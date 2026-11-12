@@ -97,7 +97,7 @@ def sync_corr_freq_track(
     """
     from scipy.signal import hilbert as _hilbert
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from map144_app.msk144_spd import _sync_correlate, NSPM
+    from ws_skim.msk144_spd import _sync_correlate, NSPM
 
     if frame_n is None:
         frame_n = NSPM    # 864 = 72 ms = one MSK144 frame

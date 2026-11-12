@@ -25,7 +25,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 from generate_msk144 import generate_ping_msk144code
-from map144_app.msk144_decode import (
+from ws_skim.msk144_decode import (
     NSPM, FS, _PP, _CB, Mn, Nm, nrw, K_LDPC,
     _bpdecode128_90, _check_crc13, msk144decodeframe,
 )

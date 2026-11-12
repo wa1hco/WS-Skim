@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Run the FT8/FT4 Costas search on a WAV file and print what it finds.
 
-Developer tool for checking map144_app.costas_search on real captures.
+Developer tool for checking ws_skim.costas_search on real captures.
 
     python tools/dev/costas_scan.py capture.wav --mode FT8 [--t0 0.0]
     python tools/dev/costas_scan.py --synthetic --mode FT4
@@ -26,7 +26,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from map144_app import costas_search as cs  # noqa: E402
+from ws_skim import costas_search as cs  # noqa: E402
 
 
 def load_wav(path: Path) -> tuple[np.ndarray, float]:

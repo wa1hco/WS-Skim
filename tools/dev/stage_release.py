@@ -11,7 +11,7 @@ Usage:
     python tools/dev/stage_release.py --out build/stage [--tag v0.1.4-test]
 
 With ``--tag``, fails unless the tag is ``v<version>`` or
-``v<version>-<suffix>`` for the version in ``map144_app/__init__.py``.
+``v<version>-<suffix>`` for the version in ``ws_skim/__init__.py``.
 Prints the version on stdout for the build scripts to pick up.
 """
 
@@ -32,16 +32,16 @@ ROOT = Path(__file__).resolve().parents[2]
 # imports experiments.gpu_tfmf at runtime.
 EXCLUDE_TOP = {
     ".github", ".vscode", ".claude", ".gitignore", ".gitattributes",
-    "docs", "tests", "CLAUDE.md", "map144.code-workspace",
+    "docs", "tests", "CLAUDE.md", "ws-skim.code-workspace",
     "packages_map144.svg", "classes_map144.svg", "decoded.txt",
 }
 
 
 def app_version(root: Path = ROOT) -> str:
-    text = (root / "map144_app" / "__init__.py").read_text(encoding="utf-8")
+    text = (root / "ws_skim" / "__init__.py").read_text(encoding="utf-8")
     m = re.search(r'(?m)^__version__\s*=\s*"([^"]+)"', text)
     if not m:
-        raise SystemExit("__version__ not found in map144_app/__init__.py")
+        raise SystemExit("__version__ not found in ws_skim/__init__.py")
     return m.group(1)
 
 

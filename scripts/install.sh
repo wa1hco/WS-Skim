@@ -20,11 +20,11 @@ cd "$REPO_DIR"
 
 # Find a working Python ≥ 3.10.  Prefer ``python3`` since that's the
 # convention every modern distro uses.
-PYTHON_CMD="${MAP144_PYTHON:-python3}"
+PYTHON_CMD="${WS_SKIM_PYTHON:-${MAP144_PYTHON:-python3}}"
 if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
     echo "ERROR: '$PYTHON_CMD' not found." >&2
     echo "  Install Python 3.10+ from your distro package manager." >&2
-    echo "  Or set MAP144_PYTHON to the full path of a python3 binary." >&2
+    echo "  Or set WS_SKIM_PYTHON to the full path of a python3 binary." >&2
     exit 1
 fi
 
@@ -78,17 +78,18 @@ echo "Installing requirements ..."
 # Kept out of requirements.txt so GPU-less station boxes aren't burdened, but
 # tracked here so a GPU box restores CuPy on every rebuild instead of silently
 # losing it (the old "had cupy, rebuilt, lost it" trap).
-#   explicit:  ./scripts/install.sh --gpu   or   MAP144_GPU=1 ./scripts/install.sh   (0 disables)
+#   explicit:  ./scripts/install.sh --gpu   or   WS_SKIM_GPU=1 ./scripts/install.sh   (0 disables)
 #   auto:      an NVIDIA display GPU is present (lspci)
-if [ -n "${MAP144_GPU:-}" ]; then
-    WANT_GPU="$MAP144_GPU"
+WS_SKIM_GPU="${WS_SKIM_GPU:-${MAP144_GPU:-}}"
+if [ -n "${WS_SKIM_GPU:-}" ]; then
+    WANT_GPU="$WS_SKIM_GPU"
 else
     WANT_GPU=0
     for arg in "$@"; do [ "$arg" = "--gpu" ] && WANT_GPU=1; done
     if [ "$WANT_GPU" = "0" ] && command -v lspci >/dev/null 2>&1 \
        && lspci 2>/dev/null | grep -iE 'vga|3d|display' | grep -qi nvidia; then
         WANT_GPU=1
-        echo "NVIDIA GPU detected — installing GPU extras (set MAP144_GPU=0 to skip)."
+        echo "NVIDIA GPU detected — installing GPU extras (set WS_SKIM_GPU=0 to skip)."
     fi
 fi
 if [ "$WANT_GPU" = "1" ]; then
@@ -101,9 +102,9 @@ if [ "$WANT_GPU" = "1" ]; then
 fi
 
 # Verify jt9 discovery.  Don't hard-fail — the operator can install
-# WSJT-X afterwards (or, from a checkout, set MAP144_JT9); a warning is enough.
+# WSJT-X afterwards (or, from a checkout, set WS_SKIM_JT9); a warning is enough.
 echo "Verifying jt9 discovery ..."
-JT9_PATH="$("$VENV_PY" -c 'from map144_app.detection import find_jt9; p = find_jt9(); print(p if p else "")')"
+JT9_PATH="$("$VENV_PY" -c 'from ws_skim.detection import find_jt9; p = find_jt9(); print(p if p else "")')"
 if [ -z "$JT9_PATH" ]; then
     echo "WARNING: jt9 not found.  Install WSJT-X (https://wsjt.sourceforge.io/)," >&2
     echo "         which provides jt9, then start WS Skim again." >&2
@@ -114,7 +115,7 @@ fi
 # Resolve the installed version from the package itself — single source
 # of truth, no risk of the install banner drifting from what the app
 # actually reports.
-WS_SKIM_VERSION="$("$VENV_PY" -c 'from map144_app.buildinfo import version_string; print(version_string())' 2>/dev/null || echo '???')"
+WS_SKIM_VERSION="$("$VENV_PY" -c 'from ws_skim.buildinfo import version_string; print(version_string())' 2>/dev/null || echo '???')"
 
 cat <<EOF
 
@@ -124,7 +125,7 @@ To run:
     ./scripts/run.sh
 
 Or directly:
-    $VENV_PY map144.py
+    $VENV_PY ws_skim.py
 
 The first launch may take ~10 s while numba JIT-compiles its hot paths.
 EOF

@@ -51,7 +51,7 @@ class TestBlockPrimaryDecodeReachesEngineQueue(unittest.TestCase):
 
     def setUp(self):
         os.environ["MAP144_USE_BLOCKS"] = "1"
-        self._tmpdir = tempfile.mkdtemp(prefix="map144_blockprimary_")
+        self._tmpdir = tempfile.mkdtemp(prefix="ws_skim_blockprimary_")
         # Redirect WAVs / decodes.jsonl / launches.jsonl into the
         # TempDir so synthetic test signals don't contaminate the
         # operator's real production decode log.  Verified essential
@@ -68,7 +68,7 @@ class TestBlockPrimaryDecodeReachesEngineQueue(unittest.TestCase):
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_decode_reaches_engine_queue_in_block_primary_mode(self):
-        from map144_app.engine import Engine
+        from ws_skim.engine import Engine
         from tests.test_block_pipeline_e2e import _generate_msk144_test_iq
 
         sample_rate = 48_000

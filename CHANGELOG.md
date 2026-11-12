@@ -11,7 +11,12 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 ### Project
 
 - **Renamed to WS Skim** (repository `wa1hco/WS-Skim`, formerly `map144`).
-  The application module and settings keep their `map144` names for now.
+  The package is now `ws_skim` and the entry point `ws_skim.py`; log files
+  are `ws-skim_*.log`; panel titles say WS Skim.  Environment variables
+  are `WS_SKIM_*`, and the old `MAP144_*` names still work.  The WSJT-X
+  UDP id, PSKReporter software name, audio sink names and router settings
+  keep their `map144` names so station setups keep working.  The Windows
+  installer removes the old `map144_app` folder and `map144.py` on update.
 - **License.**  Added the GPLv3 `LICENSE` and a `NOTICE` with WSJT-X and
   other third-party provenance; WSJT-X-derived files carry attribution
   headers.  Version set to 0.1.4 in `pyproject.toml` and the app.

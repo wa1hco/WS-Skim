@@ -73,7 +73,7 @@ git pull
 or directly:
 
 ```powershell
-.venv\Scripts\python.exe map144.py --bind-client-id <uuid> --log-level DEBUG
+.venv\Scripts\python.exe ws_skim.py --bind-client-id <uuid> --log-level DEBUG
 ```
 
 | Option | Default | Description |
@@ -90,10 +90,10 @@ The first launch may take ~10 s while numba JIT-compiles hot paths.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
-| `MAP144_JT9` | app | Full path to `jt9.exe` if it is not found automatically |
+| `WS_SKIM_JT9` | app | Full path to `jt9.exe` if it is not found automatically |
 
 ```powershell
-$env:MAP144_JT9 = "C:\Path\To\jt9.exe"
+$env:WS_SKIM_JT9 = "C:\Path\To\jt9.exe"
 .\scripts\windows\run.bat
 ```
 
@@ -114,7 +114,7 @@ Output goes under `MSK144\simulations\`. Load it with
 | `python` opens the Microsoft Store | Install the python.org build; fix PATH so it wins over `WindowsApps` |
 | pip "Building wheel for numpy" on 3.14 | Expected. Re-run `install.ps1` (it falls back to 3.13/3.12), or install Python 3.12 and delete `.venv` first |
 | `install.ps1` "cannot be loaded" | `powershell -ExecutionPolicy Bypass -File .\scripts\windows\install.ps1` |
-| Missing `jt9` | Install WSJT-X or set `MAP144_JT9` |
+| Missing `jt9` | Install WSJT-X or set `WS_SKIM_JT9` |
 | First start looks hung | Wait for numba JIT (~10 s) |
 
 See also [linux.md](linux.md).

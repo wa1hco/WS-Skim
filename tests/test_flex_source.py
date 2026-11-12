@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Hardware-free tests for ``map144_app.blocks.FlexSource``.
+"""Hardware-free tests for ``ws_skim.blocks.FlexSource``.
 
 Uses a small fake that emulates the ``FlexDAXIQ``-shaped protocol
 (``sample_queue`` + ``start()`` + ``stop()``).  The protocol is small
@@ -37,7 +37,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     FLEX_DAXIQ_FULL_SCALE,
     FlexSource,
     FlexSourceConfig,

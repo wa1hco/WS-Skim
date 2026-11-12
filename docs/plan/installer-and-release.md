@@ -37,7 +37,7 @@ Verified from the repo root:
   `scripts/install-desktop.sh` adds the menu entry and desktop icon).
 - `.github/workflows/installers.yml` builds both, installs them on clean
   runners, and on a `v*` tag publishes a GitHub release.
-- Settings and logs live in the user profile (`map144_app/user_paths.py`,
+- Settings and logs live in the user profile (`ws_skim/user_paths.py`,
   from PR #6), so reinstalling never touches them. The Windows installer
   installs Python 3.12 per-user when none is found, and its shortcuts use
   `pythonw.exe` (no console).
@@ -48,8 +48,8 @@ Verified from the repo root:
   `flex_gui.py`; its FlexRadio setup steps live on in
   `docs/flexradio-setup.md`.
 - The install scripts and the window title / About box say WS Skim.
-  The Python package, settings keys and `MAP144_*` variables keep
-  their old names.
+  The Python package is `ws_skim` and the entry point `ws_skim.py`;
+  `WS_SKIM_*` variables are read first, with `MAP144_*` as a fallback.
 - B210/UHD installers live under `tools/`.
 - CI runs pytest on Python 3.10 and 3.12 (added in PR 1).
 
@@ -83,9 +83,13 @@ Continue from the existing `v0.1.3-alpha` tag:
 2. ~~Add desktop / Start-menu launchers.~~ Done (installer PR). GUI
    settings already cover source and reporting; anything still needing
    a flag or variable moves into the GUI as it comes up.
-3. Rename remaining map144 references. User-visible strings are done;
-   the `map144_app` package, `map144.py`, QSettings keys and log file
-   names are left until a rename is worth the churn.
+3. ~~Rename remaining map144 references.~~ Done: `map144_app` became
+   `ws_skim`, `map144.py` became `ws_skim.py`, log files are
+   `ws-skim_*.log`, and variables are `WS_SKIM_*` (with `MAP144_*` as a
+   fallback). Kept on purpose: the WSJT-X UDP client id and
+   PSKReporter software name `map144`, the PulseAudio sink names
+   (`MAP144-WSJT-X`, `map144.RF0.rx`) and the router's QSettings key,
+   because station setups refer to them.
 4. ~~Move the old READMEs (`README-Windows.md`, `README-Linux.md`,
    `README_GUI.md`) into `docs/` and remove environment-variable, CLI
    flag, and `python -m` instructions from user-facing docs.~~ Done:

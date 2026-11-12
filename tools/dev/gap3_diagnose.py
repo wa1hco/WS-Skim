@@ -44,8 +44,8 @@ from scipy.signal import decimate, firwin, filtfilt
 
 sys.path.insert(0, str(Path(__file__).parent))
 from generate_msk144 import generate_ping_msk144code
-from map144_app.msk144_decode import msk144decodeframe as _msk144decodeframe
-from map144_app.msk144_spd import (
+from ws_skim.msk144_decode import msk144decodeframe as _msk144decodeframe
+from ws_skim.msk144_spd import (
     NSPM, FS, SYNC_THRESHOLD, _NAV_PATTERNS,
     _freq_search_avg, msk144_spd_decode,
 )

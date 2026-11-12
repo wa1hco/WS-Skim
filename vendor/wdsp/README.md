@@ -46,7 +46,7 @@ MSVC (Developer Command Prompt):
 cl /O2 /LD /Fe:vendor\wdsp\libnob.dll vendor\wdsp\nob.c vendor\wdsp\nob_shim.c
 ```
 
-The Python wrapper [`map144_app/nb_nr0v_wideband.py`](../../map144_app/nb_nr0v_wideband.py)
+The Python wrapper [`ws_skim/nb_nr0v_wideband.py`](../../ws_skim/nb_nr0v_wideband.py)
 resolves the platform library (`libnob.dll` / `.dylib` / `.so`) relative to the
 repo root; once present, the "NR0V-Wideband" backend becomes selectable.
 

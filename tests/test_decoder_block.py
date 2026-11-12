@@ -5,7 +5,7 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-"""Tests for ``map144_app.blocks.DecoderBlock`` — Stage 1 (skeleton).
+"""Tests for ``ws_skim.blocks.DecoderBlock`` — Stage 1 (skeleton).
 
 Validates the structural concerns introduced before any decode logic
 is wired in:
@@ -46,7 +46,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     DECODE_EVENT_KIND,
     DecoderBlock,
     DecoderBlockConfig,
@@ -58,7 +58,7 @@ from map144_app.blocks import (  # noqa: E402
     make_event_stream,
     make_sample_stream,
 )
-from map144_app.blocks import decoder_block as _decoder_block_mod  # noqa: E402
+from ws_skim.blocks import decoder_block as _decoder_block_mod  # noqa: E402
 
 
 def _stub_extract_and_decode(decode_queue, marker_id, **kwargs):
@@ -330,7 +330,7 @@ class TestRingGapHandling(unittest.TestCase):
         """End-to-end: a detection event after a gap drops should
         target the correct engine-counter position in the ring, not
         a position offset by the gap size."""
-        from map144_app.blocks import decoder_block as _dmod  # noqa: PLC0415
+        from ws_skim.blocks import decoder_block as _dmod  # noqa: PLC0415
 
         # Stub extract_and_decode to record (detect_sample, ring_pos,
         # abs_sample) so we can verify the worker sees the right
@@ -360,7 +360,7 @@ class TestRingGapHandling(unittest.TestCase):
             # Detection event at engine-position 19000 — well after the gap.
             # Note the event uses the full sample rate (48 kHz) here so the
             # rebase logic in _worker_run is a 1:1 pass-through.
-            from map144_app.blocks import Event
+            from ws_skim.blocks import Event
             evt = Event(
                 kind="detection",
                 occurred_at_sample=19000,

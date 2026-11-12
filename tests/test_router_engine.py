@@ -4,10 +4,10 @@ import types
 import numpy as np
 import pytest
 
-from map144_app.router.band_plan import DialChannel
-from map144_app.router.engine import RouterConfig, RouterEngine
-from map144_app.router.lo_planner import LoPlanError
-from map144_app.router.wideband_iq import WidebandDest
+from ws_skim.router.band_plan import DialChannel
+from ws_skim.router.engine import RouterConfig, RouterEngine
+from ws_skim.router.lo_planner import LoPlanError
+from ws_skim.router.wideband_iq import WidebandDest
 
 
 class _FakeExporter:

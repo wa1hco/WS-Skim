@@ -298,7 +298,7 @@ if (-not $SkipUhd) {
 
 # -- 6. Verify jt9 discovery --------------------------------------------
 Write-Host "Verifying jt9 discovery ..." -ForegroundColor Cyan
-$jt9Path = & $VenvPython -c "from map144_app.detection import find_jt9; p = find_jt9(); print(p if p else '')"
+$jt9Path = & $VenvPython -c "from ws_skim.detection import find_jt9; p = find_jt9(); print(p if p else '')"
 if (-not $jt9Path) {
     Write-Host "WARNING: jt9 not found." -ForegroundColor Yellow
     Write-Host "  Install WSJT-X from https://wsjt.sourceforge.io/ (provides jt9.exe)," -ForegroundColor Yellow
@@ -308,7 +308,7 @@ if (-not $jt9Path) {
 }
 
 # -- 7. Resolve installed version (single source of truth) --------------
-$WsSkimVersion = & $VenvPython -c "from map144_app.buildinfo import version_string; print(version_string())" 2>$null
+$WsSkimVersion = & $VenvPython -c "from ws_skim.buildinfo import version_string; print(version_string())" 2>$null
 if (-not $WsSkimVersion) { $WsSkimVersion = "???" }
 
 # -- 8. Done ------------------------------------------------------------

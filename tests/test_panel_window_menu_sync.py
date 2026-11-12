@@ -50,7 +50,7 @@ _APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
 
 
 class _StubParent:
-    """Minimal stand-in for MAP144Visualizer — _PanelWindow only reads
+    """Minimal stand-in for WSSkimVisualizer — _PanelWindow only reads
     the ``_app_closing`` attribute."""
 
     _app_closing = False
@@ -59,9 +59,9 @@ class _StubParent:
 def _make_panel():
     """Construct a _PanelWindow + view_action pair.  Imports
     ``_PanelWindow`` lazily so this test can opt out cleanly if
-    ``map144_app.ui`` has any import-time side effect we don't want
+    ``ws_skim.ui`` has any import-time side effect we don't want
     to drag in."""
-    from map144_app.ui import _PanelWindow  # noqa: PLC0415
+    from ws_skim.ui import _PanelWindow  # noqa: PLC0415
 
     parent = _StubParent()
     action = QtWidgets.QAction("test", _APP)
@@ -145,7 +145,7 @@ class TestPanelWindowMenuSync(unittest.TestCase):
         """If QSettings.setValue raises (disk full, permission),
         the window must still hide and the menu must still uncheck —
         the geometry-save is observability, not correctness."""
-        from map144_app.ui import _PanelWindow  # noqa: PLC0415
+        from ws_skim.ui import _PanelWindow  # noqa: PLC0415
         action = QtWidgets.QAction("boom", _APP)
         action.setCheckable(True)
         action.setChecked(True)

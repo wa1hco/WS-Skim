@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root for map144_app
-from map144_app.sq_det import NSPM, FS, DEFAULT_FC, sq_det
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root for ws_skim
+from ws_skim.sq_det import NSPM, FS, DEFAULT_FC, sq_det
 from algos.tgi import tgi_integrate, TGIConfig
 from tests.test_sq_det import make_msk_like_analytic, make_analytic_noise, make_analytic_tone
 

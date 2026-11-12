@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 import scipy.io.wavfile as sio
 
-from map144_app.channelizer import (apply_channelizer, N_CHANNELS, CH_SAMPLE_RATE,
+from ws_skim.channelizer import (apply_channelizer, N_CHANNELS, CH_SAMPLE_RATE,
                                      make_channelizer_state, design_channelizer_filter)
-from map144_app.processing import (
+from ws_skim.processing import (
     CH_DETECT_SIZE, _CH_DETECT_HOP,
     _DETECT_WINDOW, _SQ_FREQ, _LO_MASK, _HI_MASK,
     _METRIC_HIST_DEPTH, _METRIC_HIST_STRIDE,

@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Tests for ``map144_app.blocks.CombinerBlock``.
+"""Tests for ``ws_skim.blocks.CombinerBlock``.
 
 Validates:
 
@@ -47,7 +47,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     CombinerBlock,
     CombinerBlockConfig,
     Record,
@@ -233,7 +233,7 @@ class TestCombinerAlignment(unittest.TestCase):
 
     def test_misaligned_start_sample_logs_warning_and_skips(self):
         rt, comb, sh, sv, out = self._wire()
-        with self.assertLogs("map144_app.blocks.combiner_block", level="WARNING") as cap:
+        with self.assertLogs("ws_skim.blocks.combiner_block", level="WARNING") as cap:
             rt.start()
             try:
                 sh.put(_make_record(0, 0.5 + 0j))

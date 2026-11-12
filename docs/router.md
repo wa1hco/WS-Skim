@@ -98,15 +98,15 @@ glitches (same class of issue as any SDR→virtual-cable bridge).
 ## Library layout
 
 ```
-map144_app/router/
+ws_skim/router/
   band_plan.py    # frequency table
   lo_planner.py   # pan + hw_rate from selection
   dial_audio.py   # per-dial NCO/decim + exporter bank
   wideband_iq.py  # MAP65/QMAP TIMF2
   engine.py       # lifecycle
   gui.py          # thin Qt UI
-map144_app/wsjtx_audio_export.py   # DSP + PipeWire / PortAudio transports
-map144_app/data/wsjtx_frequencies.json
+ws_skim/wsjtx_audio_export.py   # DSP + PipeWire / PortAudio transports
+ws_skim/data/wsjtx_frequencies.json
 router_app.py
 scripts/run-router.sh / scripts/windows/run-router.bat
 ```

@@ -1,5 +1,5 @@
 # Algorithm implementations for the TGI experiment.
-from map144_app.sq_det import (
+from ws_skim.sq_det import (
     sq_det, slide_sq_det, SqDetResult, TriggerTrace,
     NSPM, FS, DF, DEFAULT_FC, DEFAULT_NTOL,
     DETECT_THRESHOLD_NORM, DETECT_THRESHOLD_DETMET2,

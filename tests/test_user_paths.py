@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from map144_app import user_paths
+from ws_skim import user_paths
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_migrates_in_tree_logs_and_legacy_settings(isolated_home, tmp_path, monk
     root = tmp_path / "program"
     (root / "MSK144" / "logs").mkdir(parents=True)
     (root / "MSK144" / "logs" / "map144_old.log").write_text("kept-log\n")
-    (root / "map144.py").write_text("# program\n")
+    (root / "ws_skim.py").write_text("# program\n")
     (root / "scripts").mkdir()
     monkeypatch.setattr(user_paths, "program_root", lambda start=None: root)
 
@@ -106,7 +106,7 @@ def test_redirect_leaves_real_console_alone(isolated_home):
 
 def test_jt9_dialog_does_not_block_headless(monkeypatch):
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
-    from map144_app.jt9_guide import JT9_MISSING_HTML, show_jt9_missing_dialog
+    from ws_skim.jt9_guide import JT9_MISSING_HTML, show_jt9_missing_dialog
     show_jt9_missing_dialog()  # must return immediately
     assert "wsjt.sourceforge.io" in JT9_MISSING_HTML
     assert "MAP144_" not in JT9_MISSING_HTML

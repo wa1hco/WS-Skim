@@ -41,10 +41,10 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import hilbert
 
-# Inject the map144_app package on sys.path so we can call SPD directly.
+# Inject the ws_skim package on sys.path so we can call SPD directly.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import msk144_spd_decode
-from map144_app.detection import _apply_audio_bpf, _TARGET_FC_HZ
+from ws_skim.msk144_spd import msk144_spd_decode
+from ws_skim.detection import _apply_audio_bpf, _TARGET_FC_HZ
 
 
 # ── Defaults ───────────────────────────────────────────────────────────────────

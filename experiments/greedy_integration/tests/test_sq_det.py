@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root for map144_app
-from map144_app.sq_det import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root for ws_skim
+from ws_skim.sq_det import (
     NSPM, FS, DF, DEFAULT_FC, DEFAULT_NTOL,
     DETECT_THRESHOLD_NORM, DETECT_THRESHOLD_DETMET2,
     sq_det, slide_sq_det, SqDetResult, TriggerTrace,

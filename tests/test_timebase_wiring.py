@@ -21,8 +21,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import numpy as np                                          # noqa: E402
-from map144_app.engine import Engine                        # noqa: E402
-from map144_app.runtime import (                            # noqa: E402
+from ws_skim.engine import Engine                        # noqa: E402
+from ws_skim.runtime import (                            # noqa: E402
     _reset_wav_timeline,
     _clear_decode_panel_on_source_start,
 )

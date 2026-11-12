@@ -42,7 +42,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from scipy.signal import hilbert, fftconvolve, find_peaks    # noqa: E402
-from map144_app.msk144_spd import (                          # noqa: E402
+from ws_skim.msk144_spd import (                          # noqa: E402
     NSPM, FS, _SYNC_CB, _sync_correlate, _sync_phase_features,
 )
 

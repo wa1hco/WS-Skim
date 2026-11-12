@@ -22,7 +22,7 @@
 #define AppName "WS Skim"
 #define AppIco "scripts\windows\assets\ws-skim.ico"
 ; pythonw.exe: no console window.  Settings and logs live in the user's
-; profile (see map144_app/user_paths.py); stdout/stderr go to console.log.
+; profile (see ws_skim/user_paths.py); stdout/stderr go to console.log.
 #define PyW "{app}\.venv\Scripts\pythonw.exe"
 
 [Setup]
@@ -58,7 +58,10 @@ Name: "uhd"; Description: "Install the Ettus UHD driver for a USRP B210 (asks fo
 [InstallDelete]
 ; Upgrades: clear old program files so renamed or removed modules do not
 ; linger.  .venv, env (B210 kit) and MSK144 (recordings) are kept.
+Type: filesandordirs; Name: "{app}\ws_skim"
+; Left over from before the rename to ws_skim (0.1.4-test.1 and older).
 Type: filesandordirs; Name: "{app}\map144_app"
+Type: files; Name: "{app}\map144.py"
 Type: filesandordirs; Name: "{app}\flexclient"
 Type: filesandordirs; Name: "{app}\experiments"
 Type: filesandordirs; Name: "{app}\tools"
@@ -70,8 +73,8 @@ Type: filesandordirs; Name: "{app}\fortran_bp_test"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"
-Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"
+Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Tasks: desktopicon
 
 [Run]
 ; Build the Python environment.  Interactive installs show the console and
@@ -79,13 +82,13 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\map14
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\windows\install.ps1"" -SkipUhd -PauseOnError"; WorkingDir: "{app}"; StatusMsg: "Setting up Python packages (this can take a few minutes)..."; Flags: waituntilterminated; Check: not WizardSilent
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\windows\install.ps1"" -SkipUhd"; WorkingDir: "{app}"; StatusMsg: "Setting up Python packages..."; Flags: runhidden waituntilterminated; Check: WizardSilent
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\Install-UhdWindows.ps1"""; WorkingDir: "{app}"; StatusMsg: "Installing the Ettus UHD driver..."; Flags: waituntilterminated; Tasks: uhd
-Filename: "{#PyW}"; Parameters: """{app}\map144.py"""; WorkingDir: "{app}"; Description: "Start WS Skim"; Flags: postinstall nowait skipifsilent; Check: VenvReady
+Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; Description: "Start WS Skim"; Flags: postinstall nowait skipifsilent; Check: VenvReady
 
 [UninstallDelete]
 ; Files created after install (Python environment, bytecode caches).
 ; MSK144 (recordings) and the user's settings and logs are left in place.
 Type: filesandordirs; Name: "{app}\.venv"
-Type: filesandordirs; Name: "{app}\map144_app"
+Type: filesandordirs; Name: "{app}\ws_skim"
 Type: filesandordirs; Name: "{app}\flexclient"
 Type: filesandordirs; Name: "{app}\experiments"
 Type: filesandordirs; Name: "{app}\tools"
