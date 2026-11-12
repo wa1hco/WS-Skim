@@ -1,4 +1,4 @@
-# MAP144 Project Guidelines
+# WS Skim (formerly MAP144) Project Guidelines
 
 This file contains MAP144- and WSJT-X-specific guidance. General collaboration style, architectural rules, coding preferences, and safety rails are in `~/.claude/CLAUDE.md` and apply here unless overridden below.
 
