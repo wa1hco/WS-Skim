@@ -136,6 +136,34 @@ def with_dial_section(sections: list, dial: cs.Section | None,
     return [dial] + list(sections)
 
 
+def standard_dials_mhz(mode: str) -> list[float]:
+    """The band pulldown's standard dial frequencies for ``mode`` (MHz)."""
+    try:
+        from .ui import BANDS_BY_MODE
+        return [f for _label, f, _src in BANDS_BY_MODE.get(mode, [])]
+    except Exception:                       # no Qt: fall back to none
+        return []
+
+
+def pick_dial_mhz(mode: str, center_mhz: float, fs: float,
+                  setting_mhz: float | None) -> float | None:
+    """Dial frequency for the always-decoded section.
+
+    The band setting wins when it is inside the IQ band; otherwise the
+    standard ``mode`` dial nearest the IQ centre that is inside (the band
+    setting can lag the radio, e.g. still on 6 m MSK144 50.260 while the
+    pan is on 40 m).  None if no dial fits.
+    """
+    def inside(f):
+        off = (f - center_mhz) * 1e6
+        return (off + ft8_decode.JT9_LOW_HZ >= -EDGE_FRACTION * fs
+                and off + ft8_decode.JT9_HIGH_HZ <= EDGE_FRACTION * fs)
+    if setting_mhz and inside(float(setting_mhz)):
+        return float(setting_mhz)
+    fits = [f for f in standard_dials_mhz(mode) if inside(f)]
+    return min(fits, key=lambda f: abs(f - center_mhz)) if fits else None
+
+
 def search_period(iq: np.ndarray, fs: float, mode: str, *, t0_s: float,
                   period_start_utc: float, center_freq_mhz: float,
                   data_fraction: float = 1.0,
@@ -200,8 +228,8 @@ def maybe_dispatch_period(eng) -> None:
     t0_s = (have0 - tb.sample_at(p0)) / fs
     frac = n / max(1, want1 - want0)
     center = float(eng.center_freq_mhz)
-    dial = getattr(eng, "calling_freq_mhz", None)
-    dial_off = (float(dial) - center) * 1e6 if dial else None
+    dial = pick_dial_mhz(mode, center, fs, getattr(eng, "calling_freq_mhz", None))
+    dial_off = (dial - center) * 1e6 if dial else None
     timing = timing_snapshot(eng, tb)
     if getattr(eng, "_ft8_save_iq", False):
         save_period_iq(iq, fs=fs, t0_s=t0_s, period_start_utc=p0, mode=mode,

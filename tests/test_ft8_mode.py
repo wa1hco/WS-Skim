@@ -393,3 +393,13 @@ def test_vita_packet_carries_arrival_time():
     p = VitaPacket(stream_id=1, timestamp_int=0, timestamp_frac=0, tsf=1, sequence=0,
                    samples=np.zeros((128, 1), np.complex64))
     assert p.rx_wall == 0.0
+
+
+def test_pick_dial_uses_setting_when_inside_else_standard_dial():
+    # Pan at 7.0783 MHz, 48 kHz IQ; band setting stuck on 6 m MSK144.
+    assert ft8_engine.pick_dial_mhz("FT8", 7.0783, FS, 50.26) == pytest.approx(7.074)
+    assert ft8_engine.pick_dial_mhz("FT8", 7.0783, FS, 7.0745) == pytest.approx(7.0745)
+    # FT4 40 m dial 7.0475 is below this pan's 7.0567 MHz edge.
+    assert ft8_engine.pick_dial_mhz("FT4", 7.0783, FS, None) is None
+    assert ft8_engine.pick_dial_mhz("FT4", 7.0500, FS, None) == pytest.approx(7.0475)
+    assert ft8_engine.pick_dial_mhz("FT8", 9.0, FS, None) is None
