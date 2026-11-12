@@ -81,25 +81,25 @@ moved with `display pan s <pan> center=<MHz>`.
 
 ## What MAP144 did (from the repo, not memory)
 
-From [`flexclient/setup.py`](https://github.com/wa1hco/map144/blob/main/flexclient/setup.py)
-and the [engine](https://github.com/wa1hco/map144/blob/main/map144_app/engine.py):
+From [`flexclient/setup.py`](https://github.com/wa1hco/WS-Skim/blob/main/flexclient/setup.py)
+and the [engine](https://github.com/wa1hco/WS-Skim/blob/main/map144_app/engine.py):
 
 - MAP144 never sets the IQ center. It treats SmartSDR as the owner of the
-  panadapter ("GUI owns pan tuning", [README_GUI.md](https://github.com/wa1hco/map144/blob/main/README_GUI.md)),
+  panadapter ("GUI owns pan tuning", [flexradio-setup.md](flexradio-setup.md)),
   tries `dax iq set <ch> pan=<id>` and logs a warning if the radio rejects it,
   and only retunes when a slice is attached to the stream.
 - It tracks the real center from `display pan ... center=` and `slice ...
   RF_frequency=` status lines. When the center moves (including when the radio
   reports a slightly different value than requested), it rebuilds the channelizer
   NCO with `offset = (calling_freq − pan_center) + 1500 Hz`
-  ([displays.py](https://github.com/wa1hco/map144/blob/main/map144_app/displays.py),
+  ([displays.py](https://github.com/wa1hco/WS-Skim/blob/main/map144_app/displays.py),
   `_rebuild_channelizer_state` in engine.py).
-- A separate fix, v0.1.2-alpha ([CHANGELOG.md](https://github.com/wa1hco/map144/blob/main/CHANGELOG.md)):
+- A separate fix, v0.1.2-alpha ([CHANGELOG.md](https://github.com/wa1hco/WS-Skim/blob/main/CHANGELOG.md)):
   another client's DAX IQ stream broadcast silently hijacked MAP144's stream
   filter. MAP144 now remembers its own stream ID and tells streams apart by slice.
 - MAP144 uses the older `stream create daxiq=<n> ip= port=` form and decodes the
   payload as little-endian float32 at ±32768 scale
-  ([vita.py](https://github.com/wa1hco/map144/blob/main/flexclient/vita.py)).
+  ([vita.py](https://github.com/wa1hco/WS-Skim/blob/main/flexclient/vita.py)).
   That format is proven working on the author's FLEX-8600 (user-confirmed,
   November 2026). The new driver should start by reusing exactly that format.
   FlexLib and the v4.0.1 note SMART-11918 describe big-endian samples scaled by

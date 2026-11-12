@@ -1,14 +1,13 @@
 # Plan: Installer and release
 
-Status: documentation only. This PR does not change installers, CI,
-or `main`. It records the installer and release plan for
-`wa1hco/ws-skimmer`.
+Status: in progress. Tasks 1, 4 and 8 are done; see the task list.
+Repository: `wa1hco/WS-Skim`.
 
 Related: [docs/plan/ft8-ft4-wims-udp.md](ft8-ft4-wims-udp.md).
 
 ## Goal
 
-A visitor to [github.com/wa1hco/ws-skimmer](https://github.com/wa1hco/ws-skimmer)
+A visitor to [github.com/wa1hco/WS-Skim](https://github.com/wa1hco/WS-Skim)
 should see the installer immediately. The top of the README is a short
 intro, then two large links, **Install on Windows** and **Install on
 Linux**, pointing at the latest release downloads, each with a few
@@ -32,8 +31,13 @@ Verified from the repo root:
 - Launchers live under `scripts/` (Linux) and `scripts/windows/`
   (Windows). The double-click desktop installer is still planned.
 - Developer scripts from the repo root now live under `tools/dev/`.
-- `README-Windows.md`, `README-Linux.md`, and `README_GUI.md` document
-  `MAP144_*` environment variables and CLI flags.
+- The old `README-Windows.md` and `README-Linux.md` are now developer
+  notes in `docs/dev/`; the user-facing README has no CLI flags or
+  environment variables. `README_GUI.md` described the removed
+  `flex_gui.py`; its FlexRadio setup steps live on in
+  `docs/flexradio-setup.md`.
+- `scripts/install.sh` and `scripts/windows/install.ps1` still print
+  "MAP144" and still tell users about `MAP144_*` variables.
 - B210/UHD installers live under `tools/`.
 - CI runs pytest on Python 3.10 and 3.12 (added in PR 1).
 
@@ -59,16 +63,17 @@ Continue from the existing `v0.1.3-alpha` tag:
 
 - Tag the MSK144-only state before generalization. Proposed name:
   `v0.1.4` (to be confirmed).
-- First ws-skimmer release, with FT8/FT4, is proposed as `v0.2.0`.
+- First WS Skim release, with FT8/FT4, is proposed as `v0.2.0`.
 
 ## Tasks (in order)
 
 1. ~~Move launchers to `scripts/` and developer scripts to `tools/dev/`.~~ Done in PR 2 (this layout change). The desktop installer is still later.
 2. Add GUI settings and desktop / Start-menu launchers.
 3. Rename remaining map144 references.
-4. Move the old READMEs (`README-Windows.md`, `README-Linux.md`,
+4. ~~Move the old READMEs (`README-Windows.md`, `README-Linux.md`,
    `README_GUI.md`) into `docs/` and remove environment-variable, CLI
-   flag, and `python -m` instructions from user-facing docs.
+   flag, and `python -m` instructions from user-facing docs.~~ Done:
+   `docs/dev/linux.md`, `docs/dev/windows.md`, `docs/flexradio-setup.md`.
 5. Add the release workflow (tag builds installers and attaches them
    to a GitHub release).
 6. Add CI that tests the installers on clean Windows and Linux
@@ -84,9 +89,8 @@ Continue from the existing `v0.1.3-alpha` tag:
 
 ## Prerequisite
 
-Add a GPLv3 `LICENSE` file and the missing attribution headers before
-the first public release. The repo has no `LICENSE` file, even though
-the README claims GPLv3.
+~~Add a GPLv3 `LICENSE` file and the missing attribution headers before
+the first public release.~~ Done in PR #4.
 
 ## Icons
 

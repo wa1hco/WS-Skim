@@ -1,23 +1,20 @@
-# ws-skimmer
+# WS Skim
 
 Wideband weak-signal skimmer for amateur radio. Today it is a working
 MSK144 meteor-scatter decoder (formerly map144). It is being extended
-with FT8/FT4 decoding and a WSJT-X-style UDP spot feed to WIMS, the
-planned "WS HUB" console. It is part of the wa1hco WS series.
+with FT8/FT4 decoding and a WSJT-X-style UDP spot feed to WS Hub (formerly
+WIMS). It is part of the wa1hco WS series.
 
 ## Install
 
 Windows and Linux are supported. There is no macOS installer yet.
 
-There is no ws-skimmer release yet. The
-[Releases](https://github.com/wa1hco/ws-skimmer/releases) page currently
-has only the older map144 prerelease. A ws-skimmer test prerelease is
+There is no WS Skim release yet. The
+[Releases](https://github.com/wa1hco/WS-Skim/releases) page currently
+has only the older map144 prerelease. A WS Skim test prerelease is
 planned. When it appears, download the Windows or Linux installer from
-that page and run the file (on Windows, double-click
-`scripts/windows/install.ps1` or choose Run with PowerShell; on Linux,
-run `scripts/install.sh`). Start the app with the launcher the install
-provides. The test prerelease is intended to place a desktop icon, plus
-a Start-menu entry on Windows.
+that page and run it. The installer places a WS Skim icon on the
+desktop (and in the Start menu on Windows); start the app from there.
 
 Until then, if you already have a copy of the repository, run
 `scripts/windows/install.ps1` on Windows or `scripts/install.sh` on
@@ -55,7 +52,7 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   other scripts under `tools/` and `tools/dev/`.
 
 The latest published tag is still the map144 prerelease
-[v0.1.3-alpha](https://github.com/wa1hco/ws-skimmer/releases/tag/v0.1.3-alpha)
+[v0.1.3-alpha](https://github.com/wa1hco/WS-Skim/releases/tag/v0.1.3-alpha)
 (7 Sep 2026). `main` is ahead of that tag.
 
 ### In progress and planned
@@ -97,13 +94,12 @@ Developer and analysis scripts live under `tools/dev/`
 (`analyze_*.py`, `compare_decoders.py`, `generate_msk144.py`, and
 others). B210/UHD install helpers stay under `tools/`.
 
-Older platform notes are in [README-Linux.md](README-Linux.md),
-[README-Windows.md](README-Windows.md), and
-[README_GUI.md](README_GUI.md). They still use the map144 name and
-describe command-line flags and environment variables; those
-instructions are being removed from user-facing docs. See also
-[CHANGELOG.md](CHANGELOG.md) and
-[docs/ALPHA_NOTES.md](docs/ALPHA_NOTES.md).
+FlexRadio setup is in [docs/flexradio-setup.md](docs/flexradio-setup.md).
+Developer notes for running from a git checkout (command-line options,
+environment variables, test signals) are in
+[docs/dev/linux.md](docs/dev/linux.md) and
+[docs/dev/windows.md](docs/dev/windows.md). See also
+[CHANGELOG.md](CHANGELOG.md) and [docs/ALPHA_NOTES.md](docs/ALPHA_NOTES.md).
 
 ## License
 
