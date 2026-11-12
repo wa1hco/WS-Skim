@@ -94,10 +94,20 @@ def _feed(e, x, chunk=8192, upto=None):
         _drain(e)
 
 
-def test_engine_ft8_mode_finds_signal_in_utc_period():
+def test_engine_ft8_mode_finds_signal_in_utc_period(tmp_path, monkeypatch):
+    from ws_skim import ft8_decode
     from ws_skim.engine import Engine
+    monkeypatch.setenv("WS_SKIM_OUTPUT_DIR", str(tmp_path))
+    jt9_calls = []
+
+    def fake_jt9(cmd, cwd, timeout_s=0):
+        jt9_calls.append(cmd)
+        return "000000 -10  0.3 1500 ~  CQ K1ABC FN42\n"
+
+    monkeypatch.setattr(ft8_decode, "run_jt9", fake_jt9)
     spec = cs.FT8
     e = Engine(center_freq_mhz=28.074, sample_rate=int(FS))
+    e._ft8_jt9 = "jt9"
     e.set_blanker("Bypass")
     e.set_mode("FT8")
     rng = np.random.default_rng(5)
@@ -127,11 +137,47 @@ def test_engine_ft8_mode_finds_signal_in_utc_period():
            if abs(c.freq_hz - f) <= spec.tone_spacing_hz and abs(c.dt_s - 0.3) <= spec.symbol_s / 2]
     assert hit, r.candidates[:3]
     assert e._ch_buf_end == 0                      # MSK144 hop loop never ran
+    # The fake jt9 "decodes" one line per section (each period it runs).
+    assert r.decoded and jt9_calls and len(r.decodes) == len(r.sections)
+    assert {d.message for d in r.decodes} == {"CQ K1ABC FN42"}
+    recs = []
+    while not e._decode_queue.empty():
+        recs.append(e._decode_queue.get_nowait())
+    ft8 = [x for x in recs if x.get("mode") == "FT8"]
+    assert ft8 and ft8[0]["message"] == "CQ K1ABC FN42"
+    assert (tmp_path / "decodes.jsonl").is_file()
+
+
+def test_engine_ft8_without_jt9_says_so():
+    from ws_skim.engine import Engine
+    spec = cs.FT8
+    e = Engine(center_freq_mhz=28.074, sample_rate=int(FS))
+    e._ft8_jt9 = None
+    e.set_blanker("Bypass")
+    e.set_mode("FT8")
+    rng = np.random.default_rng(6)
+    n = int(40 * FS)
+    x = cs.synth_noise(FS, n, rng=rng)
+    chunk = 8192
+    _feed(e, x, chunk, upto=chunk)
+    tb = e.timebase
+    tb.should_mark_period = lambda wall: False
+    p0 = math.ceil(tb.utc_at(0) / spec.period_s) * spec.period_s
+    s0 = tb.sample_at(p0)
+    x = x + cs.synth_signal(spec, FS, n, freq_hz=-3000.0, snr_db=-8, t0_s=-s0 / FS, rng=rng)
+    end = s0 + int((spec.period_s + ft8_engine.TAIL_S + 0.5) * FS)
+    for s in range(chunk, end, chunk):
+        e.process_iq_data(x[s:s + chunk], 0, 0)
+        _drain(e)
+    r = e._ft8_result
+    assert r is not None and r.sections and not r.decoded
+    assert "jt9 not found" in r.decode_note
 
 
 def test_engine_msk144_mode_never_runs_ft8_search():
     from ws_skim.engine import Engine
     e = Engine(center_freq_mhz=50.260, sample_rate=int(FS))
+    e._ft8_jt9 = None
     e.set_blanker("Bypass")
     x = cs.synth_noise(FS, int(35 * FS), rng=np.random.default_rng(1))
     _feed(e, x)
@@ -214,6 +260,7 @@ def test_draw_result_smoke(qapp):
     win._ft8_scatter = pg.ScatterPlotItem()
     win._ft8_table = QtWidgets.QTableWidget(0, 4)
     win._ft8_status = QtWidgets.QLabel()
+    win._ft8_decodes = QtWidgets.QTableWidget(0, 4)
     win._ft8_regions = []
     n = int(17 * FS)
     rng = np.random.default_rng(2)
@@ -226,5 +273,15 @@ def test_draw_result_smoke(qapp):
     assert win._ft8_table.rowCount() == len(r.candidates) >= 1
     assert len(win._ft8_regions) == len(r.sections)
     assert "80% of period" in win._ft8_status.text()
+    assert "decoding" in win._ft8_status.text()
+    from dataclasses import replace
+    from ws_skim import ft8_decode
+    d = ft8_decode.Decode(mode="FT8", period_start_utc=r.period_start_utc, snr_db=-9, dt_s=0.1,
+                          audio_hz=1000.0, rf_hz=28_075_000.0, dial_hz=28_074_000.0,
+                          message="CQ K1ABC FN42")
+    ft8_window.draw_result(win, replace(r, decodes=[d], decoded=True))
+    assert win._ft8_decodes.rowCount() == 1
+    assert win._ft8_decodes.item(0, 3).text() == "CQ K1ABC FN42"
+    assert "1 decoded" in win._ft8_status.text()
     assert float(win._ft8_table.item(0, 0).text()) == pytest.approx(
         28.074 + r.candidates[0].freq_hz / 1e6, abs=1e-6)

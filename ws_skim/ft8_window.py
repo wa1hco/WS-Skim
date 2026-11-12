@@ -142,10 +142,21 @@ def _build_window(self, view_action) -> None:
     table.verticalHeader().setVisible(False)
     table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
+    decodes = QtWidgets.QTableWidget(0, 4)
+    decodes.setHorizontalHeaderLabels(["Frequency (MHz)", "SNR (dB)", "DT (s)", "Message"])
+    decodes.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+    decodes.horizontalHeader().setStretchLastSection(True)
+    decodes.verticalHeader().setVisible(False)
+    decodes.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+
+    tabs = QtWidgets.QTabWidget()
+    tabs.addTab(decodes, "Decodes")
+    tabs.addTab(table, "Candidates")
+
     split = QtWidgets.QSplitter(QtCore.Qt.Vertical)
     split.addWidget(plot)
-    split.addWidget(table)
-    split.setSizes([440, 160])
+    split.addWidget(tabs)
+    split.setSizes([400, 200])
     layout.addWidget(split, stretch=1)
 
     win._ft8_status = status
@@ -153,6 +164,7 @@ def _build_window(self, view_action) -> None:
     win._ft8_img = img
     win._ft8_scatter = scatter
     win._ft8_table = table
+    win._ft8_decodes = decodes
     win._ft8_regions = []
     win._ft8_drawn = None
     self._ft8_win = win
@@ -232,8 +244,28 @@ def draw_result(win, res) -> None:
             item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             table.setItem(row, col, item)
 
+    dtab = getattr(win, "_ft8_decodes", None)
+    decodes = list(getattr(res, "decodes", []))
+    if dtab is not None:
+        dtab.setRowCount(len(decodes))
+        for row, d in enumerate(decodes):
+            vals = (f"{d.rf_hz / 1e6:.6f}", f"{d.snr_db:+d}", f"{d.dt_s:+.1f}", d.message)
+            for col, v in enumerate(vals):
+                item = QtWidgets.QTableWidgetItem(v)
+                if col < 3:
+                    item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+                dtab.setItem(row, col, item)
+
     when = time.strftime("%H:%M:%S", time.gmtime(res.period_start_utc))
     partial = "" if res.data_fraction >= 0.99 else f" · {res.data_fraction:.0%} of period"
+    if getattr(res, "decode_note", ""):
+        dec = f" · {res.decode_note}"
+    elif getattr(res, "decoded", False):
+        dec = f" · {len(decodes)} decoded"
+    elif res.sections:
+        dec = " · decoding…"
+    else:
+        dec = ""
     win._ft8_status.setText(
         f"{res.mode} period {when} UTC · {len(res.candidates)} candidates in "
-        f"{len(res.sections)} sections · search {res.compute_s:.2f} s{partial}")
+        f"{len(res.sections)} sections · search {res.compute_s:.2f} s{dec}{partial}")

@@ -189,6 +189,9 @@ def build_decode(decode: dict, my_call: str, dial_freq_hz: int) -> bytes:
         t_sec     float  time offset within the 15-s period
         radio_khz float  dial frequency in kHz
         utc_time  str    "HH:MM:SS"
+        mode      str    optional, "MSK144" (default), "FT8" or "FT4"
+        audio_hz  float  optional audio offset from the dial (default 1500,
+                         the MSK144 jt9 centre); FT8/FT4 give each decode's own
     """
     msg     = decode.get('message', '')
     snr     = decode.get('jt9_snr') or 0
@@ -215,7 +218,8 @@ def build_decode(decode: dict, my_call: str, dial_freq_hz: int) -> bytes:
     except Exception:
         ms_since_midnight = 0
 
-    delta_freq = 1500   # MSK144 audio centre — matches JT9_BASE_ARGS -f 1500
+    delta_freq = int(round(float(decode.get('audio_hz', 1500))))
+    mode       = decode.get('mode', 'MSK144')
 
     return (_header(MSG_DECODE)
             + _pack_bool(True)           # is_new
@@ -223,7 +227,7 @@ def build_decode(decode: dict, my_call: str, dial_freq_hz: int) -> bytes:
             + _pack_i32(int(snr))
             + _pack_f64(delta_t)
             + _pack_u32(delta_freq)
-            + _pack_utf8("MSK144")
+            + _pack_utf8(mode)
             + _pack_utf8(msg)
             + _pack_bool(False)          # low_confidence
             + _pack_bool(False))         # off_air
@@ -708,7 +712,7 @@ class Reporter:
                 'de_grid':   grid,
                 'freq_hz':   freq_hz,
                 'snr':       snr,
-                'mode':      'MSK144',
+                'mode':      decode.get('mode', 'MSK144'),
                 'utc_epoch': int(time.time()),
             }
             with self._psk_lock:
@@ -729,7 +733,7 @@ class Reporter:
                 freq_khz = radio_khz
                 snr_str  = f"{snr:+d}dB" if snr is not None else ""
                 grid_str = grid or ""
-                comment  = f"MSK144 {grid_str} {snr_str}".strip()
+                comment  = f"{decode.get('mode', 'MSK144')} {grid_str} {snr_str}".strip()
                 self._dx_send_spot(freq_khz, de_call, comment)
                 self._dx_dupe_cache[_key] = (_now, radio_khz)
             else:

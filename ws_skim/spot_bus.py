@@ -142,7 +142,7 @@ def normalize_map144(raw, my_call, my_grid):
         source="map144",
         t=_parse_map144_ts(raw.get("timestamp")),
         freq_hz=(khz * 1000.0 if khz else None),
-        mode="MSK144",
+        mode=raw.get("mode") or "MSK144",
         tx_call=tx,
         tx_grid=tx_grid,
         rx_call=my_call or None,
