@@ -105,6 +105,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from map144_app.user_paths import redirect_missing_console
+
+redirect_missing_console()  # pythonw.exe (Windows shortcut) has no stdout/stderr
 faulthandler.enable()   # print C-level stack trace to stderr on SIGSEGV
 
 # Limit numpy/BLAS/OpenMP to 1 thread — must be set before numpy is imported.
@@ -122,7 +125,9 @@ from map144_app.visualizer import MAP144Visualizer
 
 def _configure_logging(level_name: str):
     level      = getattr(logging, level_name.upper(), logging.INFO)
-    log_dir    = Path(__file__).parent / 'MSK144' / 'logs'
+    from map144_app.user_paths import log_dir as _user_log_dir, migrate_user_data
+    migrate_user_data(Path(__file__).resolve().parent)
+    log_dir    = _user_log_dir()   # outside the program folder; survives reinstall
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path   = log_dir / f"map144_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
@@ -178,25 +183,6 @@ class _TeeStream:
         return self._orig.isatty()
 
 
-def _show_startup_error(title: str, html: str) -> None:
-    """Show a fatal startup error in a dialog.
-
-    Launched from a desktop icon there is no visible terminal, so a
-    stderr-only message would look like the app silently failed to open.
-    """
-    try:
-        from PyQt5 import QtCore, QtWidgets
-        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
-        box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Critical, title, html)
-        box.setTextFormat(QtCore.Qt.RichText)
-        box.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
-        if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
-            return  # headless (tests/CI): nothing to click
-        box.exec_()
-    except Exception:  # never let the error dialog mask the real error
-        logging.getLogger(__name__).exception("could not show startup error dialog")
-
-
 def main():
     """Launch the Radio IQ visualizer GUI."""
     parser = argparse.ArgumentParser(description='WS Skim — wideband MSK144 skimmer (formerly map144)')
@@ -213,28 +199,19 @@ def main():
 
     from map144_app.detection import find_jt9
     jt9_path = find_jt9()
-    if jt9_path is None:
-        print(
-            "error: jt9 (WSJT-X) not found.\n"
-            "  Install WSJT-X from https://wsjt.sourceforge.io/,\n"
-            "  or set MAP144_JT9 to the full path of jt9 / jt9.exe\n"
-            "  (e.g. MAP144_JT9='C:\\\\WSJT\\\\wsjtx\\\\bin\\\\jt9.exe').",
-            file=sys.stderr,
-        )
-        _show_startup_error(
-            "WS Skim needs WSJT-X",
-            "WS Skim uses the <b>jt9</b> decoder from WSJT-X, and it was not "
-            "found on this computer.<br><br>"
-            "Install WSJT-X from "
-            "<a href='https://wsjt.sourceforge.io/'>wsjt.sourceforge.io</a>, "
-            "then start WS Skim again.",
-        )
-        sys.exit(1)
-    logging.getLogger(__name__).info("Using jt9 binary: %s", jt9_path)
 
     from PyQt5 import QtCore, QtWidgets
 
     app = QtWidgets.QApplication(sys.argv)
+    if jt9_path is None:
+        # Not fatal: the SPD decoder is primary; jt9 is only the fallback.
+        # Started from an icon there is no console, so say it in a dialog.
+        logging.getLogger(__name__).warning(
+            "jt9 (WSJT-X) not found; continuing without the jt9 fallback decoder")
+        from map144_app.jt9_guide import show_jt9_missing_dialog
+        show_jt9_missing_dialog()
+    else:
+        logging.getLogger(__name__).info("Using jt9 binary: %s", jt9_path)
     app.setQuitOnLastWindowClosed(True)
 
     def _graceful_shutdown(_signum, _frame):
