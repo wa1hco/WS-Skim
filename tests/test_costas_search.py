@@ -226,3 +226,19 @@ def test_sections_from_search_cover_every_signal():
 def test_section_narrower_than_signal_raises():
     with pytest.raises(ValueError):
         cs.group_into_sections([_cand(0.0)], cs.FT4, width_hz=50.0)
+
+
+def test_static_burst_gives_no_flood_of_candidates():
+    """A 30 ms broadband burst 30 dB over the noise must not create noise
+    candidates (it gave ~170 per period before per-frame normalisation)."""
+    fs = 48000.0
+    rng = np.random.default_rng(3)
+    n = int(18 * fs)
+    x = cs.synth_noise(fs, n, rng=rng)
+    s = int(7.3 * fs)
+    x[s:s + 1440] += 30 * (rng.standard_normal(1440) + 1j * rng.standard_normal(1440)) / np.sqrt(2)
+    x = x + cs.synth_signal(cs.FT8, fs, n, freq_hz=5000.0, dt_s=0.3, snr_db=-18,
+                            t0_s=-2.0, rng=rng)
+    c = cs.find_candidates(x, fs, cs.FT8, t0_s=-2.0, freq_range_hz=(-21600, 21550))
+    assert len(c) <= 3, len(c)
+    assert any(abs(k.freq_hz - 5000.0) <= 6.25 and abs(k.dt_s - 0.3) <= 0.08 for k in c)
