@@ -158,7 +158,7 @@ You can install elsewhere if you prefer — the install script doesn't care abou
 #### Linux / macOS
 
 ```bash
-git clone https://github.com/wa1hco/map144.git ~/map144
+git clone https://github.com/wa1hco/WS-Skim.git ~/map144
 cd ~/map144
 ./scripts/install.sh
 ```
@@ -166,7 +166,7 @@ cd ~/map144
 #### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/wa1hco/map144.git C:\map144
+git clone https://github.com/wa1hco/WS-Skim.git C:\map144
 cd C:\map144
 .\scripts\windows\install.ps1
 ```

@@ -1,8 +1,8 @@
 # Plan: FT8/FT4 decoding and WSJT-X UDP to WIMS
 
-Status: documentation only. This PR does not change code, merge to `main`,
-or rename anything. It prepares work on `wa1hco/ws-skimmer` (renamed from
-`map144`; default branch `main`).
+Status: plan. Prerequisites 1, 2 and 4 are done (PR #4); the feature
+work has not started. Repository: `wa1hco/WS-Skim` (renamed from
+`map144`, then `ws-skimmer`; default branch `main`).
 
 Goal: a wideband FT8/FT4 (and existing MSK144) skimmer for the Flex 8600
 (DAX IQ) and B210 that decodes the whole passband, including nonstandard
@@ -18,24 +18,18 @@ Installer and release plan: [docs/plan/installer-and-release.md](installer-and-r
 
 ## Prerequisites (separate PRs, before feature work)
 
-These are standing gaps; they are not implemented here.
-
-1. **GPLv3 `LICENSE` file.** The tree has no `LICENSE`. The [README](../../README.md)
-   claims GNU GPLv3 and points at `LICENSE`. That missing file is a current
-   license gap. Add the official GPLv3 text before shipping further releases.
-2. **WSJT-X attribution headers.** `fortran_bp_test/` holds WSJT-X-derived
-   Fortran and C++ with no copyright headers. `map144_app/msk144_decode.py`
-   is an explicit Python translation of WSJT-X routines. Derived files need
-   the original WSJT-X copyright and GPLv3 notices plus this project's
-   notice. `vendor/wdsp` already has proper GPL headers and `SOURCE.md`.
+1. ~~**GPLv3 `LICENSE` file.**~~ Done in PR #4 (`LICENSE`, `NOTICE`).
+2. ~~**WSJT-X attribution headers.**~~ Done in PR #4: the files in
+   `fortran_bp_test/` and `map144_app/msk144_decode.py` carry WSJT-X
+   copyright and GPLv3 notices; `vendor/wdsp` already had them.
 3. **Tag the current MSK144 baseline** on `main` before the mode-abstraction
    branch, so the last MSK144-only tree is recoverable. The latest GitHub
    release is still the prerelease `v0.1.3-alpha` (2026-09-07); `main` is
-   many commits ahead of it. Choose the tag name when tagging (not in this PR).
-4. **CI workflow.** The repo has no `.github/workflows`. Add a basic
-   GitHub Actions workflow (lint + existing test/corpus/parity fixtures)
-   so the green-CI-before-merge rule can be enforced. Land CI and keep it
-   green before merging mode or decoder changes.
+   many commits ahead of it. Proposed tag: `v0.1.4` (see the
+   [installer plan](installer-and-release.md)). Still open.
+4. ~~**CI workflow.**~~ Done in PR #4: `.github/workflows/ci.yml` runs
+   pytest on Python 3.10 and 3.12. Keep it green before merging mode or
+   decoder changes.
 
 ## Current code (facts to change against)
 
@@ -131,8 +125,10 @@ Users configure and start the skimmer from the **GUI settings and a
 desktop launcher only**. No required CLI flags, environment variables,
 or `python -m` in user-facing docs or launchers. Internal developer
 scripts may still take flags. This matches the standing zero-knowledge
-UX rule and the draft [PR #1](https://github.com/wa1hco/ws-skimmer/pull/1)
-(docs only; launchers and READMEs are not yet fixed).
+UX rule and the draft [PR #1](https://github.com/wa1hco/WS-Skim/pull/1).
+The old platform READMEs with CLI/env instructions have moved to
+`docs/dev/` as developer notes; the launchers are tracked in the
+[installer plan](installer-and-release.md).
 
 ## Verified jt9 flags and output format
 
@@ -238,9 +234,9 @@ at the first remaining line**, which is not sufficient for FT8/FT4.
 
 ## Suggested implementation order
 
-1. `LICENSE` + WSJT-X attribution headers (prerequisite PR).
+1. ~~`LICENSE` + WSJT-X attribution headers (prerequisite PR).~~ Done.
 2. Tag the current MSK144 baseline (no code change).
-3. Add CI and keep it green (prerequisite PR).
+3. ~~Add CI and keep it green (prerequisite PR).~~ Done; keep it green.
 4. Mode abstraction on a branch, MSK144 default, tests still passing.
 5. Parametrize `reporting.py` and `TimeBase` period.
 6. Period-aligned 12 kHz WAV writer, with tests.
@@ -249,8 +245,8 @@ at the first remaining line**, which is not sufficient for FT8/FT4.
    base, receive-only instance id.
 8. Cross-check with `decode_ft8`.
 9. FT4 path (`-p 7.5`).
-10. GUI mode/settings and launcher-only UX; fix user-facing README
-    CLI/env/`python -m` instructions as a follow-up to PR #1.
+10. GUI mode/settings and launcher-only UX (user-facing README
+    CLI/env instructions already moved to `docs/dev/`).
 
 ## Open questions
 

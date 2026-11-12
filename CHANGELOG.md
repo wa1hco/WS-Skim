@@ -1,12 +1,28 @@
 # Changelog
 
-All notable changes to MAP144 are recorded here.  Format roughly follows
+All notable changes to WS Skim (formerly MAP144) are recorded here.  Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/) — newest first, ham-readable.
 
 Versions are bumped at noticeable-to-tester intervals, not per commit.
 Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
-## Unreleased — 2026-06-14
+## Unreleased
+
+### Project
+
+- **Renamed to WS Skim** (repository `wa1hco/WS-Skim`, formerly `map144`).
+  The application module and settings keep their `map144` names for now.
+- **License.**  Added the GPLv3 `LICENSE` and a `NOTICE` with WSJT-X and
+  other third-party provenance; WSJT-X-derived files carry attribution
+  headers.  Version set to 0.1.4 in `pyproject.toml` and the app.
+- **CI.**  GitHub Actions runs the test suite on Python 3.10 and 3.12 for
+  every pull request and push to `main`.
+- **Layout.**  Install and launch scripts moved to `scripts/` (Linux) and
+  `scripts/windows/` (Windows); developer scripts moved to `tools/dev/`.
+  Added the WS Skim icon set.
+- **Docs.**  The old platform READMEs became developer notes in
+  `docs/dev/`; FlexRadio setup moved to `docs/flexradio-setup.md`.  The
+  obsolete `README_GUI.md` (for the removed `flex_gui.py`) was dropped.
 
 ### Added
 
