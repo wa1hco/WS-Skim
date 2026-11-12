@@ -4,12 +4,17 @@
 # - A version tag (v0.1.4, v0.1.4-test, ...): build + test, then publish a
 #   GitHub release with both installers.  Tags with a "-suffix" are marked
 #   prerelease.  Only a tag changes what users install.
+# - A release published in the GitHub web UI or app (which creates its tag):
+#   same build + test, then the installers are attached to that release.
+#   This is how to release from a phone.
 
 name: Installers
 
 on:
   push:
     tags: ["v*"]
+  release:
+    types: [published]
   pull_request:
     paths:
       - "scripts/**"
@@ -219,8 +224,15 @@ jobs:
           cd dist
           sha256sum WS-Skim-Setup.exe ws-skim-linux-install.sh > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          HASH="$(git rev-parse --short HEAD)"
-          PRE=""
-          case "$TAG" in *-*) PRE="--prerelease" ;; esac
-          gh release create "$TAG" WS-Skim-Setup.exe ws-skim-linux-install.sh SHA256SUMS.txt \
-            --title "WS Skim ${TAG#v} ($HASH)" --generate-notes $PRE
+          FILES="WS-Skim-Setup.exe ws-skim-linux-install.sh SHA256SUMS.txt"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Release already made by hand (web UI / app): attach the files.
+            echo "Release $TAG exists; uploading installers to it."
+            gh release upload "$TAG" $FILES --clobber
+          else
+            HASH="$(git rev-parse --short HEAD)"
+            PRE=""
+            case "$TAG" in *-*) PRE="--prerelease" ;; esac
+            gh release create "$TAG" $FILES \
+              --title "WS Skim ${TAG#v} ($HASH)" --generate-notes $PRE
+          fi
