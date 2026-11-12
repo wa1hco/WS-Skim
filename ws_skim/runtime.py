@@ -1442,6 +1442,7 @@ def run_radio_source(self):
                 _batch_ts_int   = None
                 _batch_ts_frac  = None
                 _batch_n        = 0
+                _batch_rx_wall  = 0.0   # arrival time of the batch's first packet
 
                 while drained < 64:
                     try:
@@ -1465,6 +1466,7 @@ def run_radio_source(self):
                     if _batch_ts_int is None:
                         # Timestamp of the first packet anchors the batch.
                         _batch_ts_int  = packet.timestamp_int
+                        _batch_rx_wall = float(getattr(packet, 'rx_wall', 0.0) or 0.0)
                         # Convert timestamp_frac to picoseconds based on the TSF
                         # field carried in each packet.  The Flex may send either:
                         #   TSF=1  sample count within current second
@@ -1551,6 +1553,11 @@ def run_radio_source(self):
                         # during CPU bursts, which manifested as spec_staging
                         # gap-fill and visible 200 ms repeat-banding in the
                         # fast graph during noise bursts).
+                        # Arrival wall time of the batch's first sample: the
+                        # period re-peg in process_iq_data uses it instead of
+                        # time.time(), so a processing backlog does not shift
+                        # sample→UTC (FT8 period alignment).
+                        self._chunk_rx_wall = _batch_rx_wall
                         self.process_iq_data(np.concatenate(_batch_chunks), 0, 0)
                         _drain_samples += _batch_n
                         _batch_chunks  = []
@@ -1560,6 +1567,7 @@ def run_radio_source(self):
 
                 # Flush any remaining samples shorter than a full batch.
                 if _batch_chunks and not getattr(self, '_flex_was_tx', False):
+                    self._chunk_rx_wall = _batch_rx_wall
                     self.process_iq_data(np.concatenate(_batch_chunks), 0, 0)
             except Exception as exc:
                 print(f"Queue get/process error: {exc}", flush=True)

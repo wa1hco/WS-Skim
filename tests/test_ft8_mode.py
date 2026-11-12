@@ -319,3 +319,77 @@ def test_band_list_follows_mode(qapp, monkeypatch):
     assert w._band_combo.currentText().startswith("6m") and w.picked[-1] == 50.260
     assert ui.band_setting_key("MSK144") == "calling_freq_mhz"
     assert ui.band_setting_key("FT4") == "dial_freq_mhz_FT4"
+
+
+# ── dial section, arrival-time anchoring, IQ save ─────────────────────────
+
+def test_dial_section_added_first_when_missing():
+    spec = cs.FT8
+    dial = ft8_engine.dial_section(-4300.0, FS, spec)
+    assert dial.base_hz == -4300.0 and dial.candidates == []
+    far = cs.Section(base_hz=9000.0, low_audio_hz=300, high_audio_hz=400, candidates=[])
+    assert ft8_engine.with_dial_section([far], dial) == [dial, far]
+    near = cs.Section(base_hz=-4200.0, low_audio_hz=300, high_audio_hz=400, candidates=[])
+    assert ft8_engine.with_dial_section([near], dial) == [near]
+
+
+def test_dial_section_none_outside_band():
+    spec = cs.FT8
+    assert ft8_engine.dial_section(None, FS, spec) is None
+    assert ft8_engine.dial_section(0.45 * FS - 1000.0, FS, spec) is None
+    assert ft8_engine.dial_section(-0.45 * FS - 300.0, FS, spec) is None
+
+
+def test_search_period_always_has_dial_section_in_noise():
+    rng = np.random.default_rng(11)
+    x = cs.synth_noise(FS, int(18 * FS), rng=rng)
+    r = ft8_engine.search_period(x, FS, "FT8", t0_s=-2.0, period_start_utc=0.0,
+                                 center_freq_mhz=7.0783, dial_offset_hz=-4300.0)
+    assert any(s.base_hz == -4300.0 for s in r.sections)
+
+
+def test_period_anchor_uses_packet_arrival_time():
+    """A backlog must not shift sample→UTC: the re-peg uses the chunk's
+    arrival wall (``_chunk_rx_wall``), not the time it is processed."""
+    import time as _time
+    from ws_skim.engine import Engine
+    e = Engine(center_freq_mhz=7.0783, sample_rate=int(FS))
+    e.set_blanker("Bypass")
+    e.set_mode("FT8")
+    arrived = _time.time() - 4.0                   # processed 4 s after arrival
+    e._chunk_rx_wall = arrived
+    e.process_iq_data(np.zeros(1024, np.complex64), 0, 0)
+    assert e.timebase.utc_at(0) == pytest.approx(arrived, abs=1e-6)
+    assert e._chunk_rx_wall == 0.0                 # consumed: never reused
+    before = _time.time()
+    e._timebase_anchor_pending = True
+    e.process_iq_data(np.zeros(1024, np.complex64), 0, 0)
+    assert e.timebase.utc_at(1024) >= before       # no stamp → falls back to now
+
+
+def test_save_period_iq_round_trip_and_keeps_last(tmp_path):
+    iq = (np.arange(10) + 1j).astype(np.complex64)
+    for k in range(5):
+        ft8_engine.save_period_iq(iq, fs=FS, t0_s=-2.0, period_start_utc=15.0 * k,
+                                  mode="FT8", center_freq_mhz=7.0783,
+                                  timing={"backlog_s": 0.25}, out_dir=tmp_path, keep=3)
+    files = sorted(tmp_path.glob("*.npz"))
+    assert len(files) == 3 and files[-1].name == "19700101_000100_FT8.npz"
+    z = np.load(files[-1])
+    assert np.array_equal(z["iq"], iq) and float(z["t0_s"]) == -2.0
+    assert float(z["period_start_utc"]) == 60.0 and float(z["backlog_s"]) == 0.25
+
+
+def test_save_period_iq_never_raises(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    ft8_engine.save_period_iq(np.zeros(4, np.complex64), fs=FS, t0_s=0.0,
+                              period_start_utc=0.0, mode="FT8", center_freq_mhz=7.0,
+                              timing={}, out_dir=blocker / "sub")
+
+
+def test_vita_packet_carries_arrival_time():
+    from flexclient.models import VitaPacket
+    p = VitaPacket(stream_id=1, timestamp_int=0, timestamp_frac=0, tsf=1, sequence=0,
+                   samples=np.zeros((128, 1), np.complex64))
+    assert p.rx_wall == 0.0

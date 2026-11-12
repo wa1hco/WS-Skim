@@ -138,9 +138,14 @@ class VITAReceiver:
         while self._running:
             try:
                 data, addr = self._sock.recvfrom(65536)
+                rx_wall = time.time()
                 pkt = self._unpack(data)
                 if pkt is None:
                     continue
+                # Arrival wall time: lets the consumer pair a sample with the
+                # UTC it was received at, independent of how far behind the
+                # processing thread is running.
+                pkt.rx_wall = rx_wall
                 if self.filter_sid and pkt.stream_id != self.filter_sid:
                     continue
                 self.packet_count += 1

@@ -75,4 +75,5 @@ class VitaPacket:
     tsf:            int         # TSF field from header: 0=none, 1=sample count, 2=picoseconds
     sequence:       int
     samples:        np.ndarray  # complex64 array, shape (N, num_channels); channel 0 = primary
+    rx_wall:        float = 0.0  # time.time() when the UDP datagram was received (0 = unknown)
 
