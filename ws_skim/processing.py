@@ -1268,6 +1268,7 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                               getattr(self, '_cand_map_win', None)) if w is not None]
     _tfmf_wanted = (not _tfmf_wins) or any(w.isVisible() for w in _tfmf_wins)
     if (self.timebase.is_anchored()
+            and getattr(self, 'mode', 'MSK144') == 'MSK144'
             and _tfmf_wanted
             and not self._tfmf_worker_busy
             and not getattr(self, '_background_stopping', False)
@@ -1308,6 +1309,19 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                     daemon=True, name='tfmf-period',
                 )
                 self._tfmf_thread.start()
+
+    # ── FT8 / FT4 mode ────────────────────────────────────────────────────────
+    # Period modes do not use the MSK144 burst path at all: hand finished UTC
+    # periods of wideband IQ to the Costas search (ft8_engine) and drop the
+    # channelised samples instead of running the MSK144 detectors on them.
+    # (A small gate, not a migration of this loop: FT8 has its own home in
+    # ft8_engine and never touches the legacy detect/decode code.)
+    if getattr(self, 'mode', 'MSK144') != 'MSK144':
+        from .ft8_engine import maybe_dispatch_period
+        maybe_dispatch_period(self)
+        self._ch_buf_end = 0
+        if dual_pol:
+            self._ch_buf_v_end = 0
 
     while self._ch_buf_end >= CH_DETECT_SIZE and not getattr(self, '_tx_settle_remaining', 0):
         ch_block   = self._ch_buf[:, :CH_DETECT_SIZE]            # (48, 512) H channel

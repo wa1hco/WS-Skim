@@ -119,6 +119,16 @@ class TimeBase:
             raise TimeBaseError("utc_at() before reset()/mark_period_start()")
         return self._period.wall + (int(sample) - self._period.sample) / self.sample_rate_hz
 
+    def sample_at(self, utc: float) -> int:
+        """Inverse of :meth:`utc_at`: the sample index stamped with ``utc``.
+
+        Rounded to the nearest sample; same validity window as ``utc_at``.
+        """
+        if self._period is None:
+            raise TimeBaseError("sample_at() before reset()/mark_period_start()")
+        return self._period.sample + int(round((float(utc) - self._period.wall)
+                                               * self.sample_rate_hz))
+
     def period_index(self, wall: float) -> int:
         """Which UTC 15-s period a wall-clock time falls in (floor to the grid).
 

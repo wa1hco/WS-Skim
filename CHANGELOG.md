@@ -31,6 +31,16 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Mode menu: MSK144 / FT8 / FT4.**  The choice is remembered.  In FT8 or
+  FT4 mode the MSK144 detectors, sync search and decode do not run, the
+  MSK144 panels are hidden, and the noise blanker defaults to Bypass (the
+  blanker choice is saved separately for each mode).
+- **FT8 Sync Map window** (View → FT8 Sync Map).  At the end of every UTC
+  period the Costas sync search runs on the whole IQ band and the window
+  shows the sync score by frequency and start time, each candidate circled,
+  the ~2.8 kHz sections that will go to jt9 shaded, and a candidate table.
+  Decoding comes next.
+
 - **Updates itself.**  About 15 s after it starts, an installed WS Skim asks
   GitHub for a newer release and offers **Update Now / Later / Skip This
   Version**.  Update Now downloads the installer for this OS, checks it

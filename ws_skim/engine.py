@@ -252,6 +252,15 @@ class Engine:
         from .noise_blanker import LinradBlanker
         self.blanker = LinradBlanker()
 
+        # Operating mode (ft8_engine.MODES).  MSK144 runs the burst
+        # detect/decode path; FT8/FT4 skip it and search each UTC period
+        # for Costas sync instead.  Switch with set_mode().
+        self.mode = "MSK144"
+        self._ft8_result = None        # ft8_engine.PeriodResult of the last period
+        self._ft8_busy = False
+        self._ft8_last_period = -1
+        self._ft8_thread: threading.Thread | None = None
+
         # Time-domain magnitude display buffer (200 ms circular) — H and V
         # _td_mag_buf*     : post-blanker (cleaned signal, for waveform display)
         # _td_mag_buf_raw* : pre-blanker  (raw ADC amplitude, for peak/headroom display)
@@ -479,6 +488,21 @@ class Engine:
         ) / 1e6
         self.freq_axis = self.fft_bin_axis_mhz + self.center_freq_mhz
         self.display_center_freq_mhz = -1.0  # force report_freq() on first display update
+
+    def set_mode(self, mode: str) -> None:
+        """Switch between MSK144 and the FT8/FT4 period modes at runtime."""
+        from .ft8_engine import MODES
+        if mode not in MODES:
+            raise ValueError(f"unknown mode {mode!r}; expected one of {MODES}")
+        if mode == self.mode:
+            return
+        log.info("Engine: mode %s -> %s", self.mode, mode)
+        self.mode = mode
+        self._ft8_result = None
+        self._ft8_last_period = -1
+        self._ch_buf_end = 0
+        if hasattr(self, "_ch_buf_v_end"):
+            self._ch_buf_v_end = 0
 
     def set_blanker(self, name: str) -> None:
         """Switch noise-blanker backend at runtime.
@@ -925,9 +949,9 @@ class Engine:
         self._background_stopping = True
         self._stop_block_runtime(timeout_s=min(5.0, timeout_s))
         threads: list[threading.Thread] = []
-        t = self._tfmf_thread
-        if t is not None and t.is_alive():
-            threads.append(t)
+        for t in (self._tfmf_thread, getattr(self, "_ft8_thread", None)):
+            if t is not None and t.is_alive():
+                threads.append(t)
         threads.extend(
             th for th in list(self._jt9_threads) if th.is_alive()
         )

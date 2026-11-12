@@ -247,6 +247,58 @@ def sync_map(sg: Spectrogram, spec: SyncSpec, min_sync_fraction: float = 0.6,
     return sync, start_times, sg.freqs_hz[:n_freqs]
 
 
+@dataclass
+class SearchResult:
+    """Everything one period's search produced, for decoding and display.
+
+    ``sync`` is the raw Costas ratio map ``(n_lags, n_freqs)`` (see
+    :func:`sync_map`); ``baseline`` is the 40th-percentile value it is
+    divided by to get ``score`` (best over lags per frequency, noise ~ 1).
+    """
+
+    sync: np.ndarray
+    start_times_s: np.ndarray
+    freqs_hz: np.ndarray
+    baseline: float
+    score: np.ndarray
+    best_lag: np.ndarray
+    candidates: list[Candidate]
+
+
+def search(
+    x: np.ndarray,
+    fs: float,
+    spec: SyncSpec = FT8,
+    *,
+    t0_s: float = 0.0,
+    threshold: float | None = None,
+    max_candidates: int = 300,
+    freq_range_hz: tuple[float, float] | None = None,
+) -> SearchResult:
+    """Like :func:`find_candidates`, but also returns the sync map behind it."""
+    if threshold is None:
+        threshold = spec.threshold
+    sg = spectrogram(x, fs, spec, t0_s)
+    sync, start_times, freqs = sync_map(sg, spec)
+
+    best_lag = np.argmax(sync, axis=0)
+    red = sync[best_lag, np.arange(sync.shape[1])]
+
+    keep = np.ones_like(freqs, dtype=bool)
+    if freq_range_hz is not None:
+        keep &= (freqs >= freq_range_hz[0]) & (freqs <= freq_range_hz[1])
+    if not keep.any():
+        return SearchResult(sync, start_times, freqs, 1.0,
+                            np.zeros_like(red), best_lag, [])
+    base = float(np.percentile(red[keep], 40))
+    base = max(base, float(np.finfo(np.float32).tiny))
+    score = red / base
+    score[~keep] = 0.0
+    cands = _pick_candidates(score, best_lag, start_times, freqs, sg.bin_hz,
+                             spec, threshold, max_candidates)
+    return SearchResult(sync, start_times, freqs, base, score, best_lag, cands)
+
+
 def find_candidates(
     x: np.ndarray,
     fs: float,
@@ -263,26 +315,18 @@ def find_candidates(
     real audio inside 100–3000 Hz, or to skip the IQ DC artifact region).
     ``threshold`` defaults to ``spec.threshold``.
     """
-    if threshold is None:
-        threshold = spec.threshold
-    sg = spectrogram(x, fs, spec, t0_s)
-    sync, start_times, freqs = sync_map(sg, spec)
+    return search(x, fs, spec, t0_s=t0_s, threshold=threshold,
+                  max_candidates=max_candidates,
+                  freq_range_hz=freq_range_hz).candidates
 
-    best_lag = np.argmax(sync, axis=0)
-    red = sync[best_lag, np.arange(sync.shape[1])]
 
-    keep = np.ones_like(freqs, dtype=bool)
-    if freq_range_hz is not None:
-        keep &= (freqs >= freq_range_hz[0]) & (freqs <= freq_range_hz[1])
-    if not keep.any():
-        return []
-    base = np.percentile(red[keep], 40)
-    score = red / max(base, np.finfo(np.float32).tiny)
-    score[~keep] = 0.0
+def _pick_candidates(score, best_lag, start_times, freqs, bin_hz, spec,
+                     threshold, max_candidates) -> list[Candidate]:
+    keep = score > 0
 
     # Local maxima across frequency within ± one signal bandwidth: one
     # candidate per signal, but two signals a bandwidth apart both survive.
-    half = max(1, int(round(spec.bandwidth_hz / sg.bin_hz / 2)))
+    half = max(1, int(round(spec.bandwidth_hz / bin_hz / 2)))
     order = np.argsort(score)[::-1]
     taken = np.zeros_like(keep)
     out: list[Candidate] = []
