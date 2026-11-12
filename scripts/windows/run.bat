@@ -1,4 +1,3 @@
-\
 @echo off
 REM Developer helper. Operators double-click the WS Skim desktop icon.
 cd /d "%~dp0"

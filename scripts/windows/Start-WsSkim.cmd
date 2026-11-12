@@ -1,4 +1,3 @@
-\
 @echo off
 REM Starts WS Skim without being the Desktop shortcut target.
 REM The shortcut uses Start-WsSkim.vbs so there is no console window.

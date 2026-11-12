@@ -1,4 +1,3 @@
-\
 ' WS Skim - Desktop shortcut entry (keeps custom .ico; no visible cmd window).
 Option Explicit
 Dim sh, fso, here, root, pyw, app, msg

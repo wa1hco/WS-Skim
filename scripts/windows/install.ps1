@@ -1,4 +1,3 @@
-\
 #Requires -Version 5.1
 # Developer helper. Operators double-click Install-WsSkim.cmd.
 # UHD / B210 is a separate optional step (tools\Install-UhdWindows.ps1).

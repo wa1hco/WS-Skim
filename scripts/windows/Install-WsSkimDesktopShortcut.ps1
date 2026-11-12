@@ -1,4 +1,3 @@
-\
 #Requires -Version 5.1
 # WS Skim - create/refresh Desktop and Start-menu "WS Skim" shortcuts.
 # Targets wscript.exe + Start-WsSkim.vbs so Explorer keeps the custom icon

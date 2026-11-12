@@ -36,6 +36,7 @@ WINDOWS_SCRIPTS = (
     "scripts/windows/run.bat",
     "scripts/windows/run-router.bat",
     "scripts/windows/run-b210.bat",
+    "scripts/windows/Add WS Skim to Desktop.bat",
 )
 
 PNG_SIZES = {
@@ -67,6 +68,14 @@ def test_windows_scripts_exist():
     for rel in WINDOWS_SCRIPTS:
         path = ROOT / rel
         assert path.is_file(), f"missing {rel}"
+
+
+def test_windows_scripts_do_not_start_with_a_stray_backslash():
+    # A leading "\\" is a statement, so [CmdletBinding]/param and @echo
+    # off never parse as the start of the script.
+    for rel in WINDOWS_SCRIPTS:
+        raw = (ROOT / rel).read_bytes()
+        assert not raw.startswith(b"\\"), f"{rel} starts with a stray backslash"
 
 
 def test_root_launchers_were_moved():
