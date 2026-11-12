@@ -141,7 +141,7 @@ def setup_ui(self):
     from .screenshot_window import setup_screenshot_window
     from .band_map_window import setup_band_map_window
 
-    self.setWindowTitle(f'map144 v{__version__}  —  {self.center_freq_mhz:.3f} MHz')
+    self.setWindowTitle(f'WS Skim v{__version__}  —  {self.center_freq_mhz:.3f} MHz')
     self.setGeometry(50, 50, 420, 800)
 
     # ── Menu bar ──────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ def setup_ui(self):
     view_menu = menu_bar.addMenu("&View")
 
     help_menu    = menu_bar.addMenu("&Help")
-    about_action = QtWidgets.QAction("About map144", self)
+    about_action = QtWidgets.QAction("About WS Skim", self)
     about_action.triggered.connect(self._on_about)
     help_menu.addAction(about_action)
 
@@ -1163,12 +1163,14 @@ def on_band_changed(self, idx: int):
 
 
 def _on_about(self):
-    version = _get_version_string()
+    from .buildinfo import version_string
+    detail = _get_version_string()
+    detail_html = f"<br><small>{detail}</small>" if detail != "unknown" else ""
     QtWidgets.QMessageBox.about(
         self,
-        "About map144",
-        f"<b>map144</b> — MSK144 Meteor Scatter Decoder<br><br>"
-        f"<b>Version:</b> {version}<br><br>"
+        "About WS Skim",
+        f"<b>WS Skim</b> — wideband weak-signal skimmer (formerly map144)<br><br>"
+        f"<b>Version:</b> {version_string()}{detail_html}<br><br>"
         f"Copyright &copy; 2026 Jeff Millar, WA1HCO<br>"
         f"GNU General Public License v3",
     )

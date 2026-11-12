@@ -38,6 +38,9 @@ step):
 Override the Python interpreter:
 `MAP144_PYTHON=/path/to/python3 ./scripts/install.sh`
 
+To add the WS Skim menu entry and desktop icon for a checkout, run
+`./scripts/install-desktop.sh` (`--remove` to take them away).
+
 ## Update
 
 ```bash

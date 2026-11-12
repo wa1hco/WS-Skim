@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install.sh — MAP144 install / update for Linux + macOS.
+# install.sh — WS Skim install / update for Linux (and macOS, untested).
 #
-# Run from inside the cloned repo (no auto-clone — gives you full
-# control of where the working tree lives):
+# The Linux installer (ws-skim-linux-install.sh) runs this for you.  From a
+# git checkout, run it from inside the tree:
 #
-#     git clone https://github.com/wa1hco/map144.git
-#     cd map144
+#     git clone https://github.com/wa1hco/WS-Skim.git ws-skim
+#     cd ws-skim
 #     ./scripts/install.sh
 #
 # Re-runnable: existing venv is reused, requirements re-resolved.
@@ -32,9 +32,19 @@ fi
 "$PYTHON_CMD" -c '
 import sys
 if sys.version_info < (3, 10):
-    sys.exit(f"Python {sys.version_info[:3]} found; MAP144 needs >= 3.10.")
+    sys.exit(f"Python {sys.version_info[:3]} found; WS Skim needs >= 3.10.")
 print(f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} OK")
 '
+
+# Debian/Ubuntu ship python3 without venv/ensurepip; catch that here with a
+# clear fix instead of a confusing "ensurepip is not available" traceback.
+if [ ! -d "$REPO_DIR/.venv" ] && ! "$PYTHON_CMD" -c 'import ensurepip, venv' >/dev/null 2>&1; then
+    PYVER="$("$PYTHON_CMD" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+    echo "ERROR: Python's venv module is missing." >&2
+    echo "  On Ubuntu/Debian:  sudo apt install python3-venv python${PYVER}-venv" >&2
+    echo "  Then run the installer again." >&2
+    exit 1
+fi
 
 # Create venv if missing.  Idempotent: re-runs reuse the existing one.
 #
@@ -86,17 +96,17 @@ if [ "$WANT_GPU" = "1" ]; then
     "$VENV_PY" -m pip install -r requirements-gpu.txt || {
         echo "WARNING: GPU extras failed to install.  CuPy needs a healthy NVIDIA" >&2
         echo "         driver; after a driver update you must reboot so the kernel" >&2
-        echo "         module matches.  MAP144 will use the CPU fallback meanwhile." >&2
+        echo "         module matches.  WS Skim will use the CPU fallback meanwhile." >&2
     }
 fi
 
 # Verify jt9 discovery.  Don't hard-fail — the operator can install
-# WSJT-X afterwards or set MAP144_JT9; surfacing a warning is enough.
+# WSJT-X afterwards (or, from a checkout, set MAP144_JT9); a warning is enough.
 echo "Verifying jt9 discovery ..."
 JT9_PATH="$("$VENV_PY" -c 'from map144_app.detection import find_jt9; p = find_jt9(); print(p if p else "")')"
 if [ -z "$JT9_PATH" ]; then
-    echo "WARNING: jt9 not found.  Install WSJT-X (provides jt9), or set" >&2
-    echo "         MAP144_JT9 to the full path of the jt9 binary." >&2
+    echo "WARNING: jt9 not found.  Install WSJT-X (https://wsjt.sourceforge.io/)," >&2
+    echo "         which provides jt9, then start WS Skim again." >&2
 else
     echo "jt9: $JT9_PATH"
 fi
@@ -104,11 +114,11 @@ fi
 # Resolve the installed version from the package itself — single source
 # of truth, no risk of the install banner drifting from what the app
 # actually reports.
-MAP144_VERSION="$("$VENV_PY" -c 'from map144_app import __version__; print(__version__)' 2>/dev/null || echo '???')"
+WS_SKIM_VERSION="$("$VENV_PY" -c 'from map144_app.buildinfo import version_string; print(version_string())' 2>/dev/null || echo '???')"
 
 cat <<EOF
 
-MAP144 v$MAP144_VERSION ready.
+WS Skim v$WS_SKIM_VERSION ready.
 
 To run:
     ./scripts/run.sh

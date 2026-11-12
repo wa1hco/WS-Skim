@@ -1,6 +1,7 @@
 # Plan: Installer and release
 
-Status: in progress. Tasks 1, 4 and 8 are done; see the task list.
+Status: in progress. Tasks 1, 2 (launchers), 4, 5, 6 and 8 are done;
+see the task list and [releasing.md](../dev/releasing.md).
 Repository: `wa1hco/WS-Skim`.
 
 Related: [docs/plan/ft8-ft4-wims-udp.md](ft8-ft4-wims-udp.md).
@@ -29,15 +30,22 @@ Verified from the repo root:
   `flex_gui.py`.)
 - **macOS:** none.
 - Launchers live under `scripts/` (Linux) and `scripts/windows/`
-  (Windows). The double-click desktop installer is still planned.
+  (Windows).
+- **Installers:** `packaging/windows/ws-skim.iss` (Inno Setup,
+  `WS-Skim-Setup.exe`, per-user, desktop and Start-menu shortcuts) and
+  `packaging/linux/` (self-extracting `ws-skim-linux-install.sh`;
+  `scripts/install-desktop.sh` adds the menu entry and desktop icon).
+- `.github/workflows/installers.yml` builds both, installs them on clean
+  runners, and on a `v*` tag publishes a GitHub release.
 - Developer scripts from the repo root now live under `tools/dev/`.
 - The old `README-Windows.md` and `README-Linux.md` are now developer
   notes in `docs/dev/`; the user-facing README has no CLI flags or
   environment variables. `README_GUI.md` described the removed
   `flex_gui.py`; its FlexRadio setup steps live on in
   `docs/flexradio-setup.md`.
-- `scripts/install.sh` and `scripts/windows/install.ps1` still print
-  "MAP144" and still tell users about `MAP144_*` variables.
+- The install scripts and the window title / About box say WS Skim.
+  The Python package, settings keys and `MAP144_*` variables keep
+  their old names.
 - B210/UHD installers live under `tools/`.
 - CI runs pytest on Python 3.10 and 3.12 (added in PR 1).
 
@@ -68,16 +76,21 @@ Continue from the existing `v0.1.3-alpha` tag:
 ## Tasks (in order)
 
 1. ~~Move launchers to `scripts/` and developer scripts to `tools/dev/`.~~ Done in PR 2 (this layout change). The desktop installer is still later.
-2. Add GUI settings and desktop / Start-menu launchers.
-3. Rename remaining map144 references.
+2. ~~Add desktop / Start-menu launchers.~~ Done (installer PR). GUI
+   settings already cover source and reporting; anything still needing
+   a flag or variable moves into the GUI as it comes up.
+3. Rename remaining map144 references. User-visible strings are done;
+   the `map144_app` package, `map144.py`, QSettings keys and log file
+   names are left until a rename is worth the churn.
 4. ~~Move the old READMEs (`README-Windows.md`, `README-Linux.md`,
    `README_GUI.md`) into `docs/` and remove environment-variable, CLI
    flag, and `python -m` instructions from user-facing docs.~~ Done:
    `docs/dev/linux.md`, `docs/dev/windows.md`, `docs/flexradio-setup.md`.
-5. Add the release workflow (tag builds installers and attaches them
-   to a GitHub release).
-6. Add CI that tests the installers on clean Windows and Linux
-   runners.
+5. ~~Add the release workflow (tag builds installers and attaches them
+   to a GitHub release).~~ Done: `.github/workflows/installers.yml`.
+6. ~~Add CI that tests the installers on clean Windows and Linux
+   runners.~~ Done: same workflow, on pull requests that touch
+   installer inputs.
 7. Once CI exists, require status checks on `main`. `main` currently
    blocks force-push and deletion only.
 8. ~~Generate multi-size `.ico` (16–256) and Linux PNG sizes from the

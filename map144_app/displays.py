@@ -700,10 +700,10 @@ def update_displays(self):
 
     if tuned_freq_mhz is not None:
         self.tuned_freq_label.setText(f"{tuned_freq_mhz:.3f} MHz")
-        self.setWindowTitle(f'map144 v{__version__}  —  {tuned_freq_mhz:.3f} MHz')
+        self.setWindowTitle(f'WS Skim v{__version__}  —  {tuned_freq_mhz:.3f} MHz')
     else:
         self.tuned_freq_label.setText(f"{self.center_freq_mhz:.3f} MHz")
-        self.setWindowTitle(f'map144 v{__version__}  —  {self.center_freq_mhz:.3f} MHz')
+        self.setWindowTitle(f'WS Skim v{__version__}  —  {self.center_freq_mhz:.3f} MHz')
 
     if self.spec_staging_filled and len(self.spectrogram_data) > 0:
         # Recompute power stats only once per second (every 10 frames) and
