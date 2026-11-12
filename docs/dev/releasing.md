@@ -19,7 +19,9 @@ Pushing a tag `v*` runs `.github/workflows/installers.yml`:
    shortcuts and the Python environment, then uninstalls.
 3. **Release:** if both pass, a GitHub release is created for the tag
    with both installers and `SHA256SUMS.txt`. Tags with a suffix
-   (`v0.1.4-test`, `v0.2.0-rc.1`) are marked **prerelease**.
+   (`v0.1.4-test`, `v0.2.0-rc.1`) are marked **prerelease**. If the
+   release already exists (made by hand in the web UI or app), the files
+   are attached to it instead.
 
 The same build and install tests run on pull requests that touch
 `scripts/`, `packaging/` or the other installer inputs listed in the
@@ -58,6 +60,19 @@ and **Help → About**, and the release title carries the same pair.
    appears on the Releases page.
 4. For a test release, install it on a clean machine and check that
    the desktop icon appears (and the Start-menu entry on Windows).
+
+### From a phone (GitHub app or website)
+
+1. Open **Releases → Draft a new release**.
+2. Under **Choose a tag**, type the new tag (for example `v0.1.4-test`)
+   and pick **Create new tag on publish**, target `main`.
+3. Tick **Set as a pre-release** for a test build, then **Publish**.
+
+Publishing creates the tag and starts the same **Installers** workflow.
+When both installers pass their clean-machine tests (about 3 minutes),
+they and `SHA256SUMS.txt` are attached to the release you made. If the
+tests fail, the release stays without installers: delete it and its
+tag, fix the problem, and publish again.
 
 If a tag build fails, fix the problem, delete the tag
 (`git push --delete origin <tag>` and `git tag -d <tag>`) and tag again.
