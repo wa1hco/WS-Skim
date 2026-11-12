@@ -209,6 +209,8 @@ def setup_ui(self):
     about_action = QtWidgets.QAction("About WS Skim", self)
     about_action.triggered.connect(self._on_about)
     help_menu.addAction(about_action)
+    from .update_ui import setup_update_check
+    setup_update_check(self, help_menu)
 
     fg_action          = QtWidgets.QAction("Fast Graph",          self)
     det_action         = QtWidgets.QAction("Tone Detection SNR",   self)

@@ -31,6 +31,16 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Updates itself.**  About 15 s after it starts, an installed WS Skim asks
+  GitHub for a newer release and offers **Update Now / Later / Skip This
+  Version**.  Update Now downloads the installer for this OS, checks it
+  against the release's `SHA256SUMS.txt`, closes WS Skim, installs over this
+  copy and starts it again; settings and logs are kept.  **Help → Check for
+  Updates** checks on demand.  A copy installed from a test release is
+  offered test releases; one installed from a full release only full
+  releases.  Installers now carry a `RELEASE` file naming their tag; copies
+  without one (git checkouts, v0.1.4-test.1) never offer updates.
+
 - **FT8/FT4 wideband Costas search (first slice).**  `map144_app/costas_search.py`
   finds FT8 and FT4 sync across a whole IQ period (or a 12 kHz audio WAV) and
   groups the hits into ~3 kHz sections for jt9.  Synthetic tests and a
