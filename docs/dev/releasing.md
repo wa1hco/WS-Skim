@@ -79,9 +79,15 @@ of the installers.
 | Program | `~/.local/share/ws-skim` | `%LOCALAPPDATA%\Programs\WS-Skim` |
 | Launcher | `~/.local/share/applications/ws-skim.desktop` and `~/Desktop/ws-skim.desktop` | Start menu and desktop `WS Skim` shortcuts |
 | Admin rights | not needed | not needed (the optional B210 UHD driver asks) |
+| Launch | `scripts/run.sh` | `.venv\Scripts\pythonw.exe map144.py` (no console) |
+| Settings | `~/.config/ws-skim` | `%APPDATA%\WS-Skim` |
+| Logs | `~/.local/state/ws-skim/logs` | `%LOCALAPPDATA%\WS-Skim\logs` (plus `console.log` for pythonw output) |
+| Python | distro `python3` (`python3-venv`) | found, or installed per-user by `install.ps1` (winget, else python.org 3.12.10) |
 | Update | run a newer installer | run a newer installer |
 | Uninstall | `bash ws-skim-linux-install.sh --uninstall` | Windows Settings → Apps |
 
 Updates keep the Python environment (`.venv`), the B210 kit (`env`)
-and recordings and logs (`MSK144`). The Windows uninstaller also keeps
-`MSK144`; the Linux `--uninstall` removes the whole folder.
+and recordings (`MSK144`). Settings and logs are outside the program
+folder (`map144_app/user_paths.py`), so neither uninstaller touches them.
+On first start, older settings (the `RadioIQ` QSettings store and
+`~/.config/map144`) and in-tree `MSK144/logs` are copied over once.

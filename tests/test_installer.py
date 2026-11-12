@@ -184,9 +184,11 @@ def test_linux_installer_refuses_foreign_folder(tmp_path):
 
 def test_inno_script_references_existing_files():
     iss = (ROOT / "packaging/windows/ws-skim.iss").read_text(encoding="utf-8")
-    for rel in ("scripts\\windows\\assets\\ws-skim.ico", "scripts\\windows\\run.bat",
+    for rel in ("scripts\\windows\\assets\\ws-skim.ico",
                 "scripts\\windows\\install.ps1", "tools\\Install-UhdWindows.ps1"):
         assert rel in iss, rel
         assert (ROOT / rel.replace("\\", "/")).is_file(), rel
     assert "OutputBaseFilename=WS-Skim-Setup" in iss
     assert "PrivilegesRequired=lowest" in iss
+    # Shortcuts start the GUI with pythonw.exe (no console window).
+    assert r"\.venv\Scripts\pythonw.exe" in iss

@@ -33,9 +33,17 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   CI runners and publishes a GitHub release; see `docs/dev/releasing.md`.
 - **Version with git hash.**  The startup log line and Help → About show
   e.g. `0.1.4 (51b9fd9)`; installed copies read it from a `BUILD` file.
-- **Missing WSJT-X dialog.**  If `jt9` is not found at startup, a dialog
-  explains how to install WSJT-X instead of the app silently exiting
-  (it had no visible console when started from an icon).
+- **Missing WSJT-X is not fatal.**  If `jt9` is not found at startup, a
+  dialog explains how to install WSJT-X and the app keeps running (SPD is
+  the primary decoder; jt9 is the fallback).  Before, it exited with a
+  terminal-only message, invisible when started from an icon.
+- **Settings and logs in the user profile** (from PR #6): `~/.config/ws-skim`
+  and `~/.local/state/ws-skim/logs` on Linux, `%APPDATA%\WS-Skim` and
+  `%LOCALAPPDATA%\WS-Skim\logs` on Windows.  Old settings and in-tree logs
+  are copied over once on first start; nothing is deleted.
+- **Windows installer installs Python if missing** (from PR #6): Python 3.12
+  for the current user via winget, else the python.org 3.12.10 installer.
+  Shortcuts start WS Skim with `pythonw.exe`, without a console window.
 
 - **MAP65 I/Q export (View → "MAP65 Export").**  Tees a 96 kHz Linrad **timf2**
   I/Q stream off the USRP B210 to MAP65 over UDP (default `:50002`), so one
@@ -78,6 +86,8 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 ### Changed
 
 - Window title, About box and install-script messages say **WS Skim**.
+- Engine: block work is not started while background workers are stopping
+  (from PR #6).
 - `install.sh` checks for Python's `venv` module up front and tells
   Ubuntu/Debian users to install `python3-venv`.
 - `USRPSource` gains `pan_center_mhz` (decouples the hardware LO / DC position

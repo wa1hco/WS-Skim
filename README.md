@@ -9,10 +9,10 @@ WIMS). It is part of the wa1hco WS series.
 
 Windows and Linux are supported. There is no macOS installer yet.
 
-First install [WSJT-X](https://wsjt.sourceforge.io/) (WS Skim uses its
-`jt9` decoder) and Python 3.12 (3.10 or newer works). On Windows, use the
-installer from [python.org](https://www.python.org/downloads/) and tick
-**Add python.exe to PATH**.
+Install [WSJT-X](https://wsjt.sourceforge.io/) as well; WS Skim uses its
+`jt9` decoder as a fallback. WS Skim needs Python 3.10 or newer: on
+Windows the installer offers to download Python 3.12 for you if it is
+missing; on Linux use your distribution's `python3`.
 
 Then download the installer for your system from the
 [Releases](https://github.com/wa1hco/WS-Skim/releases) page:
@@ -23,8 +23,16 @@ Then download the installer for your system from the
   `bash ws-skim-linux-install.sh` in a terminal.
 
 Both add a **WS Skim** icon to the desktop (and the Start menu or
-application menu); start the app from there. To update, run a newer
-installer the same way. No administrator rights are needed.
+application menu); start the app from there. On Ubuntu, if the desktop
+icon shows a gear instead of the WS SKIM icon, right-click it and choose
+**Allow Launching**. To update, run a newer installer the same way. No
+administrator rights are needed.
+
+Your settings and logs are kept in your user profile, not in the program
+folder, so updating or reinstalling keeps them: `~/.config/ws-skim` and
+`~/.local/state/ws-skim/logs` on Linux, `%APPDATA%\WS-Skim` and
+`%LOCALAPPDATA%\WS-Skim\logs` on Windows. When reporting a problem,
+attach the newest log from that folder.
 
 There is no WS Skim release yet; the Releases page has only the older
 map144 prerelease. Until the first test prerelease appears, run

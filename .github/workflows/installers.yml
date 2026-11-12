@@ -20,6 +20,8 @@ on:
       - "map144.py"
       - "map144_app/__init__.py"
       - "map144_app/buildinfo.py"
+      - "map144_app/user_paths.py"
+      - "map144_app/jt9_guide.py"
       - ".github/workflows/installers.yml"
   workflow_dispatch:
 
@@ -89,6 +91,8 @@ jobs:
           cat run.log
           [ "$rc" = 124 ] || { echo "app exited early (rc=$rc)"; exit 1; }
           ! grep -q Traceback run.log
+          # Logs go to the user state folder, not the program folder.
+          ls "$HOME/.local/state/ws-skim/logs/"map144_*.log
 
       - name: Uninstall
         run: |
@@ -141,16 +145,35 @@ jobs:
             if (-not (Test-Path -LiteralPath $f)) { throw "missing $f" }
           }
           $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($desk)
-          Write-Host "Desktop shortcut -> $($lnk.TargetPath)  icon $($lnk.IconLocation)"
-          if ($lnk.TargetPath -ne "$app\scripts\windows\run.bat") { throw 'shortcut target is wrong' }
+          Write-Host "Desktop shortcut -> $($lnk.TargetPath) $($lnk.Arguments)  icon $($lnk.IconLocation)"
+          if ($lnk.TargetPath -ne "$app\.venv\Scripts\pythonw.exe") { throw 'shortcut target is wrong' }
+          if ($lnk.Arguments -ne "`"$app\map144.py`"") { throw 'shortcut arguments are wrong' }
           $py = "$app\.venv\Scripts\python.exe"
           if (-not (Test-Path $py)) { Get-Content setup.log; throw 'venv was not created' }
           Push-Location $app
           & $py -c "from map144_app.buildinfo import version_string as v; print(v())"
           if ($LASTEXITCODE -ne 0) { throw 'version check failed' }
-          & $py -c "import map144_app.visualizer; print('GUI imports OK')"
-          if ($LASTEXITCODE -ne 0) { throw 'GUI import failed' }
           Pop-Location
+
+      - name: Launch from the shortcut (pythonw, 30 s)
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\WS-Skim'
+          $logs = Join-Path $env:LOCALAPPDATA 'WS-Skim\logs'
+          $p = Start-Process -FilePath "$app\.venv\Scripts\pythonw.exe" -ArgumentList "`"$app\map144.py`"" `
+                 -WorkingDirectory $app -PassThru
+          Start-Sleep -Seconds 30
+          $alive = -not $p.HasExited
+          if ($alive) { Stop-Process -Id $p.Id -Force }
+          $log = Get-ChildItem $logs -Filter 'map144_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $log) { throw "no session log in $logs" }
+          Get-Content $log.FullName | Select-Object -First 40
+          if (Test-Path "$logs\console.log") { Get-Content "$logs\console.log" | Select-Object -Last 20 }
+          if (-not $alive) { throw "app exited early (code $($p.ExitCode))" }
+          if (Select-String -Path $log.FullName -Pattern 'Traceback' -Quiet) { throw 'Traceback in log' }
+          if (-not (Select-String -Path $log.FullName -Pattern 'starting WS Skim' -Quiet)) { throw 'no start banner' }
 
       - name: Uninstall (silent)
         shell: pwsh
