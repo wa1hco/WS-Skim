@@ -9,26 +9,26 @@ Product overview and radio sources: see the top-level [README.md](README.md).
 - Python **3.10+** (`python3` from your distro)
 - [WSJT-X](https://wsjt.sourceforge.io/) (provides `jt9` / `msk144sim`)
 - Git
-- Optional: `python3-uhd` (apt) for USRP/B210 — `install.sh` uses a venv with
+- Optional: `python3-uhd` (apt) for USRP/B210 — `scripts/install.sh` uses a venv with
   `--system-site-packages` so UHD is visible
-- Optional NVIDIA GPU: CuPy extras via `./install.sh --gpu` or auto-detect
+- Optional NVIDIA GPU: CuPy extras via `./scripts/install.sh --gpu` or auto-detect
 
 ## Install (first time)
 
 ```bash
 git clone https://github.com/wa1hco/map144.git
 cd map144
-./install.sh
+./scripts/install.sh
 ```
 
-What `install.sh` does (re-runnable = update):
+What `scripts/install.sh` does (re-runnable = update):
 
 - Creates/reuses `.venv` (with system site-packages for UHD)
 - `pip install -r requirements.txt`
 - Optional GPU extras (`requirements-gpu.txt`) if `--gpu` / `MAP144_GPU=1` / NVIDIA detected
 - Verifies `jt9` discovery (warning only if missing)
 
-Override Python: `MAP144_PYTHON=/path/to/python3 ./install.sh`
+Override Python: `MAP144_PYTHON=/path/to/python3 ./scripts/install.sh`
 
 ## Update
 
@@ -36,13 +36,13 @@ From inside the repo:
 
 ```bash
 git pull
-./install.sh
+./scripts/install.sh
 ```
 
 ## Run
 
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 
 Or:
@@ -79,8 +79,8 @@ Open **View → Reporting**:
 ## Test signals
 
 ```bash
-.venv/bin/python generate_msk144.py --count 10
-.venv/bin/python generate_msk144.py --count 10 --callsigns
+.venv/bin/python tools/dev/generate_msk144.py --count 10
+.venv/bin/python tools/dev/generate_msk144.py --count 10 --callsigns
 ```
 
 Output under `MSK144/simulations/`. Load with **Source → WAV File**.
@@ -100,9 +100,9 @@ Install distro UHD bindings, e.g. Debian/Ubuntu:
 
 ```bash
 sudo apt install python3-uhd
-./install.sh   # venv must see system site-packages
+./scripts/install.sh   # venv must see system site-packages
 ```
 
 ## Windows?
 
-Use **[README-Windows.md](README-Windows.md)** (`install.ps1` / `run.bat`).
+Use **[README-Windows.md](README-Windows.md)** (`scripts/windows/install.ps1` / `scripts/windows/run.bat`).

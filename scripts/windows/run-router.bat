@@ -2,25 +2,26 @@
 REM run-router.bat — launch the B210 audio/IQ router on Windows.
 REM
 REM Auto-detects the Python env in this order (same as run-b210.bat):
-REM   1. <script-dir>\env\python.exe   <- kit-installed portable env
-REM   2. <script-dir>\.venv\Scripts\python.exe
+REM   1. <repo>\env\python.exe   <- kit-installed portable env
+REM   2. <repo>\.venv\Scripts\python.exe
 REM   3. %USERPROFILE%\miniconda3\envs\map144\python.exe
 REM
 REM WSJT-X audio on Windows needs VB-CABLE (or VoiceMeeter) + sounddevice.
 REM See docs\router.md.
 
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
+set "REPO=%CD%"
 
 set "ENV_PY="
-if exist "%~dp0env\python.exe" (
-    set "ENV_PY=%~dp0env\python.exe"
-    set "ENV_DIR=%~dp0env"
+if exist "%REPO%\env\python.exe" (
+    set "ENV_PY=%REPO%\env\python.exe"
+    set "ENV_DIR=%REPO%\env"
     goto :env_found
 )
-if exist "%~dp0.venv\Scripts\python.exe" (
-    set "ENV_PY=%~dp0.venv\Scripts\python.exe"
-    set "ENV_DIR=%~dp0.venv"
+if exist "%REPO%\.venv\Scripts\python.exe" (
+    set "ENV_PY=%REPO%\.venv\Scripts\python.exe"
+    set "ENV_DIR=%REPO%\.venv"
     goto :env_found
 )
 if exist "%USERPROFILE%\miniconda3\envs\map144\python.exe" (
@@ -30,7 +31,7 @@ if exist "%USERPROFILE%\miniconda3\envs\map144\python.exe" (
 )
 echo ERROR: no B210-capable Python env found. 1>&2
 echo   Looked for env\, .venv\, and conda env map144. 1>&2
-echo   1^) .\install.ps1          - venv + Ettus UHD/B210 firmware 1>&2
+echo   1^) .\scripts\windows\install.ps1  - venv + Ettus UHD/B210 firmware 1>&2
 echo   2^) need Python import uhd: tools\install-b210.bat  OR  1>&2
 echo      conda install -c conda-forge uhd   (see docs\router-windows.md) 1>&2
 exit /b 1

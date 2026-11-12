@@ -113,6 +113,10 @@ fortran_bp_test/mf_test
 !assets/icons/
 !assets/icons/**/*.png
 
+# Generated shipping icons (from tools/dev/make_ws_skim_icons.py).
+!scripts/assets/
+!scripts/assets/**/*.png
+
 # Throwaway artifacts from forensic investigations and one-off analysis
 # runs.  Per the global rule "never create files outside the project tree"
 # (~/.claude/CLAUDE.md), tools default to writing here; nothing in scratch/

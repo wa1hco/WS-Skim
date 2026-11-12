@@ -36,13 +36,15 @@ from pathlib import Path
 import numpy as np
 import scipy.signal
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
+sys.path.insert(0, str(_REPO_ROOT / "tools" / "dev"))
 from analyze_msk144 import _compute_squared_spectrogram, DETECT_THRESH
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from measure_burst_freq_afc_correct import _audio_to_baseband, SR_AUDIO
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(_REPO_ROOT))
 from map144_app.msk144_spd import _sync_correlate, _frame_to_wav_and_decode, NSPM
 
 

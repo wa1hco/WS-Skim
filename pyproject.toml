@@ -9,10 +9,10 @@ authors = [
     { name = "Jeff Millar, WA1HCO", email = "wa1hco@gmail.com" },
 ]
 
-# The application still runs from the repository tree (install.sh / install.ps1
-# and the upcoming desktop launchers). This file records the project name and
+# The application still runs from the repository tree (scripts/install.sh /
+# scripts/windows/install.ps1 and the upcoming desktop launchers). This file records the project name and
 # version; it is not a pip-install entry point.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "tools/dev"]

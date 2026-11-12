@@ -35,12 +35,12 @@ HOW TO INSTALL
   4. Approve the UAC prompt ("Yes" to administrator privileges).
   5. Watch the progress output.  Total time: ~5 minutes.
   6. The last line will say either:
-        READY         <- success; launch with C:\map144\run-b210.bat
+        READY         <- success; launch with C:\map144\scripts\windows\run-b210.bat
         FAILED: ...   <- see the FAILED line for the reason
 
 DEFAULT INSTALL LOCATION
 ------------------------
-  C:\map144\            <- MAP144 source + run-b210.bat
+  C:\map144\            <- MAP144 source + scripts\windows\run-b210.bat
   C:\map144\env\        <- portable Python env (~1 GB after extract)
   C:\map144\MSK144\     <- decode WAVs + JSONL logs (created on first run)
   C:\Program Files\UHD\ <- Ettus UHD (driver + firmware images)
@@ -50,7 +50,7 @@ To install elsewhere, run from PowerShell:
 
 HOW TO LAUNCH
 -------------
-  Double-click C:\map144\run-b210.bat
+  Double-click C:\map144\scripts\windows\run-b210.bat
   (or whichever drive you installed to)
 
   MAP144 will start with Flex as the default source.  Switch to USRP from
@@ -72,7 +72,7 @@ TROUBLESHOOTING
 
   "B210 not detected" warning — the B210 wasn't plugged in (or wasn't on
     a USB 3 port) when the smoke test ran.  Plug it in and launch
-    run-b210.bat; it will re-probe.
+    scripts\windows\run-b210.bat; it will re-probe.
 
   Anything else — see docs/ALPHA_NOTES.md inside the map144 source tree
   (C:\map144\docs\ALPHA_NOTES.md after install) for the manual recipe.

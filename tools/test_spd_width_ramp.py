@@ -1,7 +1,7 @@
 """Direct SPD test against a synthetic width ramp.
 
 For each ping in a width-ramped WAV (produced by
-``generate_msk144.py --ramp --ramp-mode width``), this harness:
+``tools/dev/generate_msk144.py --ramp --ramp-mode width``), this harness:
 
   1. Reads the ping's t_offset and width_ms from the truth JSON sidecar
   2. Slices a ~1.7 s window of audio centered on t_offset
@@ -18,7 +18,7 @@ Usage
 -----
 First generate the ramp WAV::
 
-    python3 generate_msk144.py --ramp --ramp-mode width \\
+    python3 tools/dev/generate_msk144.py --ramp --ramp-mode width \\
         --ramp-width-min-ms 30 --ramp-width-max-ms 200 --ramp-width-step-ms 20 \\
         --ramp-fixed-snr-db 6 --output-dir /tmp
 
@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument('--audio-wav', type=Path, required=True,
                     help='Width-ramp audio WAV (12 kHz mono real) from '
-                         'generate_msk144.py --ramp --ramp-mode width.')
+                         'tools/dev/generate_msk144.py --ramp --ramp-mode width.')
     ap.add_argument('--truth-json', type=Path, default=None,
                     help='Truth JSON sidecar.  Default: <audio>.replace("_audio.wav","_truth.json").')
     args = ap.parse_args(argv)

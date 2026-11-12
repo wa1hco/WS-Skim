@@ -173,7 +173,7 @@ if (Test-Path $find) {
     if ($probe -match 'B210') {
         Write-Ok "B210 visible to UHD"
     } else {
-        Write-Warn2 "B210 not detected yet. Plug into a USB 3.0 port before run-router.bat."
+        Write-Warn2 "B210 not detected yet. Plug into a USB 3.0 port before scripts\windows\run-router.bat."
     }
 }
 

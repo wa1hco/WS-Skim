@@ -2,20 +2,21 @@
 REM run-b210.bat — launch MAP144 with USRP B210 support on Windows.
 REM
 REM Auto-detects the Python env in this order:
-REM   1. <script-dir>\env\python.exe   <- kit-installed portable env (preferred)
+REM   1. <repo>\env\python.exe   <- kit-installed portable env (preferred)
 REM   2. %USERPROFILE%\miniconda3\envs\map144\python.exe   <- dev-machine conda env
 REM Set UHD_IMAGES_DIR by looking for the Ettus install dir.
 REM
 REM See docs/ALPHA_NOTES.md for setup; tools/install-b210.ps1 for kit installer.
 
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
+set "REPO=%CD%"
 
 REM --- Pick a Python env -------------------------------------------------------
 set "ENV_PY="
-if exist "%~dp0env\python.exe" (
-    set "ENV_PY=%~dp0env\python.exe"
-    set "ENV_DIR=%~dp0env"
+if exist "%REPO%\env\python.exe" (
+    set "ENV_PY=%REPO%\env\python.exe"
+    set "ENV_DIR=%REPO%\env"
     goto :env_found
 )
 if exist "%USERPROFILE%\miniconda3\envs\map144\python.exe" (
@@ -25,7 +26,7 @@ if exist "%USERPROFILE%\miniconda3\envs\map144\python.exe" (
 )
 echo ERROR: no B210-capable Python env found. 1>&2
 echo   Looked for: 1>&2
-echo     %~dp0env\python.exe 1>&2
+echo     %REPO%\env\python.exe 1>&2
 echo     %USERPROFILE%\miniconda3\envs\map144\python.exe 1>&2
 echo   Install via tools\install-b210.ps1 or follow docs\ALPHA_NOTES.md. 1>&2
 exit /b 1

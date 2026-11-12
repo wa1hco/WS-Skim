@@ -110,7 +110,7 @@ Ported from `map144_app/msk144_spd.py::_build_sync_template`, retimed from
 |---|---|
 | `sync_template.py` | Build the MSK144 sync template at any sample rate |
 | `wideband_sync.py` | Core GPU matched filter + candidate extraction |
-| `synthetic.py` | Synthetic-IQ test signal generator (uses repo's `generate_msk144.py`) |
+| `synthetic.py` | Synthetic-IQ test signal generator (uses repo's `tools/dev/generate_msk144.py`) |
 | `benchmark.py` | Sweep harness: SNR × freq-offset × position → detection-rate table |
 | `compare_to_legacy.py` | Same signals through legacy `sq_det + sync`, ROC compare |
 | `test_wideband_sync.py` | Unit tests — template correctness, single-ping detection at high SNR, noise-only false-positive rate |
@@ -118,7 +118,7 @@ Ported from `map144_app/msk144_spd.py::_build_sync_template`, retimed from
 ## Dev setup (laptop side)
 
 ```bash
-# After git clone + ./install.sh:
+# After git clone + ./scripts/install.sh:
 nvidia-smi   # confirm driver + CUDA version
 .venv/bin/pip install cupy-cuda12x   # adjust for your CUDA major version
                                       #   12.x: cupy-cuda12x

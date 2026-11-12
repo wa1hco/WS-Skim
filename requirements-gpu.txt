@@ -2,7 +2,7 @@
 #
 # CuPy powers the TFMF GPU path (the Sync Detection / Sync Candidate Map
 # surface): ~10 ms on a modest GPU vs ~4-7 s on the CPU fallback.  Kept out of
-# requirements.txt so the GPU-less station boxes aren't burdened; install.sh
+# requirements.txt so the GPU-less station boxes aren't burdened; scripts/install.sh
 # pulls this in only with `--gpu`, `MAP144_GPU=1`, or when it auto-detects an
 # NVIDIA display GPU via lspci.
 #

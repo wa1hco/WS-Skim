@@ -23,7 +23,7 @@ same radio at the same time.
 ### Linux
 
 ```bash
-./run-router.sh
+./scripts/run-router.sh
 # or:
 python3 router_app.py          # auto-re-execs into .venv when present
 ```
@@ -33,13 +33,13 @@ python3 router_app.py          # auto-re-execs into .venv when present
 **Full install & start guide:** [`router-windows.md`](router-windows.md)
 
 ```bat
-run-router.bat
+scripts/windows/run-router.bat
 ```
 
 Short form once MAP144+B210 and VB-CABLE are already installed:
 
 1. `env\python.exe -m pip install sounddevice` (once)
-2. `run-router.bat`
+2. `scripts/windows/run-router.bat`
 3. Band → select dials → **Apply**
 4. WSJT-X **Audio Input** = **CABLE Output** (or Cable A/B Output)
 
@@ -108,7 +108,7 @@ map144_app/router/
 map144_app/wsjtx_audio_export.py   # DSP + PipeWire / PortAudio transports
 map144_app/data/wsjtx_frequencies.json
 router_app.py
-run-router.sh / run-router.bat
+scripts/run-router.sh / scripts/windows/run-router.bat
 ```
 
 ## Limits (v1)

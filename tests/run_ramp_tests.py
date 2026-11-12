@@ -31,7 +31,7 @@ from collections import defaultdict
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent   # tests/ → repo root
-GENERATE_PY = PROJECT_DIR / 'generate_msk144.py'
+GENERATE_PY = PROJECT_DIR / 'tools' / 'dev' / 'generate_msk144.py'
 
 _AN_AP_RE = re.compile(r'\bA[PN]\d{5}[PN]\d{2}\b')
 

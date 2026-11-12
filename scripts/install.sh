@@ -6,16 +6,16 @@
 #
 #     git clone https://github.com/wa1hco/map144.git
 #     cd map144
-#     ./install.sh
+#     ./scripts/install.sh
 #
 # Re-runnable: existing venv is reused, requirements re-resolved.
 # Sets up:
 #   - .venv/ — Python virtual environment with pinned deps
 #   - jt9 discovery verified
-#   - run.sh ready to launch
+#   - scripts/run.sh ready to launch
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
 # Find a working Python ≥ 3.10.  Prefer ``python3`` since that's the
@@ -68,7 +68,7 @@ echo "Installing requirements ..."
 # Kept out of requirements.txt so GPU-less station boxes aren't burdened, but
 # tracked here so a GPU box restores CuPy on every rebuild instead of silently
 # losing it (the old "had cupy, rebuilt, lost it" trap).
-#   explicit:  ./install.sh --gpu   or   MAP144_GPU=1 ./install.sh   (0 disables)
+#   explicit:  ./scripts/install.sh --gpu   or   MAP144_GPU=1 ./scripts/install.sh   (0 disables)
 #   auto:      an NVIDIA display GPU is present (lspci)
 if [ -n "${MAP144_GPU:-}" ]; then
     WANT_GPU="$MAP144_GPU"
@@ -111,7 +111,7 @@ cat <<EOF
 MAP144 v$MAP144_VERSION ready.
 
 To run:
-    ./run.sh
+    ./scripts/run.sh
 
 Or directly:
     $VENV_PY map144.py

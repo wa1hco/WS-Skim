@@ -18,6 +18,9 @@ import datetime
 import logging
 import os
 import queue
+import threading
+import time
+import weakref
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +33,10 @@ from .processing import (
 )
 
 log = logging.getLogger(__name__)
+
+# Live Engine instances, so tests and process-exit can join leftover
+# background workers (TFMF display, extract_and_decode / jt9).
+_LIVE_ENGINES: weakref.WeakSet = weakref.WeakSet()
 
 
 # Phase 4 cut-over feature flag.  Semantics changed 2026-05-17:
@@ -442,6 +449,9 @@ class Engine:
         self._jt9_markers = []
         self._jt9_marker_next_id = 0
         self._decode_queue = queue.SimpleQueue()
+        self._tfmf_thread: threading.Thread | None = None
+        self._background_stopping = False
+        _LIVE_ENGINES.add(self)
 
         # Phase 4 cut-over (shadow mode).  When the env var is set we
         # turn on the parallel Block runtime; tests / direct callers can
@@ -897,6 +907,41 @@ class Engine:
         self._block_iq_sample_counter = 0
         self._block_iq_anchor_wall = 0.0
 
+    def stop_background_workers(self, timeout_s: float = 15.0) -> None:
+        """Stop starting new workers and join any that are still running.
+
+        The TFMF display thread and ``extract_and_decode`` / jt9 threads
+        are daemons and were previously left running when the window
+        closed or a test finished. Native work still in flight at
+        interpreter shutdown can abort the process (exit 134,
+        ``terminate called without an active exception``).
+        """
+        self._background_stopping = True
+        self._stop_block_runtime(timeout_s=min(5.0, timeout_s))
+        threads: list[threading.Thread] = []
+        t = self._tfmf_thread
+        if t is not None and t.is_alive():
+            threads.append(t)
+        threads.extend(
+            th for th in list(self._jt9_threads) if th.is_alive()
+        )
+        deadline = time.monotonic() + timeout_s
+        still_alive = []
+        for th in threads:
+            remaining = max(0.0, deadline - time.monotonic())
+            th.join(timeout=remaining)
+            if th.is_alive():
+                still_alive.append(th.name)
+        self._tfmf_worker_busy = False
+        self._tfmf_thread = None
+        self._jt9_threads = [th for th in self._jt9_threads if th.is_alive()]
+        if still_alive:
+            log.warning(
+                "Engine: %d background worker(s) still alive after "
+                "%.1f s: %s",
+                len(still_alive), timeout_s, ", ".join(still_alive),
+            )
+
     # ──────────────────────────────────────────────────────────────────
     # Diagnostic state dump — operator-triggered snapshot of all the
     # internal arrays that contribute to the detection-spectrum display.
@@ -974,3 +1019,9 @@ class Engine:
         snapshot = {k: v for k, v in snapshot.items() if v is not None}
         np.savez(path, **snapshot)
         log.info("Engine: diagnostic state dumped to %s", path)
+
+
+def stop_all_background_workers(timeout_s: float = 15.0) -> None:
+    """Join leftover Engine workers on every live instance."""
+    for engine in list(_LIVE_ENGINES):
+        engine.stop_background_workers(timeout_s=timeout_s)
