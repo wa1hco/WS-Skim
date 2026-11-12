@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "tools" / "dev"))
 
 import stage_release  # noqa: E402
 
-from map144_app import __version__  # noqa: E402
-from map144_app import buildinfo  # noqa: E402
+from ws_skim import __version__  # noqa: E402
+from ws_skim import buildinfo  # noqa: E402
 
 needs_bash = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
@@ -76,7 +76,7 @@ def test_stage_excludes_developer_paths(tmp_path):
     names = stage_release.stage(out)
     for gone in ("docs", "tests", ".github", ".claude", "CLAUDE.md"):
         assert gone not in names
-    for kept in ("map144.py", "map144_app", "experiments", "scripts", "LICENSE",
+    for kept in ("ws_skim.py", "ws_skim", "experiments", "scripts", "LICENSE",
                  "NOTICE", "requirements.txt"):
         assert kept in names, kept
     head = subprocess.check_output(

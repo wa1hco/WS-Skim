@@ -50,7 +50,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     Event,
     JsonlSink,
     JsonlSinkConfig,
@@ -89,7 +89,7 @@ def _write_iq_wav(
     sample_rate_hz: int = 48_000,
 ) -> None:
     """Write a tiny PCM int16 IQ WAV (L=I, R=Q) compatible with
-    ``map144_app.runtime._load_wav_complex``.
+    ``ws_skim.runtime._load_wav_complex``.
     """
     if samples.dtype not in (np.complex64, np.complex128):
         raise ValueError("samples must be complex")
@@ -261,7 +261,7 @@ class TestClockHealth(unittest.TestCase):
         CHARACTERIZE threshold (2 ms) within ~0.5 s.  Verify the
         log line lands at INFO, not WARNING.
         """
-        with self.assertLogs("map144_app.blocks.source", level="INFO") as caplog:
+        with self.assertLogs("ws_skim.blocks.source", level="INFO") as caplog:
             rt = Runtime()
             src = rt.add(
                 SyntheticSource("char-src"),
@@ -306,7 +306,7 @@ class TestClockHealth(unittest.TestCase):
         """Aggressive injection crosses the WARN threshold (100 ms) inside
         the test window.  Verify the log line lands at WARNING.
         """
-        with self.assertLogs("map144_app.blocks.source", level="INFO") as caplog:
+        with self.assertLogs("ws_skim.blocks.source", level="INFO") as caplog:
             rt = Runtime()
             src = rt.add(
                 SyntheticSource("warn-src"),

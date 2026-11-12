@@ -33,7 +33,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from scipy.signal import hilbert
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import (
+from ws_skim.msk144_spd import (
     _freq_search_avg, _NAV_PATTERNS, NSPM, FS, FC_JT9, SYNC_THRESHOLD,
 )
 from tools.qrz_lookup import QrzClient, load_credentials, QrzError

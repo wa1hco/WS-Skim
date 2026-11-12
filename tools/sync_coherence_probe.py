@@ -31,7 +31,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, ".")
-from map144_app.msk144_spd import _sync_correlate, _sync_phase_features, NSPM, FS  # noqa: E402
+from ws_skim.msk144_spd import _sync_correlate, _sync_phase_features, NSPM, FS  # noqa: E402
 
 WAV = "/home/jeff/.local/share/WSJT-X - flex/save/260511_093000.wav"
 OUT = "scratch/ridge_proto/sync_coherence_260511_093000.png"

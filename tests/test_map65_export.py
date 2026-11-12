@@ -1,6 +1,6 @@
 # Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for map144_app/map65_export.py (MAP65 timf2 I/Q export).
+"""Tests for ws_skim/map65_export.py (MAP65 timf2 I/Q export).
 
 Covers the DSP (decimate, NCO tone placement, int16 scaling) and the transport
 (timf2 header layout, int16 interleave I_h,Q_h,I_v,Q_v, packetization/ptr).
@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from map144_app.map65_export import (
+from ws_skim.map65_export import (
     Map65Exporter, build_timf2_header, _make_decimator, _nco_shift,
     _clip_int16, TIMF2_HEADER_SIZE, TIMF2_HEADER_FMT, HW_RATE_IN, MAP65_RATE,
     DECIMATE, BYTES_PER_CHANNEL, NET_MULTICAST_PAYLOAD,

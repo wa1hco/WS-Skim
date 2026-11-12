@@ -7,7 +7,7 @@
             "name": "Python Debugger: map144",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/map144.py",
+            "program": "${workspaceFolder}/ws_skim.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "python": "${workspaceFolder}/.venv/bin/python",

@@ -1,5 +1,5 @@
-"""Tests for map144_app.router.band_plan."""
-from map144_app.router.band_plan import (
+"""Tests for ws_skim.router.band_plan."""
+from ws_skim.router.band_plan import (
     DialChannel,
     all_channels,
     bands,

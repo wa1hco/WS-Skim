@@ -60,7 +60,7 @@ from measure_burst_freq_afc_correct import (
 from measure_afc_greedy import greedy_decode_burst, GreedyResult
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import (
+from ws_skim.msk144_spd import (
     _sync_correlate, _frame_to_wav_and_decode, NSPM,
 )
 

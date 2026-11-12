@@ -1,8 +1,8 @@
-"""Tests for map144_app.router.lo_planner."""
+"""Tests for ws_skim.router.lo_planner."""
 import pytest
 
-from map144_app.router.band_plan import DialChannel
-from map144_app.router.lo_planner import LoPlanError, plan_lo
+from ws_skim.router.band_plan import DialChannel
+from ws_skim.router.lo_planner import LoPlanError, plan_lo
 
 
 def _ch(band, mode, dial):

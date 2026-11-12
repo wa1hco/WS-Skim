@@ -1321,12 +1321,12 @@ def build():
         (0, "Install Python dependencies:"),
         (1, "pip install -r requirements.txt"),
         (0, "Verify:"),
-        (1, "python map144.py --help"),
+        (1, "python ws_skim.py --help"),
     ], mono_items={1, 3, 5, 7},
     notes="Replace GitHub URL with actual repo URL before presenting.")
 
     content_slide(prs, "First-Run Configuration", [
-        (0, "Launch MAP144:  python map144.py"),
+        (0, "Launch MAP144:  python ws_skim.py"),
         (0, "Select your radio source from the Source menu"),
         (0, "Set center frequency to the MSK144 calling frequency"),
         (1, "6 m: 50.260 MHz     2 m: 144.150 MHz"),
@@ -1680,7 +1680,7 @@ def build():
         (0, "No prior experience with PyQt5, pyqtgraph, or polyphase filter banks"),
         (0, "Cross-session continuity: CLAUDE.md + persistent memory files"),
         (1, "Findings, thresholds, and architectural decisions survive session boundaries"),
-    ], notes="Run: git log --oneline | wc -l    and    wc -l map144_app/*.py "
+    ], notes="Run: git log --oneline | wc -l    and    wc -l ws_skim/*.py "
              "to get current numbers before presenting.")
 
     content_slide(prs, "Lessons Learned", [
@@ -1702,7 +1702,7 @@ def build():
 
     content_slide(prs, "A Case Study: Finding the CPU Bottleneck", [
         (0, "Tool: py-spy — statistical profiler, attaches to a running process"),
-        (1, "sudo py-spy top --pid $(pgrep -u $USER -f map144.py)"),
+        (1, "sudo py-spy top --pid $(pgrep -u $USER -f ws_skim.py)"),
         (0, "Test: 50-ping synthetic file, SNR −1 to +2 dB (all near-threshold)"),
         (0, "Result: one function consumed 97% of all CPU"),
         (1, "_bpdecode128_90  —  137 seconds for 50 pings"),
@@ -1841,7 +1841,7 @@ def build():
     content_slide(prs, "The Profiling Tool: py-spy", [
         (0, "py-spy — statistical sampling profiler for Python"),
         (1, "Attaches to a running process with no code changes"),
-        (1, "sudo py-spy top --pid $(pgrep -u $USER -f map144.py)"),
+        (1, "sudo py-spy top --pid $(pgrep -u $USER -f ws_skim.py)"),
         (1, "Samples the call stack at ~100 Hz — no instrumentation overhead"),
         (0, "Key columns in the output:"),
         (1, "Own%    — time spent inside the function body (excludes callees)"),

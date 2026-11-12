@@ -22,11 +22,11 @@ on:
       - "tools/dev/stage_release.py"
       - "tools/Install-UhdWindows.ps1"
       - "requirements.txt"
-      - "map144.py"
-      - "map144_app/__init__.py"
-      - "map144_app/buildinfo.py"
-      - "map144_app/user_paths.py"
-      - "map144_app/jt9_guide.py"
+      - "ws_skim.py"
+      - "ws_skim/__init__.py"
+      - "ws_skim/buildinfo.py"
+      - "ws_skim/user_paths.py"
+      - "ws_skim/jt9_guide.py"
       - ".github/workflows/installers.yml"
   workflow_dispatch:
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Install
         env:
-          MAP144_GPU: "0"
+          WS_SKIM_GPU: "0"
         run: |
           mkdir -p "$HOME/Desktop"
           bash dist/ws-skim-linux-install.sh
@@ -84,7 +84,7 @@ jobs:
           grep -q "^Exec=\"$APP/scripts/run.sh\"$" "$HOME/Desktop/ws-skim.desktop"
           test -f "$APP/scripts/assets/ws-skim.png"
           test ! -e "$APP/tests" && test ! -e "$APP/docs"
-          "$APP/.venv/bin/python" -c "from map144_app.buildinfo import version_string as v; print(v())"
+          "$APP/.venv/bin/python" -c "from ws_skim.buildinfo import version_string as v; print(v())"
           # Launch the GUI headless for 30 s with a stub jt9 on PATH.
           mkdir -p "$RUNNER_TEMP/bin"
           printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/bin/jt9"
@@ -97,7 +97,7 @@ jobs:
           [ "$rc" = 124 ] || { echo "app exited early (rc=$rc)"; exit 1; }
           ! grep -q Traceback run.log
           # Logs go to the user state folder, not the program folder.
-          ls "$HOME/.local/state/ws-skim/logs/"map144_*.log
+          ls "$HOME/.local/state/ws-skim/logs/"ws-skim_*.log
 
       - name: Uninstall
         run: |
@@ -152,11 +152,11 @@ jobs:
           $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($desk)
           Write-Host "Desktop shortcut -> $($lnk.TargetPath) $($lnk.Arguments)  icon $($lnk.IconLocation)"
           if ($lnk.TargetPath -ne "$app\.venv\Scripts\pythonw.exe") { throw 'shortcut target is wrong' }
-          if ($lnk.Arguments -ne "`"$app\map144.py`"") { throw 'shortcut arguments are wrong' }
+          if ($lnk.Arguments -ne "`"$app\ws_skim.py`"") { throw 'shortcut arguments are wrong' }
           $py = "$app\.venv\Scripts\python.exe"
           if (-not (Test-Path $py)) { Get-Content setup.log; throw 'venv was not created' }
           Push-Location $app
-          & $py -c "from map144_app.buildinfo import version_string as v; print(v())"
+          & $py -c "from ws_skim.buildinfo import version_string as v; print(v())"
           if ($LASTEXITCODE -ne 0) { throw 'version check failed' }
           Pop-Location
 
@@ -167,12 +167,12 @@ jobs:
         run: |
           $app = Join-Path $env:LOCALAPPDATA 'Programs\WS-Skim'
           $logs = Join-Path $env:LOCALAPPDATA 'WS-Skim\logs'
-          $p = Start-Process -FilePath "$app\.venv\Scripts\pythonw.exe" -ArgumentList "`"$app\map144.py`"" `
+          $p = Start-Process -FilePath "$app\.venv\Scripts\pythonw.exe" -ArgumentList "`"$app\ws_skim.py`"" `
                  -WorkingDirectory $app -PassThru
           Start-Sleep -Seconds 30
           $alive = -not $p.HasExited
           if ($alive) { Stop-Process -Id $p.Id -Force }
-          $log = Get-ChildItem $logs -Filter 'map144_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
+          $log = Get-ChildItem $logs -Filter 'ws-skim_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
           if (-not $log) { throw "no session log in $logs" }
           Get-Content $log.FullName | Select-Object -First 40
           if (Test-Path "$logs\console.log") { Get-Content "$logs\console.log" | Select-Object -Last 20 }

@@ -33,7 +33,7 @@ process_iq_data()           [processing.py]
 │                               WAV write · jt9 · JSONL log
 └── Waterfall FFT           48 kHz spectrogram (overlap-add)
 
-MAP144Visualizer            [visualizer.py]
+WSSkimVisualizer            [visualizer.py]
 ├── Engine (DSP state)      [engine.py]
 └── QMainWindow
     ├── 100 ms display timer ──► update_displays()  [displays.py]
@@ -41,7 +41,7 @@ MAP144Visualizer            [visualizer.py]
     └── Background thread ──►   run_radio_source()  [runtime.py]
 ```
 
-The class design uses **method mixins**: `MAP144Visualizer` inherits `Engine` and `QMainWindow`, then assigns module-level functions from `processing.py`, `runtime.py`, `displays.py`, and `ui.py` as class attributes. This keeps each concern in its own file without deep inheritance chains.
+The class design uses **method mixins**: `WSSkimVisualizer` inherits `Engine` and `QMainWindow`, then assigns module-level functions from `processing.py`, `runtime.py`, `displays.py`, and `ui.py` as class attributes. This keeps each concern in its own file without deep inheritance chains.
 
 ---
 

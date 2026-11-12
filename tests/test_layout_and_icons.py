@@ -78,7 +78,7 @@ def test_root_launchers_were_moved():
     ):
         assert not (ROOT / name).exists(), f"{name} should not remain at the repo root"
     # App entry points stay at the root.
-    assert (ROOT / "map144.py").is_file()
+    assert (ROOT / "ws_skim.py").is_file()
     assert (ROOT / "router_app.py").is_file()
     for rel in RELOCATED_FROM_ROOT:
         assert (ROOT / rel).is_file(), f"missing relocated {rel}"

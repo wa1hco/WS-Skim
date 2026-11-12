@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Fail unless pyproject.toml version equals map144_app.__version__."""
+"""Fail unless pyproject.toml version equals ws_skim.__version__."""
 
 from __future__ import annotations
 
@@ -27,11 +27,11 @@ def main() -> int:
         "version",
     )
     init_ver = _field(
-        ROOT / "map144_app" / "__init__.py",
+        ROOT / "ws_skim" / "__init__.py",
         r'(?m)^__version__\s*=\s*"([^"]+)"',
         "__version__",
     )
-    print(f"pyproject.toml version={py_ver}  map144_app.__version__={init_ver}")
+    print(f"pyproject.toml version={py_ver}  ws_skim.__version__={init_ver}")
     if py_ver != init_ver:
         print("ERROR: version mismatch", file=sys.stderr)
         return 1

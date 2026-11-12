@@ -29,15 +29,15 @@ Upstream project: <https://github.com/WSJTX/wsjtx>
 **Verified in this repository.** The Python decoder describes itself as a
 port of WSJT-X MSK144 routines:
 
-- `map144_app/msk144_spd.py` opens with "Python port of WSJT-X msk144spd /
+- `ws_skim/msk144_spd.py` opens with "Python port of WSJT-X msk144spd /
   msk144sync coherent frame-averaging decoder" and names `msk144spd.f90`,
   `msk144sync.f90`, and `msk144_freq_search.f90`.
-- `map144_app/msk144_decode.py` names `msk144decodeframe.f90`,
+- `ws_skim/msk144_decode.py` names `msk144decodeframe.f90`,
   `bpdecode128_90.f90`, `ldpc_128_90_reordered_parity.f90`,
   `chkcrc13a.f90`, `crc13.cpp`, and `packjt77.f90`. Its LDPC matrix comment
   says the table was "Translated directly from
   ldpc_128_90_reordered_parity.f90".
-- `map144_app/sq_det.py` opens with "WSJT-X sq_det formula for MSK144,
+- `ws_skim/sq_det.py` opens with "WSJT-X sq_det formula for MSK144,
   ported from msk144spd.f90 lines 23-138."
 
 `msk144_decode.py` and `msk144_spd.py` now carry a derivation header
@@ -50,8 +50,8 @@ verified WSJT-X ports.
 
 `docs/notes/2026-05-15_wsjtx_sq_det_port.md` says three `msk144spd.f90`
 detection choices (rectangular window, max of the two tones, and the
-threshold) were brought into `map144_app/processing.py` and
-`map144_app/blocks/detector_block.py`. That note is a design write-up.
+threshold) were brought into `ws_skim/processing.py` and
+`ws_skim/blocks/detector_block.py`. That note is a design write-up.
 Those Python files were not diffed against the Fortran for this notice.
 
 **Verified against upstream** WSJT-X `master` on 2026-11-10:
@@ -109,7 +109,7 @@ local harness, not an upstream extract, and has no WSJT-X copyright banner.
 
 ### MAP65
 
-**Verified in this repository.** `map144_app/map65_export.py` builds
+**Verified in this repository.** `ws_skim/map65_export.py` builds
 Linrad timf2 UDP packets for MAP65. Its copyright header is Jeff Millar,
 WA1HCO, with the GPL-3.0-or-later boilerplate. The module docstring says
 the 24-byte header layout was checked against Linrad `NET_RX_STRUCT`, and
@@ -122,8 +122,8 @@ rather than by copying MAP65 decoder source. MAP65 as a program is part of
 the WSJT-X project and is under GPL-3.0 as stated in the WSJT-X README
 (verified against upstream, above).
 
-`map144_app/router/` can send a wideband TIMF2 stream toward MAP65 or QMAP
-(`map144_app/router/__init__.py`). That package's copyright header is Jeff
+`ws_skim/router/` can send a wideband TIMF2 stream toward MAP65 or QMAP
+(`ws_skim/router/__init__.py`). That package's copyright header is Jeff
 Millar, WA1HCO. It was not compared with QMAP source.
 
 ## WDSP noise blanker (Warren Pratt, NR0V)
@@ -176,7 +176,7 @@ not ship a file that forbids redistribution.
 
 `docs/notes/flex_pan_fc_investigation.md` is a 2026-05-12 investigation
 note. One sentence mentions a "FlexQMAP bridge". It was left as history.
-`docs/figures/burst_freq_afc_corpus/map144.code-workspace` points at an
+`docs/figures/burst_freq_afc_corpus/ws-skim.code-workspace` points at an
 external `FlexQMAP` directory, not at `FlexQMAP2.py`.
 
 ## Headers on map144's own Python files

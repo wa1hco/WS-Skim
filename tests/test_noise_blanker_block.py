@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Tests for ``map144_app.blocks.NoiseBlankerBlock``.
+"""Tests for ``ws_skim.blocks.NoiseBlankerBlock``.
 
 Validates the packaging-only block wrapper around the noise_blanker backends:
 
@@ -42,7 +42,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     NoiseBlankerBlock,
     NoiseBlankerBlockConfig,
     Record,

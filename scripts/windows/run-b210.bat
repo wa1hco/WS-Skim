@@ -62,4 +62,4 @@ if exist "C:\Program Files\UHD\bin\uhd_find_devices.exe" (
 )
 
 REM --- Launch -----------------------------------------------------------------
-"%ENV_PY%" map144.py %*
+"%ENV_PY%" ws_skim.py %*

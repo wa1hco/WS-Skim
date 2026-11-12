@@ -12,7 +12,7 @@ that MAP144 has already detected?"
 The synthetic signal uses the WSJT-X 2500 Hz bandwidth SNR convention, so
 the resulting threshold is directly comparable to WSJT-X's own decode
 sensitivity (accounting for the expected ~3–4 dB coherent-vs-incoherent
-offset — see map144.py SNR reporting section).
+offset — see ws_skim.py SNR reporting section).
 
 Signal model
 ------------
@@ -58,8 +58,8 @@ from scipy.signal import decimate
 # ── Path setup ────────────────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 from generate_msk144 import generate_ping_msk144code
-from map144_app.detection import JT9_BASE_ARGS
-from map144_app.msk144_spd import msk144_spd_decode, FC_JT9
+from ws_skim.detection import JT9_BASE_ARGS
+from ws_skim.msk144_spd import msk144_spd_decode, FC_JT9
 
 # ── Audio layout constants — must match detection.py ─────────────────────────
 _IQ_RATE    = 48_000

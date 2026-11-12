@@ -32,11 +32,11 @@ step):
 - Creates or reuses `.venv` (with system site-packages for UHD)
 - `pip install -r requirements.txt`
 - Installs GPU extras (`requirements-gpu.txt`) if `--gpu`,
-  `MAP144_GPU=1`, or an NVIDIA GPU is detected
+  `WS_SKIM_GPU=1`, or an NVIDIA GPU is detected
 - Verifies `jt9` discovery (warning only if missing)
 
 Override the Python interpreter:
-`MAP144_PYTHON=/path/to/python3 ./scripts/install.sh`
+`WS_SKIM_PYTHON=/path/to/python3 ./scripts/install.sh`
 
 To add the WS Skim menu entry and desktop icon for a checkout, run
 `./scripts/install-desktop.sh` (`--remove` to take them away).
@@ -57,7 +57,7 @@ git pull
 or directly:
 
 ```bash
-.venv/bin/python map144.py --bind-client-id <uuid> --log-level DEBUG
+.venv/bin/python ws_skim.py --bind-client-id <uuid> --log-level DEBUG
 ```
 
 | Option | Default | Description |
@@ -74,13 +74,14 @@ JIT-compiles hot paths.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
-| `MAP144_PYTHON` | `install.sh` | Python interpreter to build the venv from |
-| `MAP144_GPU` | `install.sh` | `1` forces GPU extras, `0` skips them |
-| `MAP144_JT9` | app | Full path to `jt9` if it is not found automatically |
+| `WS_SKIM_PYTHON` | `install.sh` | Python interpreter to build the venv from |
+| `WS_SKIM_GPU` | `install.sh` | `1` forces GPU extras, `0` skips them |
+| `WS_SKIM_JT9` | app | Full path to `jt9` if it is not found automatically |
 
-The `MAP144_` prefix is kept for compatibility with existing station
-setups. Other `MAP144_*` variables in the code are development and
-test switches (for example `MAP144_USE_BLOCKS`, `MAP144_OUTPUT_DIR`).
+The older `MAP144_` spelling of each variable still works; when both
+are set, `WS_SKIM_` wins. Other `WS_SKIM_*` variables in the code are
+development and test switches (for example `WS_SKIM_USE_BLOCKS`,
+`WS_SKIM_OUTPUT_DIR`).
 
 ## Test signals
 
@@ -95,7 +96,7 @@ Output goes under `MSK144/simulations/`. Load it with
 ## jt9 not found
 
 Install WSJT-X so `jt9` is on `PATH` (often `/usr/bin/jt9` or
-`~/.local/bin/jt9`), or set `MAP144_JT9=/full/path/to/jt9`.
+`~/.local/bin/jt9`), or set `WS_SKIM_JT9=/full/path/to/jt9`.
 
 ## USRP / B210
 

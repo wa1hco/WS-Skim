@@ -196,7 +196,7 @@ def calibrate_sqdet_threshold(
 
     Returns (calibrated_threshold_db, achieved_far_per_s).
     """
-    from map144_app.sq_det import sq_det as _sq_det, NSPM    # noqa: PLC0415
+    from ws_skim.sq_det import sq_det as _sq_det, NSPM    # noqa: PLC0415
     from scipy.signal import decimate                         # noqa: PLC0415
 
     duration_s = float(noise_iq.shape[0]) / sample_rate_hz
@@ -247,7 +247,7 @@ def run_sq_det_baseline(iq: np.ndarray, sample_rate_hz: int,
     carrier is expected — for the ramp simulations, 1500 Hz.  Squared
     tones land at 2*(fc-500) and 2*(fc+500).
     """
-    from map144_app.sq_det import sq_det, NSPM    # noqa: PLC0415
+    from ws_skim.sq_det import sq_det, NSPM    # noqa: PLC0415
     from scipy.signal import decimate             # noqa: PLC0415
 
     if sample_rate_hz == 12_000:

@@ -33,7 +33,7 @@ if (-not (Test-Path -LiteralPath $Launcher)) {
     Write-Error "Launcher not found: $Launcher"
 }
 $Launcher = (Resolve-Path -LiteralPath $Launcher).Path
-# Working directory is the repository root (map144.py, .venv, env\), not
+# Working directory is the repository root (ws_skim.py, .venv, env\), not
 # the scripts\windows folder that holds the launcher.
 $workDir = (Resolve-Path (Join-Path (Split-Path -Parent $Launcher) '..\..')).Path
 

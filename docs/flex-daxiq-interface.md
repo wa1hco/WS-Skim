@@ -82,7 +82,7 @@ moved with `display pan s <pan> center=<MHz>`.
 ## What MAP144 did (from the repo, not memory)
 
 From [`flexclient/setup.py`](https://github.com/wa1hco/WS-Skim/blob/main/flexclient/setup.py)
-and the [engine](https://github.com/wa1hco/WS-Skim/blob/main/map144_app/engine.py):
+and the [engine](https://github.com/wa1hco/WS-Skim/blob/main/ws_skim/engine.py):
 
 - MAP144 never sets the IQ center. It treats SmartSDR as the owner of the
   panadapter ("GUI owns pan tuning", [flexradio-setup.md](flexradio-setup.md)),
@@ -92,7 +92,7 @@ and the [engine](https://github.com/wa1hco/WS-Skim/blob/main/map144_app/engine.p
   RF_frequency=` status lines. When the center moves (including when the radio
   reports a slightly different value than requested), it rebuilds the channelizer
   NCO with `offset = (calling_freq − pan_center) + 1500 Hz`
-  ([displays.py](https://github.com/wa1hco/WS-Skim/blob/main/map144_app/displays.py),
+  ([displays.py](https://github.com/wa1hco/WS-Skim/blob/main/ws_skim/displays.py),
   `_rebuild_channelizer_state` in engine.py).
 - A separate fix, v0.1.2-alpha ([CHANGELOG.md](https://github.com/wa1hco/WS-Skim/blob/main/CHANGELOG.md)):
   another client's DAX IQ stream broadcast silently hijacked MAP144's stream

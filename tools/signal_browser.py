@@ -243,7 +243,7 @@ class IntegrationWorker(QThread):
         self._sig = sig
 
     def run(self):
-        from map144_app.msk144_spd import (
+        from ws_skim.msk144_spd import (
             _freq_search_avg, _sync_phase_features,
             NSPM, FS as SPD_FS, SYNC_THRESHOLD,
         )
@@ -380,7 +380,7 @@ class _SqDetWorker(QThread):
 
     def run(self):
         from scipy.signal import hilbert as _hilbert
-        from map144_app.sq_det import (
+        from ws_skim.sq_det import (
             NSPM, FS, DF, PCT_FOR_XMED, DETECT_THRESHOLD_NORM_LIN,
             DETECT_THRESHOLD_DETMET2_LIN,
         )
@@ -501,7 +501,7 @@ class SqDetTab(QWidget):
         self._render(data, sig)
 
     def _render(self, data: dict, sig: dict) -> None:
-        from map144_app.sq_det import DETECT_THRESHOLD_NORM_LIN, DETECT_THRESHOLD_DETMET2_LIN
+        from ws_skim.sq_det import DETECT_THRESHOLD_NORM_LIN, DETECT_THRESHOLD_DETMET2_LIN
 
         fig = self._canvas.figure
         fig.clear()
@@ -618,7 +618,7 @@ class SyncWorker(QThread):
         self._sig = sig
 
     def run(self):
-        from map144_app.msk144_spd import (
+        from ws_skim.msk144_spd import (
             _sync_correlate, _sync_phase_features, NSPM, FS as SPD_FS,
         )
         sig      = self._sig

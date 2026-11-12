@@ -138,7 +138,7 @@ Companion infrastructure (existing, reused):
 - `experiments/gpu_tfmf/synthetic.py` — synthetic IQ generator
   (`single_ping`, `noise_only`) using WSJT-X 2500 Hz SNR convention.
 - `experiments/gpu_tfmf/tfmf.py` — TFMF detector + surface helpers.
-- `map144_app/sq_det.py` — WSJT-X-faithful sq_det implementation.
+- `ws_skim/sq_det.py` — WSJT-X-faithful sq_det implementation.
 
 ## 12. TODOs / open items
 

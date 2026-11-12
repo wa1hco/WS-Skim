@@ -83,7 +83,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.blocks import (  # noqa: E402
+from ws_skim.blocks import (  # noqa: E402
     ChannelizerBlock,
     ChannelizerBlockConfig,
     DecoderBlock,
@@ -179,7 +179,7 @@ class _PrebakedIQSource(Source):
 
 
 class _FakeReporter:
-    """Stub for ``map144_app.reporting.Reporter`` (no sockets)."""
+    """Stub for ``ws_skim.reporting.Reporter`` (no sockets)."""
 
     def __init__(self):
         self.my_call = ""
@@ -352,7 +352,7 @@ class TestBlockPipelineEndToEnd(unittest.TestCase):
 
         # Use a temp dir for decoder WAV output (we don't inspect the
         # files; just want decode to succeed even with output_dir set).
-        self._tmpdir = tempfile.mkdtemp(prefix="map144_e2e_")
+        self._tmpdir = tempfile.mkdtemp(prefix="ws_skim_e2e_")
         self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
 
         dec = rt.add(
@@ -372,7 +372,7 @@ class TestBlockPipelineEndToEnd(unittest.TestCase):
 
         # ── ReporterBlock with fake Reporter (no sockets) ─────────────
         fake_reporter = _FakeReporter()
-        import map144_app.reporting as _rep
+        import ws_skim.reporting as _rep
         real_reporter_cls = _rep.Reporter
         _rep.Reporter = lambda: fake_reporter
         self.addCleanup(setattr, _rep, "Reporter", real_reporter_cls)

@@ -66,7 +66,7 @@ def parse_map144_jsonl(path: Path, since_ts: str | None = None) -> set[str]:
 def replay_map144_headless(iq_path: Path, decodes_jsonl: Path) -> set[str]:
     """Replay one IQ WAV through MAP144 headlessly.  Return the AN/AP messages
     decoded **during this replay** (filtered by the captured run_start)."""
-    # Lazy import so this file works as a doc target without map144_app deps.
+    # Lazy import so this file works as a doc target without ws_skim deps.
     from headless_replay import replay_iq_wav
     run_start = replay_iq_wav(str(iq_path), verbose=False)
     # decodes.jsonl entries log timestamp as "YYYY-MM-DD_HH:MM:SS.f"; convert

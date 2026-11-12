@@ -5,7 +5,7 @@ import types
 import numpy as np
 import pytest
 
-import map144_app.wsjtx_audio_export as wae
+import ws_skim.wsjtx_audio_export as wae
 
 
 class _FakeTransport(wae.AudioTransport):

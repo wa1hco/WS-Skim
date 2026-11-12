@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from map144_app import costas_search as cs
+from ws_skim import costas_search as cs
 
 FS_IQ = 48000.0
 FS_AUDIO = 12000.0

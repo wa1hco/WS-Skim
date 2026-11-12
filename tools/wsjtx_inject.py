@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inject a synthetic WSJT-X UDP decode to test the map144 -> GridTracker -> N1MM chain.
 
-Reuses map144's own wire-format builders (map144_app/reporting.py) so the
+Reuses map144's own wire-format builders (ws_skim/reporting.py) so the
 datagrams are byte-for-byte identical to what map144 emits on a real decode.
 No radio or meteor ping required.
 
@@ -28,10 +28,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Make 'map144_app' importable when run from tools/.
+# Make 'ws_skim' importable when run from tools/.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from map144_app.reporting import build_heartbeat, build_status, build_decode
+from ws_skim.reporting import build_heartbeat, build_status, build_decode
 
 
 def main():

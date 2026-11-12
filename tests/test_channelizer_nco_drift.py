@@ -3,7 +3,7 @@
 Background
 ----------
 The fused Numba kernels ``_nb_mix_fir_sp`` and ``_nb_mix_fir_dp`` in
-``map144_app/channelizer.py`` advance the per-channel NCO phase by
+``ws_skim/channelizer.py`` advance the per-channel NCO phase by
 ``ph *= mix_step`` in complex64.  Float32 rounding asymmetries cause
 ``|ph|`` to drift away from 1.0 at a per-channel-specific rate; without
 renormalization at the chunk boundary, that drift integrates over many
@@ -19,7 +19,7 @@ project_channelizer_nco_drift.md for the diagnosis history.
 import numpy as np
 import pytest
 
-from map144_app.channelizer import (
+from ws_skim.channelizer import (
     CHANNEL_SPACING_HZ,
     N_CHANNELS,
     design_channelizer_filter,

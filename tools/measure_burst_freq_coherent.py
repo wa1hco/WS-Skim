@@ -85,7 +85,7 @@ from measure_ping_freq_vs_time import (
 
 # Sync correlator + template from the production decoder
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import _sync_correlate, _SYNC_CB_CONJ, NSPM, FS
+from ws_skim.msk144_spd import _sync_correlate, _SYNC_CB_CONJ, NSPM, FS
 
 
 SR_AUDIO = 12000

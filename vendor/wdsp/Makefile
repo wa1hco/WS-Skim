@@ -1,5 +1,5 @@
 # Build the WDSP wideband noise blanker (nob.c + nob_shim.c) as a standalone
-# shared library, exported for ctypes use from map144_app/nb_nr0v_wideband.py.
+# shared library, exported for ctypes use from ws_skim/nb_nr0v_wideband.py.
 #
 # Only nob.c (+ the MAP144 nob_shim.c) is compiled; comm.h is a MAP144 stub
 # providing just the symbols nob.c references, not the full WDSP header stack.

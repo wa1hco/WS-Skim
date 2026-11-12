@@ -64,8 +64,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root for map144_app
-from map144_app.sq_det import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root for ws_skim
+from ws_skim.sq_det import (
     sq_det, slide_sq_det, NSPM, FS, DEFAULT_FC, DETECT_THRESHOLD_NORM,
 )
 from algos.map144_sq_det import (

@@ -1,5 +1,5 @@
-from map144_app.capture import load_capture
-from map144_app.analysis_engine import AnalysisEngine
+from ws_skim.capture import load_capture
+from ws_skim.analysis_engine import AnalysisEngine
 
 iq, meta = load_capture('MSK144/captures/20260402_165412Z_capture_radio_50260kHz.wav')
 eng = AnalysisEngine(iq, meta)

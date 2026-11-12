@@ -38,7 +38,7 @@ first full release exists.
 
 ## Version and hash
 
-The version lives in `map144_app/__init__.py` and `pyproject.toml`
+The version lives in `ws_skim/__init__.py` and `pyproject.toml`
 (`tools/dev/check-version.py` keeps them equal). The tag must be
 `v<version>` or `v<version>-<suffix>`; `tools/dev/stage_release.py`
 refuses anything else. The build writes the short git hash to a `BUILD`
@@ -94,7 +94,7 @@ of the installers.
 | Program | `~/.local/share/ws-skim` | `%LOCALAPPDATA%\Programs\WS-Skim` |
 | Launcher | `~/.local/share/applications/ws-skim.desktop` and `~/Desktop/ws-skim.desktop` | Start menu and desktop `WS Skim` shortcuts |
 | Admin rights | not needed | not needed (the optional B210 UHD driver asks) |
-| Launch | `scripts/run.sh` | `.venv\Scripts\pythonw.exe map144.py` (no console) |
+| Launch | `scripts/run.sh` | `.venv\Scripts\pythonw.exe ws_skim.py` (no console) |
 | Settings | `~/.config/ws-skim` | `%APPDATA%\WS-Skim` |
 | Logs | `~/.local/state/ws-skim/logs` | `%LOCALAPPDATA%\WS-Skim\logs` (plus `console.log` for pythonw output) |
 | Python | distro `python3` (`python3-venv`) | found, or installed per-user by `install.ps1` (winget, else python.org 3.12.10) |
@@ -103,6 +103,6 @@ of the installers.
 
 Updates keep the Python environment (`.venv`), the B210 kit (`env`)
 and recordings (`MSK144`). Settings and logs are outside the program
-folder (`map144_app/user_paths.py`), so neither uninstaller touches them.
+folder (`ws_skim/user_paths.py`), so neither uninstaller touches them.
 On first start, older settings (the `RadioIQ` QSettings store and
 `~/.config/map144`) and in-tree `MSK144/logs` are copied over once.

@@ -39,7 +39,7 @@ _TARGET_FC_HZ    = 1500.0          # MSK144 audio carrier convention
 
 # ── Import MAP144's own SNR estimator ─────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
-from map144_app.detection import _estimate_snr_db
+from ws_skim.detection import _estimate_snr_db
 
 
 # ── Signal generation ─────────────────────────────────────────────────────────

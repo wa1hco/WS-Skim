@@ -49,7 +49,7 @@ def main(argv=None):
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    from map144_app.router.gui import run_app
+    from ws_skim.router.gui import run_app
     return run_app()
 
 

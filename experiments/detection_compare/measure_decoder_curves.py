@@ -32,7 +32,7 @@ import numpy as np
 from scipy.signal import decimate
 
 from experiments.gpu_tfmf import synthetic
-from map144_app.detection import find_jt9
+from ws_skim.detection import find_jt9
 
 # Configuration
 SNR_GRID_DB    = list(range(-10, 4))    # -10 to +3 dB (decoder-relevant range)
@@ -49,7 +49,7 @@ N_WORKERS      = 6                      # physical-core count on this box
 
 JT9_PATH = find_jt9()
 if JT9_PATH is None:
-    print("ERROR: jt9 binary not found.  See map144_app.detection.find_jt9 for "
+    print("ERROR: jt9 binary not found.  See ws_skim.detection.find_jt9 for "
           "search locations.", file=sys.stderr)
     sys.exit(1)
 

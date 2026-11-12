@@ -61,7 +61,7 @@ from measure_burst_freq_afc_correct import (
 from measure_afc_metric_reliability import line_snr_of_summed_frame
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import _sync_correlate, NSPM
+from ws_skim.msk144_spd import _sync_correlate, NSPM
 
 
 DELTA_MIN_DB = 0.0       # threshold for accepting a frame add (0 = any positive)

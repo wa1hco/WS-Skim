@@ -38,7 +38,7 @@ This works, but it has costs we have already paid:
   and detector bookkeeping; back-to-back pings can stall ingest. Phase 2's
   numba vectorization bought headroom but did not change the topology.
 - Adding a new source (USRP / SDRangel / WAV / RTL-SDR / Airspy) currently
-  requires editing [runtime.py:1101–1280](../map144_app/runtime.py); each new
+  requires editing [runtime.py:1101–1280](../ws_skim/runtime.py); each new
   source duplicates the "drain queue → call `process_iq_data`" pattern.
 
 The argument for blocks is **observability and testability**, not throughput.
@@ -74,7 +74,7 @@ different names in different files. The standardisation:
 - `frame` (Simulink, MATLAB DSP / Comms) — the natural DSP term, but **collides with MSK144 frame** which is entrenched throughout the codebase.
 - `slice` (informal name we tried first) — collides with Flex SmartSDR's `slice` (a virtual receiver: A/B/C, frequency + mode + filter; see [flexclient/client.py:122](../flexclient/client.py)). Reader switching files would get whiplash.
 - `waveform` (LabVIEW) — closest semantic match (LabVIEW Waveform = `t0 + dt + Y + attributes`), but LabVIEW's `t0` is wall-clock; ours is sample-counter (see §3.1, `project_sample_clock_anchoring`). Borrowing the name with different semantics invites bugs.
-- `chunk` — already used informally in [channelizer.py:101](../map144_app/channelizer.py); fine but weak time-ordered connotation.
+- `chunk` — already used informally in [channelizer.py:101](../ws_skim/channelizer.py); fine but weak time-ordered connotation.
 - `record` (chosen) — generic streaming / database / event-log vocabulary (Kafka, Beam, Reactive Streams). Zero domain collisions in this codebase, and §3 was already using "time-ordered records" as the umbrella description.
 
 Conventions:
@@ -608,13 +608,13 @@ Source ── IQStream ──► Channelizer ── ChannelStream ──► Dete
 
 | Block | Owns today | Inputs | Outputs | Notes |
 |---|---|---|---|---|
-| **Source** | flex_client / usrp / sdrangel / airspy / rtl-sdr / WAV ingress in [runtime.py:1101–1280](../map144_app/runtime.py); also the `_iq_t0_wall + _iq_abs_sample / sr` fallback in [processing.py:329–339](../map144_app/processing.py) | radio handle | `IQStream` | Per-source subclass (`FlexSource`, `UsrpSource`, …). Owns the sample-clock anchor. After this block, no code looks at `time.time()` for stream-time. |
+| **Source** | flex_client / usrp / sdrangel / airspy / rtl-sdr / WAV ingress in [runtime.py:1101–1280](../ws_skim/runtime.py); also the `_iq_t0_wall + _iq_abs_sample / sr` fallback in [processing.py:329–339](../ws_skim/processing.py) | radio handle | `IQStream` | Per-source subclass (`FlexSource`, `UsrpSource`, …). Owns the sample-clock anchor. After this block, no code looks at `time.time()` for stream-time. |
 | **NoiseBlanker** | NB code path inside `process_iq_data` | `IQStream` | `IQStream` | Optional. Pass-through if disabled. Open question §9: separate block or first-stage of Source? |
-| **Channelizer** | [channelizer.py](../map144_app/channelizer.py) `apply_channelizer` + the `_ch_buf` accumulator in [processing.py:455–481](../map144_app/processing.py) | `IQStream` | `ChannelStream`, `IQStream` (pass-through for waterfall + decoder window) | Note: today `_ch_buf` is also where the detector reads. Under the new graph the Channelizer emits a `ChannelStream` and the Detector buffers what it needs; the Channelizer does not own a multi-consumer accumulator. |
-| **Detector** | sync correlator (`_sync_correlate_batch`) + squared-FFT detector + cluster gate in [processing.py:516–889](../map144_app/processing.py) | `ChannelStream` | `DetectionEventStream`, internal `ChannelMetricStream` for Display | Owns `_detect_cooldowns`, `_ch_above_thresh`, the rolling pct25 baseline. Independent of source thread. TODO #5 (cluster-gate tightening) and TODO #6 (noise-floor-rise hysteresis) live here. |
-| **Decoder** | `extract_and_decode` ([detection.py:422–571](../map144_app/detection.py)), SPD ([msk144_spd.py](../map144_app/msk144_spd.py)), jt9 fallback | `DetectionEventStream`, `IQStream` (windowed read on event) | `DecodeEventStream` | Internally pools jt9 (existing semaphore). Reads IQ from a shared ring, not via a queue — the trigger fires, the Decoder reads a 1.7 s window from the ring at the event's `occurred_at`. |
-| **Display** | heatmap rendering, marker overlay, waterfall in [displays.py](../map144_app/displays.py) and [processing.py:901–950](../map144_app/processing.py) | `ChannelMetricStream`, `DetectionEventStream`, `IQStream` (waterfall) | — | Owns `_ch_snr_boundary`, `_ch_snr_hop_count`, `_jt9_markers`, the scrolling state. TODO #14 cleanup is automatic once Display is the only writer. |
-| **Reporter** | [reporting.py](../map144_app/reporting.py), `_decode_queue` consumer | `DecodeEventStream` | — | PSKReporter / DXcluster. Already mostly a block; just needs the typed input. |
+| **Channelizer** | [channelizer.py](../ws_skim/channelizer.py) `apply_channelizer` + the `_ch_buf` accumulator in [processing.py:455–481](../ws_skim/processing.py) | `IQStream` | `ChannelStream`, `IQStream` (pass-through for waterfall + decoder window) | Note: today `_ch_buf` is also where the detector reads. Under the new graph the Channelizer emits a `ChannelStream` and the Detector buffers what it needs; the Channelizer does not own a multi-consumer accumulator. |
+| **Detector** | sync correlator (`_sync_correlate_batch`) + squared-FFT detector + cluster gate in [processing.py:516–889](../ws_skim/processing.py) | `ChannelStream` | `DetectionEventStream`, internal `ChannelMetricStream` for Display | Owns `_detect_cooldowns`, `_ch_above_thresh`, the rolling pct25 baseline. Independent of source thread. TODO #5 (cluster-gate tightening) and TODO #6 (noise-floor-rise hysteresis) live here. |
+| **Decoder** | `extract_and_decode` ([detection.py:422–571](../ws_skim/detection.py)), SPD ([msk144_spd.py](../ws_skim/msk144_spd.py)), jt9 fallback | `DetectionEventStream`, `IQStream` (windowed read on event) | `DecodeEventStream` | Internally pools jt9 (existing semaphore). Reads IQ from a shared ring, not via a queue — the trigger fires, the Decoder reads a 1.7 s window from the ring at the event's `occurred_at`. |
+| **Display** | heatmap rendering, marker overlay, waterfall in [displays.py](../ws_skim/displays.py) and [processing.py:901–950](../ws_skim/processing.py) | `ChannelMetricStream`, `DetectionEventStream`, `IQStream` (waterfall) | — | Owns `_ch_snr_boundary`, `_ch_snr_hop_count`, `_jt9_markers`, the scrolling state. TODO #14 cleanup is automatic once Display is the only writer. |
+| **Reporter** | [reporting.py](../ws_skim/reporting.py), `_decode_queue` consumer | `DecodeEventStream` | — | PSKReporter / DXcluster. Already mostly a block; just needs the typed input. |
 
 ### 6.1 Dual-polarization graph
 

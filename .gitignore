@@ -124,7 +124,7 @@ fortran_bp_test/mf_test
 scratch/
 
 # Band Map basemap data (drop GridTracker shapes.json here; not redistributed)
-map144_app/data/
+ws_skim/data/
 
 # Runtime-generated launch/decode logs (canonical corpora live elsewhere)
 launches.jsonl

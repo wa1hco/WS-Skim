@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """MAP144's current sq_det formula, faithful port for the experiment.
 
-Mirrors map144_app/blocks/detector_block.py:_compute_sq_metric_db and
-the constants in map144_app/processing.py.  This is the BASELINE
+Mirrors ws_skim/blocks/detector_block.py:_compute_sq_metric_db and
+the constants in ws_skim/processing.py.  This is the BASELINE
 detector that Experiment A compares against the WSJT-X formula.
 
 Differs from WSJT-X (algos/sq_det.py) in five ways recorded in
@@ -33,7 +33,7 @@ from typing import Optional
 import numpy as np
 
 
-# ── Constants from map144_app/processing.py ──────────────────────────────────
+# ── Constants from ws_skim/processing.py ──────────────────────────────────
 CH_SAMPLE_RATE      = 12000      # Hz (same as WSJT-X)
 CH_DETECT_SIZE      = 512        # MAP144's FFT length (different!)
 DF_MAP144           = float(CH_SAMPLE_RATE) / CH_DETECT_SIZE  # 23.4375 Hz/bin

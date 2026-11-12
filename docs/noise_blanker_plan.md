@@ -46,7 +46,7 @@ Key invariants:
 ## Current state (Stage 1 — DONE)
 
 The pluggable backend framework already exists in
-[map144_app/noise_blanker.py](../map144_app/noise_blanker.py). The interface:
+[ws_skim/noise_blanker.py](../ws_skim/noise_blanker.py). The interface:
 
 ```python
 class Blanker(ABC):
@@ -121,10 +121,10 @@ brittle across distros.
 
 ### Class name and file
 
-`NR0VWidebandBlanker` in [map144_app/noise_blanker.py](../map144_app/noise_blanker.py),
+`NR0VWidebandBlanker` in [ws_skim/noise_blanker.py](../ws_skim/noise_blanker.py),
 joining the existing `BypassBlanker` and `LinradBlanker`. If the backend
 grows large enough to warrant its own file, split to
-`map144_app/nb_nr0v_wideband.py` and re-export from `noise_blanker.py`.
+`ws_skim/nb_nr0v_wideband.py` and re-export from `noise_blanker.py`.
 
 ### Parameters to tune at 192 kHz
 
@@ -244,14 +244,14 @@ directly before declaring a winner.
 Current (Stage 1):
 
 ```
-map144_app/
+ws_skim/
   noise_blanker.py     ← Blanker / BlankerResult / BypassBlanker / LinradBlanker
 ```
 
 After Stage 2, if backends stay small:
 
 ```
-map144_app/
+ws_skim/
   noise_blanker.py     ← +NR0VWidebandBlanker
 ```
 
@@ -259,7 +259,7 @@ After Stage 2, if NR0V integration grows (ctypes wrapper, WDSP vendored
 subset):
 
 ```
-map144_app/
+ws_skim/
   noise_blanker.py            ← base classes, factory, registry
   nb_linrad.py                ← LinradBlanker moved out
   nb_nr0v_wideband.py         ← NR0VWidebandBlanker
@@ -293,7 +293,7 @@ per SM5BSZ's published licensing. Compatible with GPL-3.
 - Linrad wideband blanker (SM5BSZ):
   <http://www.sm5bsz.com/linuxdsp/blanker/blanker.htm>
 - Current briefing: [briefing.md](briefing.md) §"Noise Blanker"
-- Current code: [map144_app/noise_blanker.py](../map144_app/noise_blanker.py)
+- Current code: [ws_skim/noise_blanker.py](../ws_skim/noise_blanker.py)
 
 ---
 

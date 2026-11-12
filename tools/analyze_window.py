@@ -3,7 +3,7 @@
 # Licensed under GPL-3.0-or-later.
 """Standalone launcher for the improved Qt AnalysisWindow.
 
-The AnalysisWindow lives in ``map144_app.analysis_window`` and is normally
+The AnalysisWindow lives in ``ws_skim.analysis_window`` and is normally
 opened from inside the main map144 app (View → Open Analysis Window…), or
 from a right-click in the main-window decode list.  This launcher lets you
 open it directly on a WAV without booting the full app — useful for
@@ -13,7 +13,7 @@ Usage:
     python tools/analyze_window.py /path/to/capture.wav
     python tools/analyze_window.py                # opens file picker
 
-Run from the project root so the ``map144_app`` package resolves.
+Run from the project root so the ``ws_skim`` package resolves.
 """
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ import argparse
 import sys
 from pathlib import Path
 
-# Make ``map144_app`` importable when this script is launched directly.
+# Make ``ws_skim`` importable when this script is launched directly.
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from PyQt5 import QtCore, QtWidgets   # noqa: E402
 
-from map144_app.analysis_window import AnalysisWindow   # noqa: E402
+from ws_skim.analysis_window import AnalysisWindow   # noqa: E402
 
 
 def main() -> int:

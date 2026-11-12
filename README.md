@@ -34,10 +34,9 @@ folder, so updating or reinstalling keeps them: `~/.config/ws-skim` and
 `%LOCALAPPDATA%\WS-Skim\logs` on Windows. When reporting a problem,
 attach the newest log from that folder.
 
-There is no WS Skim release yet; the Releases page has only the older
-map144 prerelease. Until the first test prerelease appears, run
-`scripts/windows/install.ps1` or `scripts/install.sh` from a copy of the
-repository (see [docs/dev](docs/dev/)).
+The first WS Skim test prerelease is
+[v0.1.4-test.1](https://github.com/wa1hco/WS-Skim/releases/tag/v0.1.4-test.1).
+Prereleases are listed on the Releases page but are not "latest".
 
 Linux is the best-tested path (Ubuntu 22.04 / 24.04); Windows works but has had
 less soak testing. Radio source and sample rate are chosen in the app
@@ -96,10 +95,10 @@ There is no macOS support for the main application.
 
 Install and launch files live under `scripts/` (Linux) and
 `scripts/windows/` (Windows): `install.sh` / `install.ps1`,
-`run.sh` / `run.bat` (the GUI, `map144.py`), `run-router.sh` /
+`run.sh` / `run.bat` (the GUI, `ws_skim.py`), `run-router.sh` /
 `run-router.bat` and `router_app.py` (B210 router), and `run-b210.bat`.
 
-- `map144_app/` — decoder, GUI, reporting, and router library
+- `ws_skim/` — decoder, GUI, reporting, and router library
 - `packaging/` — Windows (Inno Setup) and Linux installer builds
 - `flexclient/` — FlexRadio client
 - `tests/` — automated tests

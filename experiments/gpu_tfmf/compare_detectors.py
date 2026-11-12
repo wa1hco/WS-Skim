@@ -108,7 +108,7 @@ def make_trial(snr_db: float, freq_hz: float, noise_seed: int) -> np.ndarray:
 
 def measure_sqdet_far(freq_hz: float, duration_s: float = 10.0) -> float:
     """Measure sq_det's false-alarm rate (windows/s) at its design threshold."""
-    from map144_app.sq_det import sq_det as _sq_det, NSPM  # noqa: PLC0415
+    from ws_skim.sq_det import sq_det as _sq_det, NSPM  # noqa: PLC0415
     from scipy.signal import decimate                       # noqa: PLC0415
 
     n = int(duration_s * FS)
@@ -188,7 +188,7 @@ def _detected_tfmf(iq: np.ndarray, h: np.ndarray, threshold_db: float,
 
 def _detected_sqdet(iq: np.ndarray, freq_hz: float) -> bool:
     """True if any sq_det window near PING_TIME_S exceeds the design threshold."""
-    from map144_app.sq_det import sq_det as _sq_det, NSPM  # noqa: PLC0415
+    from ws_skim.sq_det import sq_det as _sq_det, NSPM  # noqa: PLC0415
     from scipy.signal import decimate                       # noqa: PLC0415
 
     audio_12k = decimate(iq, _DEC_FACTOR,

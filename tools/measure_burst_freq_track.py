@@ -77,7 +77,7 @@ from measure_burst_freq_coherent import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import NSPM
+from ws_skim.msk144_spd import NSPM
 
 
 # Classification thresholds — see module docstring

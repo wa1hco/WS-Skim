@@ -45,8 +45,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Engine import — no Qt subclass — fine for headless test.
-from map144_app.engine import Engine     # noqa: E402
-from map144_app.noise_blanker import (   # noqa: E402
+from ws_skim.engine import Engine     # noqa: E402
+from ws_skim.noise_blanker import (   # noqa: E402
     BypassBlanker, BlankerResult,
 )
 
@@ -177,9 +177,9 @@ class TestPct25BlankerGate(unittest.TestCase):
         ``skip_history_update=True`` and verifying its history counter
         doesn't advance.
         """
-        from map144_app.processing import _compute_sync_metric_db
-        from map144_app.channelizer import N_CHANNELS
-        from map144_app.msk144_spd import NSPM
+        from ws_skim.processing import _compute_sync_metric_db
+        from ws_skim.channelizer import N_CHANNELS
+        from ws_skim.msk144_spd import NSPM
 
         # Synthesise a sync_window of weak noise.
         rng = np.random.default_rng(42)
@@ -249,7 +249,7 @@ class TestPct25BlankerGate(unittest.TestCase):
         and history should grow normally.  This is the regression
         guard: blanker doesn't false-positive on quiet operation."""
         # Replace the fake blanker with the real default.
-        from map144_app.noise_blanker import LinradBlanker
+        from ws_skim.noise_blanker import LinradBlanker
         self.engine.blanker = LinradBlanker()
         cnt_before = self.engine._metric_hist_cnt
         for _ in range(10):

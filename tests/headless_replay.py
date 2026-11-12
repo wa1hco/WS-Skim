@@ -7,7 +7,7 @@
 # (at your option) any later version.
 """Headless MAP144 IQ-WAV replay — same DSP path as the GUI, no Qt.
 
-Constructs a minimal :class:`map144_app.engine.Engine`, feeds chunks of an IQ
+Constructs a minimal :class:`ws_skim.engine.Engine`, feeds chunks of an IQ
 WAV through ``process_iq_data`` exactly the way the live runtime does, and
 joins all spawned jt9 decode threads before returning.  Used by
 ``run_ramp_tests.py`` so the multi-seed ramp sweep can score MAP144 results
@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Allow ``python tests/headless_replay.py`` from anywhere — Python normally
-# adds only the script's directory to sys.path, but ``map144_app`` lives at
+# adds only the script's directory to sys.path, but ``ws_skim`` lives at
 # the repo root one level up.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -38,8 +38,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 import numpy as np
 
-from map144_app.engine import Engine
-from map144_app.runtime import (
+from ws_skim.engine import Engine
+from ws_skim.runtime import (
     _load_wav_complex,
     _set_dual_pol,
     _reset_wav_timeline,

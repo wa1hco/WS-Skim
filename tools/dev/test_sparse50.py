@@ -23,11 +23,11 @@ from scipy.signal import decimate
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from map144_app.detection import (
+from ws_skim.detection import (
     _DECIMATE_FACTOR, _DECODE_RATE, _TARGET_FC_HZ,
     _apply_audio_bpf, JT9_BASE_ARGS,
 )
-from map144_app.msk144_spd import msk144_spd_decode
+from ws_skim.msk144_spd import msk144_spd_decode
 
 
 def load_wav_iq(path: str) -> tuple[np.ndarray, int]:

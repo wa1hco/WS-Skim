@@ -62,7 +62,7 @@ class TestFlagOffByDefault(unittest.TestCase):
         # Make sure no inherited env from parent shell taints the test.
         prev = os.environ.pop("MAP144_USE_BLOCKS", None)
         try:
-            from map144_app.engine import Engine
+            from ws_skim.engine import Engine
             e = Engine()
             self.assertFalse(e.use_blocks)
             self.assertIsNone(e._block_runtime)
@@ -73,7 +73,7 @@ class TestFlagOffByDefault(unittest.TestCase):
     def test_legacy_path_runs_when_flag_off(self):
         prev = os.environ.pop("MAP144_USE_BLOCKS", None)
         try:
-            from map144_app.engine import Engine
+            from ws_skim.engine import Engine
             e = Engine()
             # process_iq_data dispatch falls through to legacy.  Pure
             # zero IQ is harmless; the legacy DSP path will run
@@ -96,7 +96,7 @@ class TestFlagOnFromEnv(unittest.TestCase):
     def test_env_var_enables_flag(self):
         os.environ["MAP144_USE_BLOCKS"] = "1"
         try:
-            from map144_app.engine import Engine
+            from ws_skim.engine import Engine
             e = Engine()
             self.assertTrue(e.use_blocks)
             # Lazy-init: runtime not started until first IQ tick.
@@ -109,7 +109,7 @@ class TestFlagOnFromEnv(unittest.TestCase):
         for off_val in ("0", "false", "no", "off", ""):
             os.environ["MAP144_USE_BLOCKS"] = off_val
             from importlib import reload
-            from map144_app import engine as _eng_mod
+            from ws_skim import engine as _eng_mod
             reload(_eng_mod)   # _env_use_blocks reads at import + ctor
             e = _eng_mod.Engine()
             self.assertFalse(
@@ -131,7 +131,7 @@ class TestShadowRuntimeLifecycle(unittest.TestCase):
         os.environ.pop("MAP144_USE_BLOCKS", None)
 
     def test_first_iq_tick_starts_runtime(self):
-        from map144_app.engine import Engine
+        from ws_skim.engine import Engine
         e = Engine()
         try:
             self.assertIsNone(e._block_runtime)   # not yet
@@ -154,8 +154,8 @@ class TestShadowRuntimeLifecycle(unittest.TestCase):
         and legacy continues.  Simulated by replacing the IQ-input
         stream with a sentinel that always raises on put.
         """
-        from map144_app.engine import Engine
-        from map144_app.blocks.types import StreamClosed
+        from ws_skim.engine import Engine
+        from ws_skim.blocks.types import StreamClosed
         e = Engine()
         try:
             chunk = _silent_iq_chunk(1024)
@@ -216,7 +216,7 @@ class TestShadowTxStateHandling(unittest.TestCase):
         """While ``_tx_settle_remaining > 0``, no IQ should reach
         the shadow runtime — even if the runtime is up and the flag
         is on."""
-        from map144_app.engine import Engine
+        from ws_skim.engine import Engine
         e = Engine()
         try:
             # Boot the runtime by sending one normal tick.
@@ -265,7 +265,7 @@ class TestShadowTxStateHandling(unittest.TestCase):
     def test_pump_runs_when_settle_zero(self):
         """Sanity: with no TX-settle in progress, the pump runs as
         normal (no behaviour change to the non-TX path)."""
-        from map144_app.engine import Engine
+        from ws_skim.engine import Engine
         e = Engine()
         try:
             self.assertEqual(getattr(e, '_tx_settle_remaining', 0), 0)
@@ -294,7 +294,7 @@ class TestShadowChannelizerRebuild(unittest.TestCase):
         os.environ.pop("MAP144_USE_BLOCKS", None)
 
     def test_rebuild_tears_down_shadow_runtime(self):
-        from map144_app.engine import Engine
+        from ws_skim.engine import Engine
         e = Engine()
         try:
             # Boot shadow with one IQ tick.
@@ -325,7 +325,7 @@ class TestShadowChannelizerRebuild(unittest.TestCase):
         the user retunes, regardless of bake-in flag state."""
         prev = os.environ.pop("MAP144_USE_BLOCKS", None)
         try:
-            from map144_app.engine import Engine
+            from ws_skim.engine import Engine
             e = Engine()
             self.assertFalse(e.use_blocks)
             self.assertIsNone(e._block_runtime)

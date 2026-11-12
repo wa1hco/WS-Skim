@@ -22,7 +22,7 @@ _WORKER_NAME_MARKERS = ("tfmf-period", "extract_and_decode")
 def _join_engine_background_workers():
     """After each test, join Engine TFMF / decode workers left running."""
     yield
-    from map144_app.engine import stop_all_background_workers
+    from ws_skim.engine import stop_all_background_workers
     stop_all_background_workers(timeout_s=15.0)
 
 
@@ -39,7 +39,7 @@ def pytest_sessionfinish(session, exitstatus):
     # Last-chance join in case a test created workers without an Engine
     # instance in the live set. Then report anything still running so a
     # shutdown abort has a clear cause in the log.
-    from map144_app.engine import stop_all_background_workers
+    from ws_skim.engine import stop_all_background_workers
     stop_all_background_workers(timeout_s=15.0)
     leftover = _live_worker_threads()
     if leftover:

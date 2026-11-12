@@ -1,9 +1,9 @@
-"""Unit tests for map144_app/spot_bus.py — normalization, tailing, aging store."""
+"""Unit tests for ws_skim/spot_bus.py — normalization, tailing, aging store."""
 import json
 
 import pytest
 
-from map144_app import spot_bus
+from ws_skim import spot_bus
 
 
 def _raw(sc="W9XX", sl="EN63bl", rc="N4SIX", rl="FM04lv", t=100, f=50260000):

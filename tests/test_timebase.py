@@ -1,6 +1,6 @@
 # Copyright (C) 2026  Jeff Millar, WA1HCO <wa1hco@gmail.com>
 # Licensed under GPL-3.0-or-later.
-"""Tests for map144_app.timebase.TimeBase — the dual-clock owner.
+"""Tests for ws_skim.timebase.TimeBase — the dual-clock owner.
 
 Covers the block-stream-design §3.5 contract: intra-period sample precision,
 fresh-per-period UTC, no cross-period drift accumulation, and the headline
@@ -18,7 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from map144_app.timebase import TimeBase, TimeBaseError   # noqa: E402
+from ws_skim.timebase import TimeBase, TimeBaseError   # noqa: E402
 
 RATE = 48000.0
 # A representative live-radio anchor: 2026-05-31 12:00:00 UTC ≈ 1.78e9 s.

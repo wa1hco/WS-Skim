@@ -7,7 +7,7 @@ The MSK144 frame has TWO 8-symbol sync sub-blocks per 144-symbol frame
 bipolar bit pattern, modulated as offset-MSK with a half-sine pulse
 shape.
 
-The legacy detector at ``map144_app/msk144_spd.py`` builds this template
+The legacy detector at ``ws_skim/msk144_spd.py`` builds this template
 at 12 kHz (the channelized-audio rate) as a 42-sample complex array.
 For wideband detection we want it at the full IQ rate (48 kHz default)
 without going through the channelizer first; this module produces the
@@ -114,7 +114,7 @@ def build_sync_template(sample_rate_hz: int = 48_000,
         # At 12 kHz with SPS=6: drops 6 samples each side → 48-12 = 36?
         # Actually WSJT-X drops only half-pulse worth (SPS samples
         # total — half from start of I, half from end of Q).  Re-check
-        # against `_build_sync_template` in map144_app/msk144_spd.py
+        # against `_build_sync_template` in ws_skim/msk144_spd.py
         # before claiming bit-parity.
         # For scaffold, return the natural-length template; edge-trim
         # tuning is a refinement once everything else works.

@@ -2,8 +2,8 @@
 import numpy as np
 import pytest
 
-from map144_app.router.band_plan import DialChannel
-from map144_app.router.dial_audio import AUDIO_FS, DialAudioBank
+from ws_skim.router.band_plan import DialChannel
+from ws_skim.router.dial_audio import AUDIO_FS, DialAudioBank
 
 
 class _CaptureExporter:

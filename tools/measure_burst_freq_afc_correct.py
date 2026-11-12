@@ -89,7 +89,7 @@ from measure_burst_freq_coherent import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from map144_app.msk144_spd import _sync_correlate, _SYNC_CB_CONJ, NSPM
+from ws_skim.msk144_spd import _sync_correlate, _SYNC_CB_CONJ, NSPM
 
 
 # Squared-FFT tracker parameters

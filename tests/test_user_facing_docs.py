@@ -24,7 +24,7 @@ USER_FACING = (
 _FORBIDDEN = (
     re.compile(r"python\s+-m\b", re.I),
     re.compile(r"\bPYTHONPATH\b"),
-    re.compile(r"\bMAP144_[A-Z0-9_]+\b"),
+    re.compile(r"\b(MAP144|WS_SKIM)_[A-Z0-9_]+\b"),
     re.compile(r"\$env:[A-Za-z0-9_]+"),
     re.compile(r"^export\s+[A-Z0-9_]+", re.M),
     re.compile(r"--bind-client|--log-level"),

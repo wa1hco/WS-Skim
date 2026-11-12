@@ -21,8 +21,8 @@ import numpy as np
 from scipy.signal import hilbert, decimate
 
 sys.path.insert(0, str(Path(__file__).parent))
-from map144_app.msk144_decode import msk144decodeframe, NSPM, FS
-from map144_app.detection import JT9_BASE_ARGS
+from ws_skim.msk144_decode import msk144decodeframe, NSPM, FS
+from ws_skim.detection import JT9_BASE_ARGS
 from generate_msk144 import generate_ping_msk144code
 
 BW  = 2500.0

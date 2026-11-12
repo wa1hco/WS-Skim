@@ -156,7 +156,7 @@ _CMAP_CACHE = None
 def _cmap():
     """MAP144 GUI colormap.
 
-    Mirrors map144_app/ui.py:295-303 (the pyqtgraph ColorMap used by the
+    Mirrors ws_skim/ui.py:295-303 (the pyqtgraph ColorMap used by the
     realtime / spectrogram / channel-detect / sync-detect image items) so
     the gallery thumbnails read the same as the live displays.
 

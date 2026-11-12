@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from measure_burst_freq_afc_correct import _audio_to_baseband, SR_AUDIO
 
 sys.path.insert(0, str(_REPO_ROOT))
-from map144_app.msk144_spd import _sync_correlate, _frame_to_wav_and_decode, NSPM
+from ws_skim.msk144_spd import _sync_correlate, _frame_to_wav_and_decode, NSPM
 
 
 WAV_PATH = '/home/jeff/.local/share/WSJT-X - flex/save/260511_105430.wav'

@@ -35,7 +35,7 @@ import numpy as np
 from scipy.signal import decimate
 
 from experiments.gpu_tfmf import tfmf, sync_template, synthetic
-from map144_app.sq_det import sq_det, NSPM
+from ws_skim.sq_det import sq_det, NSPM
 
 # Configuration
 SNR_GRID_DB    = list(range(-12, 6))   # -12 to +5 dB

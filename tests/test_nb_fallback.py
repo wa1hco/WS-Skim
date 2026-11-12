@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from map144_app import noise_blanker as nb
+from ws_skim import noise_blanker as nb
 
 
 def test_base_is_available_default_true():
