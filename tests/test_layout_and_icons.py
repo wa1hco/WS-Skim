@@ -20,6 +20,8 @@ LINUX_SCRIPTS = (
     "scripts/install.sh",
     "scripts/run.sh",
     "scripts/run-router.sh",
+    "scripts/install-desktop.sh",
+    "packaging/linux/build-installer.sh",
 )
 
 WINDOWS_SCRIPTS = (

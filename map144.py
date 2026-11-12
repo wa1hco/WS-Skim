@@ -152,8 +152,8 @@ def _configure_logging(level_name: str):
 
     # Version banner first so every log file carries the version that
     # produced it — even when the user doesn't think to mention it.
-    from map144_app import __version__ as _map144_version
-    print(f"[map144] starting MAP144 v{_map144_version}", flush=True)
+    from map144_app.buildinfo import version_string
+    print(f"[map144] starting WS Skim v{version_string()}", flush=True)
     print(f"[map144] log file: {log_path}", flush=True)
 
 
@@ -178,9 +178,28 @@ class _TeeStream:
         return self._orig.isatty()
 
 
+def _show_startup_error(title: str, html: str) -> None:
+    """Show a fatal startup error in a dialog.
+
+    Launched from a desktop icon there is no visible terminal, so a
+    stderr-only message would look like the app silently failed to open.
+    """
+    try:
+        from PyQt5 import QtCore, QtWidgets
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+        box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Critical, title, html)
+        box.setTextFormat(QtCore.Qt.RichText)
+        box.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
+        if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return  # headless (tests/CI): nothing to click
+        box.exec_()
+    except Exception:  # never let the error dialog mask the real error
+        logging.getLogger(__name__).exception("could not show startup error dialog")
+
+
 def main():
     """Launch the Radio IQ visualizer GUI."""
-    parser = argparse.ArgumentParser(description='map144 MSK144 meteor scatter decoder')
+    parser = argparse.ArgumentParser(description='WS Skim — wideband MSK144 skimmer (formerly map144)')
     parser.add_argument('--bind-client-id', type=str, default=None,
                         help='GUI client UUID for `client bind client_id=<uuid>`')
     parser.add_argument('--bind-client', type=str, default=None,
@@ -201,6 +220,14 @@ def main():
             "  or set MAP144_JT9 to the full path of jt9 / jt9.exe\n"
             "  (e.g. MAP144_JT9='C:\\\\WSJT\\\\wsjtx\\\\bin\\\\jt9.exe').",
             file=sys.stderr,
+        )
+        _show_startup_error(
+            "WS Skim needs WSJT-X",
+            "WS Skim uses the <b>jt9</b> decoder from WSJT-X, and it was not "
+            "found on this computer.<br><br>"
+            "Install WSJT-X from "
+            "<a href='https://wsjt.sourceforge.io/'>wsjt.sourceforge.io</a>, "
+            "then start WS Skim again.",
         )
         sys.exit(1)
     logging.getLogger(__name__).info("Using jt9 binary: %s", jt9_path)

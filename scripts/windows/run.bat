@@ -1,5 +1,5 @@
 @echo off
-REM run.bat — launch MAP144 from its venv (Windows).
+REM run.bat — launch WS Skim from its venv (Windows).
 REM Re-runnable; passes any args straight through to map144.py.
 cd /d "%~dp0..\.."
 if not exist ".venv\Scripts\python.exe" (

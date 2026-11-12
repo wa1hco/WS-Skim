@@ -1,0 +1,203 @@
+# WS Skim installers: build, then install on clean Linux and Windows runners.
+#
+# - Pull requests that touch install/packaging files: build + test only.
+# - A version tag (v0.1.4, v0.1.4-test, ...): build + test, then publish a
+#   GitHub release with both installers.  Tags with a "-suffix" are marked
+#   prerelease.  Only a tag changes what users install.
+
+name: Installers
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "packaging/**"
+      - "tools/dev/stage_release.py"
+      - "tools/Install-UhdWindows.ps1"
+      - "requirements.txt"
+      - "map144.py"
+      - "map144_app/__init__.py"
+      - "map144_app/buildinfo.py"
+      - ".github/workflows/installers.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TAG_ARG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
+jobs:
+  linux:
+    name: Linux installer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # What a desktop Ubuntu user already has (venv + Qt runtime), using
+      # the distro python3 rather than setup-python, like a real user.
+      - name: Desktop prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-venv \
+            libgl1 libegl1 libglib2.0-0 libxkbcommon0 libxkbcommon-x11-0 \
+            libdbus-1-3 libfontconfig1 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xfixes0 xdg-user-dirs
+
+      - name: Build
+        run: |
+          if [ -n "$TAG_ARG" ]; then
+            packaging/linux/build-installer.sh --tag "$TAG_ARG"
+          else
+            packaging/linux/build-installer.sh
+          fi
+
+      - name: Install
+        env:
+          MAP144_GPU: "0"
+        run: |
+          mkdir -p "$HOME/Desktop"
+          bash dist/ws-skim-linux-install.sh
+
+      - name: Verify install
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -x
+          APP="$HOME/.local/share/ws-skim"
+          test -f "$HOME/.local/share/applications/ws-skim.desktop"
+          test -x "$HOME/Desktop/ws-skim.desktop"
+          grep -q "^Exec=\"$APP/scripts/run.sh\"$" "$HOME/Desktop/ws-skim.desktop"
+          test -f "$APP/scripts/assets/ws-skim.png"
+          test ! -e "$APP/tests" && test ! -e "$APP/docs"
+          "$APP/.venv/bin/python" -c "from map144_app.buildinfo import version_string as v; print(v())"
+          # Launch the GUI headless for 30 s with a stub jt9 on PATH.
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/bin/jt9"
+          chmod +x "$RUNNER_TEMP/bin/jt9"
+          set +e
+          PATH="$RUNNER_TEMP/bin:$PATH" timeout 30 "$APP/scripts/run.sh" > run.log 2>&1
+          rc=$?
+          set -e
+          cat run.log
+          [ "$rc" = 124 ] || { echo "app exited early (rc=$rc)"; exit 1; }
+          ! grep -q Traceback run.log
+
+      - name: Uninstall
+        run: |
+          bash dist/ws-skim-linux-install.sh --uninstall
+          test ! -e "$HOME/.local/share/ws-skim"
+          test ! -e "$HOME/Desktop/ws-skim.desktop"
+          test ! -e "$HOME/.local/share/applications/ws-skim.desktop"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: dist/ws-skim-linux-install.sh
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # python.org-style Python 3.12 (the recommended version for users).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'packaging\windows\build-installer.ps1')
+          if ($env:TAG_ARG) { $a += @('-Tag', $env:TAG_ARG) }
+          powershell.exe @a
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install (silent)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\WS-Skim-Setup.exe -Wait -PassThru -ArgumentList `
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=desktopicon', "/LOG=$PWD\setup.log"
+          if ($p.ExitCode -ne 0) { Get-Content setup.log; throw "setup exit $($p.ExitCode)" }
+
+      - name: Verify install
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\WS-Skim'
+          $desk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'WS Skim.lnk'
+          $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'WS Skim.lnk'
+          foreach ($f in @($desk, $menu, "$app\scripts\windows\run.bat", "$app\BUILD")) {
+            if (-not (Test-Path -LiteralPath $f)) { throw "missing $f" }
+          }
+          $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($desk)
+          Write-Host "Desktop shortcut -> $($lnk.TargetPath)  icon $($lnk.IconLocation)"
+          if ($lnk.TargetPath -ne "$app\scripts\windows\run.bat") { throw 'shortcut target is wrong' }
+          $py = "$app\.venv\Scripts\python.exe"
+          if (-not (Test-Path $py)) { Get-Content setup.log; throw 'venv was not created' }
+          Push-Location $app
+          & $py -c "from map144_app.buildinfo import version_string as v; print(v())"
+          if ($LASTEXITCODE -ne 0) { throw 'version check failed' }
+          & $py -c "import map144_app.visualizer; print('GUI imports OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'GUI import failed' }
+          Pop-Location
+
+      - name: Uninstall (silent)
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\WS-Skim'
+          Start-Process -FilePath "$app\unins000.exe" -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          $desk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'WS Skim.lnk'
+          # The uninstaller re-launches itself from %TEMP%; wait for it.
+          for ($i = 0; $i -lt 60 -and ((Test-Path $desk) -or (Test-Path "$app\.venv")); $i++) { Start-Sleep 2 }
+          if (Test-Path $desk) { throw 'desktop shortcut not removed' }
+          if (Test-Path "$app\.venv") { throw '.venv not removed' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/WS-Skim-Setup.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: windows-setup-log
+          path: setup.log
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum WS-Skim-Setup.exe ws-skim-linux-install.sh > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          HASH="$(git rev-parse --short HEAD)"
+          PRE=""
+          case "$TAG" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$TAG" WS-Skim-Setup.exe ws-skim-linux-install.sh SHA256SUMS.txt \
+            --title "WS Skim ${TAG#v} ($HASH)" --generate-notes $PRE

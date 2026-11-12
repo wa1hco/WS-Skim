@@ -26,6 +26,17 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Installers.**  `WS-Skim-Setup.exe` for Windows (per-user, no admin;
+  desktop and Start-menu shortcuts; optional B210 UHD driver) and a
+  single-file `ws-skim-linux-install.sh` for Linux (application-menu entry
+  and desktop icon).  A version tag builds both, installs them on clean
+  CI runners and publishes a GitHub release; see `docs/dev/releasing.md`.
+- **Version with git hash.**  The startup log line and Help → About show
+  e.g. `0.1.4 (51b9fd9)`; installed copies read it from a `BUILD` file.
+- **Missing WSJT-X dialog.**  If `jt9` is not found at startup, a dialog
+  explains how to install WSJT-X instead of the app silently exiting
+  (it had no visible console when started from an icon).
+
 - **MAP65 I/Q export (View → "MAP65 Export").**  Tees a 96 kHz Linrad **timf2**
   I/Q stream off the USRP B210 to MAP65 over UDP (default `:50002`), so one
   radio feeds MAP65 (EME) while MSK144 detection keeps running unchanged.
@@ -66,6 +77,9 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Changed
 
+- Window title, About box and install-script messages say **WS Skim**.
+- `install.sh` checks for Python's `venv` module up front and tells
+  Ubuntu/Debian users to install `python3-venv`.
 - `USRPSource` gains `pan_center_mhz` (decouples the hardware LO / DC position
   from the MSK144 processing centre) and an optional `map65_exporter` tap; the
   NCO table build is refactored into `_build_nco_table()` so `retune()` keeps

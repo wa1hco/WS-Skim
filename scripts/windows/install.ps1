@@ -1,10 +1,10 @@
-﻿# install.ps1 - MAP144 install / update for Windows.
+﻿# install.ps1 - WS Skim install / update for Windows.
 #
-# Run from inside the cloned repo (no auto-clone - gives you full
-# control of where the working tree lives):
+# The Windows installer (WS-Skim-Setup.exe) runs this for you.  From a git
+# checkout, run it from inside the tree:
 #
-#     git clone https://github.com/wa1hco/map144.git C:\WSJT\map144
-#     cd C:\WSJT\map144
+#     git clone https://github.com/wa1hco/WS-Skim.git C:\ws-skim
+#     cd C:\ws-skim
 #     .\scripts\windows\install.ps1
 #
 # Re-runnable: existing venv is reused when compatible, requirements
@@ -24,10 +24,26 @@
 # requires the B210 kit env\ or conda-forge uhd (no Windows pip wheels).
 
 param(
-    [switch]$SkipUhd
+    [switch]$SkipUhd,
+    # Set by WS-Skim-Setup.exe: keep the console open on failure so the
+    # user can read the error before the window closes.
+    [switch]$PauseOnError
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Exit-Install([int] $Code) {
+    if ($Code -ne 0 -and $PauseOnError) {
+        Write-Host ''
+        Read-Host 'WS Skim setup did not finish. Press Enter to close this window'
+    }
+    exit $Code
+}
+
+trap {
+    Write-Host "ERROR: $_" -ForegroundColor Red
+    Exit-Install 1
+}
 
 # Always operate relative to the script's own directory so PowerShell's
 # (frequently-resetting) cwd never confuses us.
@@ -103,7 +119,7 @@ if ($candidates.Count -eq 0) {
     Write-Host '  (the python.org installer, NOT the Microsoft Store one).' -ForegroundColor Red
     Write-Host '  Note: numpy==1.26.4 has no official 3.14 wheels - if 3.14 fails,' -ForegroundColor Yellow
     Write-Host '  install.ps1 will automatically retry with 3.13/3.12.' -ForegroundColor Yellow
-    exit 1
+    Exit-Install 1
 }
 
 Write-Host "Python candidates (preferred first):" -ForegroundColor Cyan
@@ -192,7 +208,7 @@ if (-not $installed) {
     if ($lastError) { Write-Host "  Last failure: $lastError" -ForegroundColor Red }
     Write-Host "  Install Python 3.12 from https://www.python.org/downloads/ and re-run." -ForegroundColor Yellow
     Write-Host "  (3.14 is tried first, but numpy==1.26.4 usually needs 3.10-3.13.)" -ForegroundColor Yellow
-    exit 1
+    Exit-Install 1
 }
 
 # -- 5. Ettus UHD + B210 firmware (for router / USRP) -------------------
@@ -223,18 +239,18 @@ $jt9Path = & $VenvPython -c "from map144_app.detection import find_jt9; p = find
 if (-not $jt9Path) {
     Write-Host "WARNING: jt9 not found." -ForegroundColor Yellow
     Write-Host "  Install WSJT-X from https://wsjt.sourceforge.io/ (provides jt9.exe)," -ForegroundColor Yellow
-    Write-Host "  or set MAP144_JT9 to the full jt9.exe path before launching." -ForegroundColor Yellow
+    Write-Host "  then start WS Skim again." -ForegroundColor Yellow
 } else {
     Write-Host "jt9: $jt9Path" -ForegroundColor Green
 }
 
 # -- 7. Resolve installed version (single source of truth) --------------
-$Map144Version = & $VenvPython -c "from map144_app import __version__; print(__version__)" 2>$null
-if (-not $Map144Version) { $Map144Version = "???" }
+$WsSkimVersion = & $VenvPython -c "from map144_app.buildinfo import version_string; print(version_string())" 2>$null
+if (-not $WsSkimVersion) { $WsSkimVersion = "???" }
 
 # -- 8. Done ------------------------------------------------------------
 Write-Host ""
-Write-Host "MAP144 v$Map144Version ready." -ForegroundColor Green
+Write-Host "WS Skim v$WsSkimVersion ready." -ForegroundColor Green
 Write-Host "To run:"
 Write-Host "    cd $RepoDir"
 Write-Host "    .\scripts\windows\run.bat"

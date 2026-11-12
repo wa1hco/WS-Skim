@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh — launch MAP144 from its venv (Linux / macOS).
+# run.sh — launch WS Skim from its venv (Linux / macOS).
 # Re-runnable; passes any args straight through to map144.py.
 set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"

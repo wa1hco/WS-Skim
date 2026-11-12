@@ -9,22 +9,29 @@ WIMS). It is part of the wa1hco WS series.
 
 Windows and Linux are supported. There is no macOS installer yet.
 
-There is no WS Skim release yet. The
-[Releases](https://github.com/wa1hco/WS-Skim/releases) page currently
-has only the older map144 prerelease. A WS Skim test prerelease is
-planned. When it appears, download the Windows or Linux installer from
-that page and run it. The installer places a WS Skim icon on the
-desktop (and in the Start menu on Windows); start the app from there.
+First install [WSJT-X](https://wsjt.sourceforge.io/) (WS Skim uses its
+`jt9` decoder) and Python 3.12 (3.10 or newer works). On Windows, use the
+installer from [python.org](https://www.python.org/downloads/) and tick
+**Add python.exe to PATH**.
 
-Until then, if you already have a copy of the repository, run
-`scripts/windows/install.ps1` on Windows or `scripts/install.sh` on
-Linux, then start the app with `scripts/windows/run.bat` or
-`scripts/run.sh`.
+Then download the installer for your system from the
+[Releases](https://github.com/wa1hco/WS-Skim/releases) page:
 
-You will need [WSJT-X](https://wsjt.sourceforge.io/) (it provides the
-`jt9` decoder) and Python 3.10 or newer. On Windows, use the installer
-from [python.org](https://www.python.org/downloads/). Linux is the
-best-tested path (Ubuntu 22.04 / 24.04); Windows works but has had
+- **Windows:** download `WS-Skim-Setup.exe` and run it. Windows may warn
+  that the publisher is unknown; choose **More info → Run anyway**.
+- **Linux:** download `ws-skim-linux-install.sh` and run
+  `bash ws-skim-linux-install.sh` in a terminal.
+
+Both add a **WS Skim** icon to the desktop (and the Start menu or
+application menu); start the app from there. To update, run a newer
+installer the same way. No administrator rights are needed.
+
+There is no WS Skim release yet; the Releases page has only the older
+map144 prerelease. Until the first test prerelease appears, run
+`scripts/windows/install.ps1` or `scripts/install.sh` from a copy of the
+repository (see [docs/dev](docs/dev/)).
+
+Linux is the best-tested path (Ubuntu 22.04 / 24.04); Windows works but has had
 less soak testing. Radio source and sample rate are chosen in the app
 under the **Source** menu. Reporting is set up under **View → Reporting**.
 
@@ -62,9 +69,10 @@ The plans live on `main`. The feature work itself is not done yet.
 - FT8 and FT4 modes, and a receive-only WSJT-X-style UDP Status/Decode
   feed to WS Hub (formerly WIMS)
   ([plan](docs/plan/ft8-ft4-wims-udp.md))
-- An installer with a desktop-icon launcher; only a version tag will
-  update what users install
-  ([plan](docs/plan/installer-and-release.md))
+- The first installer release. The installers and the release workflow
+  are built and tested in CI; a version tag publishes them
+  ([plan](docs/plan/installer-and-release.md),
+  [releasing](docs/dev/releasing.md))
 
 ## Supported hardware
 
@@ -84,6 +92,7 @@ Install and launch files live under `scripts/` (Linux) and
 `run-router.bat` and `router_app.py` (B210 router), and `run-b210.bat`.
 
 - `map144_app/` — decoder, GUI, reporting, and router library
+- `packaging/` — Windows (Inno Setup) and Linux installer builds
 - `flexclient/` — FlexRadio client
 - `tests/` — automated tests
 - `docs/` — design notes, alpha notes, and router guides
@@ -98,7 +107,8 @@ FlexRadio setup is in [docs/flexradio-setup.md](docs/flexradio-setup.md).
 Developer notes for running from a git checkout (command-line options,
 environment variables, test signals) are in
 [docs/dev/linux.md](docs/dev/linux.md) and
-[docs/dev/windows.md](docs/dev/windows.md). See also
+[docs/dev/windows.md](docs/dev/windows.md); building installers and
+cutting a release is in [docs/dev/releasing.md](docs/dev/releasing.md). See also
 [CHANGELOG.md](CHANGELOG.md) and [docs/ALPHA_NOTES.md](docs/ALPHA_NOTES.md).
 
 ## License
