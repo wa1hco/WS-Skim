@@ -52,11 +52,18 @@ class _DownloadThread(QtCore.QThread):
     def __init__(self, release, parent=None):
         super().__init__(parent)
         self._release = release
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
 
     def run(self):
         try:
-            path = uc.download(self._release, progress=self.progress.emit)
+            path = uc.download(self._release, progress=self.progress.emit,
+                               cancelled=lambda: self._cancel)
             self.done.emit(path, "")
+        except uc.Cancelled:
+            self.done.emit(None, "cancelled")
         except Exception as e:
             self.done.emit(None, str(e) or e.__class__.__name__)
 
@@ -96,10 +103,10 @@ def _start_check(win, manual: bool) -> None:
 
     def finished(release, err):
         win._update_thread = None
-        t.deleteLater()
         _on_check_done(win, release, err, manual, current)
 
     t.done.connect(finished)
+    t.finished.connect(t.deleteLater)
     t.start()
 
 
@@ -164,16 +171,19 @@ def _download_and_install(win, release) -> None:
     cancelled = {"v": False}
 
     def on_progress(done, total):
-        if total > 0:
+        if total > 0 and not cancelled["v"]:
             dlg.setValue(min(100, int(done * 100 / total)))
 
     def on_cancel():
         cancelled["v"] = True
+        t.cancel()
 
     def finished(path, err):
         win._update_download = None
-        t.deleteLater()
-        dlg.close()
+        # hide(), not close(): QProgressDialog.closeEvent emits canceled().
+        dlg.canceled.disconnect(on_cancel)
+        dlg.hide()
+        dlg.deleteLater()
         if cancelled["v"]:
             return
         if err or path is None:
@@ -186,6 +196,7 @@ def _download_and_install(win, release) -> None:
 
     t.progress.connect(on_progress)
     t.done.connect(finished)
+    t.finished.connect(t.deleteLater)
     dlg.canceled.connect(on_cancel)
     t.start()
     dlg.show()

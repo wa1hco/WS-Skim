@@ -61,6 +61,13 @@ def test_parse_skips_drafts_and_releases_without_installers():
     assert got[0].prerelease
 
 
+def test_parse_requires_both_installers():
+    for missing in (uc.LINUX_ASSET, uc.WINDOWS_ASSET, uc.SUMS_ASSET):
+        assets = tuple(a for a in (uc.LINUX_ASSET, uc.WINDOWS_ASSET, uc.SUMS_ASSET) if a != missing)
+        for platform_asset in (uc.LINUX_ASSET, uc.WINDOWS_ASSET):
+            assert uc.parse_releases([_rel("v0.1.4-test.3", assets=assets)], platform_asset) == []
+
+
 def test_pick_update_prerelease_rules():
     rels = uc.parse_releases([_rel("v0.1.4-test.3"), _rel("v0.1.4-test.2"),
                               _rel("v0.1.3")], uc.LINUX_ASSET)
@@ -143,6 +150,21 @@ def test_download_rejects_bad_checksum(tmp_path, monkeypatch):
     assert not (tmp_path / uc.LINUX_ASSET).exists()
 
 
+def test_download_cancel_removes_partial_file(tmp_path, monkeypatch):
+    payload = b"x" * (1024 * 1024)
+    _serve(monkeypatch, payload, f"{hashlib.sha256(payload).hexdigest()}  {uc.LINUX_ASSET}\n")
+    calls = []
+
+    def progress(d, t):
+        calls.append(d)
+
+    with pytest.raises(uc.Cancelled):
+        uc.download(_fake_release(), tmp_path, progress=progress,
+                    cancelled=lambda: len(calls) >= 1)
+    assert len(calls) == 1                   # stopped after the first chunk
+    assert not (tmp_path / uc.LINUX_ASSET).exists()
+
+
 def test_download_rejects_missing_checksum(tmp_path, monkeypatch):
     _serve(monkeypatch, b"x", f"{'0' * 64}  something-else\n")
     with pytest.raises(ValueError, match="no entry"):
@@ -151,17 +173,24 @@ def test_download_rejects_missing_checksum(tmp_path, monkeypatch):
 
 # ── installer hand-off ──────────────────────────────────────────────────────
 
-def test_windows_script_waits_installs_and_restarts(tmp_path):
-    s = uc._windows_script(Path(r"C:\t\WS-Skim-Setup.exe"), Path(r"C:\App"), 4242,
-                           Path(r"C:\t\update.log"))
-    assert 'PID eq 4242' in s
-    assert '/SILENT' in s and 'WS-Skim-Setup.exe' in s
-    assert s.index('/SILENT') < s.index('ws_skim.py')
+def test_windows_script_is_ascii_and_checks_the_installer():
+    s = uc._WINDOWS_SCRIPT
+    s.encode("ascii")                         # cmd.exe reads .cmd in the OEM code page
+    assert "PID eq %WSS_PID%" in s
+    assert '"%WSS_INSTALLER%" /SILENT' in s
+    assert s.index("/SILENT") < s.index("if errorlevel 1 goto failed") < s.index("%WSS_MAIN%")
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bash hand-off")
-def test_linux_hand_off_runs_installer_then_restarts(tmp_path):
-    root = tmp_path / "app"
+def test_helper_env_carries_paths(tmp_path):
+    root = tmp_path / "Jos\u00e9" / "WS-Skim"
+    env = uc._helper_env(tmp_path / "s.exe", root, 7, tmp_path / "u.log", "win32")
+    assert env["WSS_PID"] == "7"
+    assert env["WSS_MAIN"] == str(root / "ws_skim.py")
+    assert env["WSS_PYTHONW"].endswith("pythonw.exe")
+
+
+def _linux_fixture(tmp_path, installer_exit=0):
+    root = tmp_path / "app d\u00e9j\u00e0"
     (root / "scripts").mkdir(parents=True)
     marker = tmp_path / "events"
     run = root / "scripts" / "run.sh"
@@ -170,8 +199,13 @@ def test_linux_hand_off_runs_installer_then_restarts(tmp_path):
     inst_dir = tmp_path / "dl"
     inst_dir.mkdir()
     installer = inst_dir / uc.LINUX_ASSET
-    installer.write_text(f"#!/bin/bash\necho \"installed $*\" >> '{marker}'\n")
+    installer.write_text(f"#!/bin/bash\necho \"installed $*\" >> '{marker}'\nexit {installer_exit}\n")
+    return root, marker, installer
 
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bash hand-off")
+def test_linux_hand_off_runs_installer_then_restarts(tmp_path):
+    root, marker, installer = _linux_fixture(tmp_path)
     sleeper = subprocess.Popen(["sleep", "1"])      # stands in for the running app
     uc.start_install(installer, root=root, pid=sleeper.pid, platform="linux")
     time.sleep(0.3)
@@ -183,6 +217,22 @@ def test_linux_hand_off_runs_installer_then_restarts(tmp_path):
         time.sleep(0.1)
     lines = marker.read_text().splitlines()
     assert lines == [f"installed --dest {root}", "started"]
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bash hand-off")
+def test_linux_hand_off_does_not_restart_after_failed_install(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")       # no zenity/kdialog popups in CI
+    root, marker, installer = _linux_fixture(tmp_path, installer_exit=3)
+    log = tmp_path / "update.log"
+    script = uc.start_install(installer, root=root, pid=999999, log=log, platform="linux")
+    for _ in range(50):
+        if log.exists() and "did not finish" in log.read_text():
+            break
+        time.sleep(0.1)
+    time.sleep(0.3)
+    assert marker.read_text().splitlines() == [f"installed --dest {root}"]
+    assert "did not finish" in log.read_text()
+    script.read_text(encoding="ascii")
 
 
 def test_stage_writes_release_file(tmp_path):
@@ -207,5 +257,42 @@ def test_help_menu_gets_check_for_updates(tmp_path, monkeypatch):
     menu = win.menuBar().addMenu("&Help")
     update_ui.setup_update_check(win, menu)
     assert [a.text() for a in menu.actions()] == ["Check for Updates…"]
+    win.deleteLater()
+    app.processEvents()
+
+
+def _wait_for(app, cond, timeout=5.0):
+    end = time.time() + timeout
+    while not cond() and time.time() < end:
+        app.processEvents()
+        time.sleep(0.01)
+    return cond()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_download_completion_reaches_hand_off_or_error(monkeypatch, tmp_path, fail):
+    QtWidgets = pytest.importorskip("PyQt5.QtWidgets")
+    from ws_skim import update_ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    installer = tmp_path / uc.LINUX_ASSET
+
+    def fake_download(release, progress=None, cancelled=None, **kw):
+        progress(5, 10)
+        if fail:
+            raise ValueError("checksum mismatch")
+        return installer
+
+    seen = []
+    monkeypatch.setattr(uc, "download", fake_download)
+    monkeypatch.setattr(update_ui, "_hand_off", lambda win, rel, path: seen.append(("ok", path)))
+    monkeypatch.setattr(QtWidgets.QMessageBox, "warning",
+                        staticmethod(lambda *a, **k: seen.append(("error", a[2]))))
+    win = QtWidgets.QMainWindow()
+    update_ui._download_and_install(win, _fake_release())
+    assert _wait_for(app, lambda: bool(seen))
+    if fail:
+        assert seen[0][0] == "error" and "checksum mismatch" in seen[0][1]
+    else:
+        assert seen == [("ok", installer)]
     win.deleteLater()
     app.processEvents()

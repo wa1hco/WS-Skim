@@ -96,6 +96,10 @@ def installed_tag(root: Path = ROOT) -> str:
 
 # ── Releases ────────────────────────────────────────────────────────────────
 
+class Cancelled(Exception):
+    """The download was cancelled by the user."""
+
+
 @dataclass(frozen=True)
 class Release:
     tag: str
@@ -131,8 +135,8 @@ def parse_releases(data: list, asset_name: str) -> list[Release]:
         assets = {a.get("name"): a for a in r.get("assets") or [] if isinstance(a, dict)}
         inst = assets.get(asset_name)
         sums = assets.get(SUMS_ASSET)
-        if not inst or not sums:
-            continue          # installers not attached (yet): not installable
+        if not all(assets.get(n) for n in (WINDOWS_ASSET, LINUX_ASSET, SUMS_ASSET)):
+            continue          # not every installer attached (yet): incomplete
         out.append(Release(
             tag=tag,
             name=r.get("name") or tag,
@@ -201,10 +205,12 @@ def expected_sha256(sums_text: str, name: str) -> str | None:
 
 def download(release: Release, dest_dir: Path | None = None,
              progress: Callable[[int, int], None] | None = None,
-             timeout: float = 30.0) -> Path:
+             timeout: float = 30.0,
+             cancelled: Callable[[], bool] | None = None) -> Path:
     """Download and verify the installer; return its path.
 
-    Raises ValueError if the checksum is missing or does not match.
+    Raises ValueError if the checksum is missing or does not match, and
+    Cancelled (removing the partial file) once ``cancelled()`` returns True.
     """
     dest_dir = Path(dest_dir or tempfile.mkdtemp(prefix="ws-skim-update-"))
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -219,6 +225,8 @@ def download(release: Release, dest_dir: Path | None = None,
         total = int(resp.headers.get("Content-Length") or release.installer_size or 0)
         done = 0
         while True:
+            if cancelled and cancelled():
+                break
             chunk = resp.read(256 * 1024)
             if not chunk:
                 break
@@ -227,34 +235,75 @@ def download(release: Release, dest_dir: Path | None = None,
             done += len(chunk)
             if progress:
                 progress(done, total)
+    if cancelled and cancelled():
+        path.unlink(missing_ok=True)
+        raise Cancelled()
     if h.hexdigest() != want:
         path.unlink(missing_ok=True)
         raise ValueError(f"checksum mismatch for {release.installer_name}")
     return path
 
 
-def _windows_script(installer: Path, root: Path, pid: int, log: Path) -> str:
-    pythonw = root / ".venv" / "Scripts" / "pythonw.exe"
-    return "\r\n".join([
-        "@echo off",
-        ":wait",
-        f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && '
-        "(ping -n 2 127.0.0.1 >nul & goto wait)",
-        f'"{installer}" /SILENT /SUPPRESSMSGBOXES /NORESTART /LOG="{log}"',
-        f'start "" "{pythonw}" "{root / "ws_skim.py"}"',
-        "",
-    ])
+# The helpers get every path through environment variables (WSS_*), so the
+# scripts themselves are plain ASCII: cmd.exe reads a .cmd file in the OEM
+# code page and would mangle a non-ASCII user folder written into it.  If
+# the installer fails they do not start the half-updated copy; they show
+# where the log is instead.
+
+_FAIL_TEXT = ("The WS Skim update did not finish. "
+              "Run the installer again from " + RELEASES_PAGE + " . Log: ")
 
 
-def _linux_script(installer: Path, root: Path, pid: int, log: Path) -> str:
-    q = lambda p: "'" + str(p).replace("'", "'\\''") + "'"   # noqa: E731
-    return "\n".join([
-        "#!/usr/bin/env bash",
-        f"while kill -0 {pid} 2>/dev/null; do sleep 0.5; done",
-        f"bash {q(installer)} --dest {q(root)} >> {q(log)} 2>&1",
-        f"setsid {q(root / 'scripts' / 'run.sh')} >/dev/null 2>&1 < /dev/null &",
-        "",
-    ])
+def _helper_env(installer: Path, root: Path, pid: int, log: Path,
+                platform: str) -> dict[str, str]:
+    env = dict(os.environ)
+    env.update({
+        "WSS_PID": str(pid),
+        "WSS_INSTALLER": str(installer),
+        "WSS_ROOT": str(root),
+        "WSS_LOG": str(log),
+        "WSS_FAIL": _FAIL_TEXT,
+    })
+    if platform.startswith("win"):
+        env["WSS_PYTHONW"] = str(root / ".venv" / "Scripts" / "pythonw.exe")
+        env["WSS_MAIN"] = str(root / "ws_skim.py")
+    return env
+
+
+_WINDOWS_SCRIPT = "\r\n".join([
+    "@echo off",
+    ":wait",
+    'tasklist /FI "PID eq %WSS_PID%" 2>nul | find "%WSS_PID%" >nul && '
+    "(ping -n 2 127.0.0.1 >nul & goto wait)",
+    '"%WSS_INSTALLER%" /SILENT /SUPPRESSMSGBOXES /NORESTART /LOG="%WSS_LOG%"',
+    "if errorlevel 1 goto failed",
+    'start "" "%WSS_PYTHONW%" "%WSS_MAIN%"',
+    "exit /b 0",
+    ":failed",
+    "powershell -NoProfile -WindowStyle Hidden -Command "
+    '"Add-Type -AssemblyName PresentationFramework; '
+    "[System.Windows.MessageBox]::Show($env:WSS_FAIL + $env:WSS_LOG, 'WS Skim update') "
+    '| Out-Null"',
+    "exit /b 1",
+    "",
+])
+
+_LINUX_SCRIPT = "\n".join([
+    "#!/usr/bin/env bash",
+    'while kill -0 "$WSS_PID" 2>/dev/null; do sleep 0.5; done',
+    'if bash "$WSS_INSTALLER" --dest "$WSS_ROOT" >> "$WSS_LOG" 2>&1; then',
+    '    setsid "$WSS_ROOT/scripts/run.sh" >/dev/null 2>&1 < /dev/null &',
+    "    exit 0",
+    "fi",
+    'msg="$WSS_FAIL$WSS_LOG"',
+    'echo "$msg" >> "$WSS_LOG"',
+    'if command -v zenity >/dev/null 2>&1; then zenity --error --title="WS Skim update" --text="$msg";',
+    'elif command -v kdialog >/dev/null 2>&1; then kdialog --title "WS Skim update" --error "$msg";',
+    'elif command -v notify-send >/dev/null 2>&1; then notify-send "WS Skim update" "$msg";',
+    "fi",
+    "exit 1",
+    "",
+])
 
 
 def start_install(installer: Path, root: Path = ROOT, pid: int | None = None,
@@ -267,19 +316,20 @@ def start_install(installer: Path, root: Path = ROOT, pid: int | None = None,
     platform = platform or sys.platform
     pid = pid or os.getpid()
     log = log or (installer.parent / "update.log")
+    env = _helper_env(installer, root, pid, log, platform)
     if platform.startswith("win"):
         script = installer.parent / "ws-skim-update.cmd"
-        script.write_text(_windows_script(installer, root, pid, log), encoding="utf-8")
+        script.write_text(_WINDOWS_SCRIPT, encoding="ascii")
         flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0)
                  | getattr(subprocess, "DETACHED_PROCESS", 0)
                  | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
         subprocess.Popen(["cmd", "/c", str(script)], creationflags=flags,
-                         close_fds=True)
+                         close_fds=True, env=env)
     else:
         script = installer.parent / "ws-skim-update.sh"
-        script.write_text(_linux_script(installer, root, pid, log), encoding="utf-8")
+        script.write_text(_LINUX_SCRIPT, encoding="ascii")
         script.chmod(0o755)
         subprocess.Popen(["bash", str(script)], start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, close_fds=True)
+                         stderr=subprocess.DEVNULL, close_fds=True, env=env)
     return script
