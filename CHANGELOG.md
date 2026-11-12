@@ -10,6 +10,9 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### FT8 decoding fixes
 
+- **The FT8 sub-band section follows the radio.**  If the band pulldown
+  is on another band (e.g. still 6 m MSK144) the always-decoded section
+  now uses the standard FT8/FT4 dial inside the tuned band (7.074 on 40 m).
 - **Static bursts no longer flood the Sync Map with candidates.**  Each
   time slice of the search spectrogram is now scaled to its own noise
   level, so a burst of static weighs like any other moment.  On synthetic
