@@ -31,6 +31,12 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **The Band pulldown follows the Mode menu.**  In FT8 or FT4 mode it lists
+  the WSJT-X FT8/FT4 dial frequencies from 160 m to 70 cm (only the bands the
+  current radio can reach are selectable), and the choice is remembered per
+  mode.  The decode list's offset column is measured from that dial.  With
+  the Flex the radio's pan still sets the frequency.
+
 - **FT8 / FT4 decoding.**  After each period's Costas search, jt9 decodes
   every ~2.8 kHz section of the band (audio 200-3200 Hz around each).  The
   decodes appear in the main decode list and the FT8 Sync Map's new
