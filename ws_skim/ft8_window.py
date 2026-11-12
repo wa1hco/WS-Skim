@@ -82,6 +82,10 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
     if act is not None and not act.isChecked():
         act.setChecked(True)
 
+    if hasattr(self, "_band_combo"):
+        from .ui import set_band_list
+        set_band_list(self, mode)
+
     combo = getattr(self, "nb_backend_combo", None)
     want = str(_SETTINGS.value(blanker_key(mode), DEFAULT_BLANKER.get(mode, "Linrad")))
     if combo is not None and combo.findText(want) >= 0:

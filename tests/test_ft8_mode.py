@@ -285,3 +285,37 @@ def test_draw_result_smoke(qapp):
     assert "1 decoded" in win._ft8_status.text()
     assert float(win._ft8_table.item(0, 0).text()) == pytest.approx(
         28.074 + r.candidates[0].freq_hz / 1e6, abs=1e-6)
+
+
+def test_band_list_follows_mode(qapp, monkeypatch):
+    from PyQt5 import QtWidgets
+    from ws_skim import ui, visualizer
+    settings = _FakeSettings({"dial_freq_mhz_FT8": 7.074, "calling_freq_mhz": 50.260})
+    monkeypatch.setattr(visualizer, "_SETTINGS", settings)
+
+    class Win:
+        mode = "MSK144"
+
+        def __init__(self):
+            self._band_combo = QtWidgets.QComboBox()
+            for label, _f, _s in ui.MSK144_BANDS:
+                self._band_combo.addItem(label)
+            self._bands = ui.MSK144_BANDS
+            self.picked = []
+
+        def on_band_changed(self, idx):
+            self.picked.append(ui._bands(self)[idx][1])
+
+    w = Win()
+    w.mode = "FT8"
+    ui.set_band_list(w, "FT8")
+    labels = [w._band_combo.itemText(i) for i in range(w._band_combo.count())]
+    assert labels[0].startswith("160m") and any("7.074" in t for t in labels)
+    assert w._band_combo.currentText().startswith("40m") and w.picked == [7.074]
+    ui.set_band_list(w, "FT8")                       # same mode: nothing reapplied
+    assert w.picked == [7.074]
+    w.mode = "MSK144"
+    ui.set_band_list(w, "MSK144")
+    assert w._band_combo.currentText().startswith("6m") and w.picked[-1] == 50.260
+    assert ui.band_setting_key("MSK144") == "calling_freq_mhz"
+    assert ui.band_setting_key("FT4") == "dial_freq_mhz_FT4"

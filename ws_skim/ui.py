@@ -62,6 +62,72 @@ MSK144_BANDS = [
     ("70cm 432.360 MHz", 432.360, {'usrp', 'rtlsdr', 'sdrangel'}),
 ]
 
+# FT8 / FT4 dial frequencies (WSJT-X defaults, USB).  HF is reachable with the
+# Flex (it follows the SmartSDR pan; the pick here sets the dial the decode
+# list measures offsets from), the Airspy HF+ and SDRangel.
+_HF  = {'radio', 'airspy', 'sdrangel'}
+_6M  = {'usrp', 'rtlsdr', 'radio', 'sdrangel'}
+_VHF = {'usrp', 'rtlsdr', 'sdrangel'}
+FT8_BANDS = [
+    ("160m   1.840 MHz",   1.840, _HF),
+    ("80m    3.573 MHz",   3.573, _HF),
+    ("60m    5.357 MHz",   5.357, _HF),
+    ("40m    7.074 MHz",   7.074, _HF),
+    ("30m   10.136 MHz",  10.136, _HF),
+    ("20m   14.074 MHz",  14.074, _HF),
+    ("17m   18.100 MHz",  18.100, _HF),
+    ("15m   21.074 MHz",  21.074, _HF),
+    ("12m   24.915 MHz",  24.915, _HF),
+    ("10m   28.074 MHz",  28.074, _HF),
+    ("6m    50.313 MHz",  50.313, _6M),
+    ("2m   144.174 MHz", 144.174, _VHF),
+    ("70cm 432.174 MHz", 432.174, _VHF),
+]
+FT4_BANDS = [
+    ("80m    3.575 MHz",   3.575, _HF),
+    ("40m    7.0475 MHz",  7.0475, _HF),
+    ("30m   10.140 MHz",  10.140, _HF),
+    ("20m   14.080 MHz",  14.080, _HF),
+    ("17m   18.104 MHz",  18.104, _HF),
+    ("15m   21.140 MHz",  21.140, _HF),
+    ("12m   24.919 MHz",  24.919, _HF),
+    ("10m   28.180 MHz",  28.180, _HF),
+    ("6m    50.318 MHz",  50.318, _6M),
+    ("2m   144.170 MHz", 144.170, _VHF),
+]
+BANDS_BY_MODE = {"MSK144": MSK144_BANDS, "FT8": FT8_BANDS, "FT4": FT4_BANDS}
+
+
+def band_setting_key(mode: str) -> str:
+    """Settings key for the saved band of ``mode`` (MSK144 keeps the old key)."""
+    return 'calling_freq_mhz' if mode == 'MSK144' else f'dial_freq_mhz_{mode}'
+
+
+def _bands(self):
+    return getattr(self, '_bands', MSK144_BANDS)
+
+
+def set_band_list(self, mode: str) -> None:
+    """Fill the Band pulldown with ``mode``'s frequencies and apply the saved one."""
+    from .visualizer import _SETTINGS as _VS
+    bands = BANDS_BY_MODE.get(mode, MSK144_BANDS)
+    combo = getattr(self, '_band_combo', None)
+    if combo is None or bands is _bands(self):
+        return
+    try:
+        saved = float(_VS.value(band_setting_key(mode), bands[0][1]))
+    except (ValueError, TypeError):
+        saved = bands[0][1]
+    idx = next((i for i, (_, f, _s) in enumerate(bands) if abs(f - saved) < 0.0001), 0)
+    self._bands = bands
+    combo.blockSignals(True)
+    combo.clear()
+    for label, _f, _s in bands:
+        combo.addItem(label)
+    combo.setCurrentIndex(idx)
+    combo.blockSignals(False)
+    self.on_band_changed(idx)
+
 
 def _get_version_string():
     """Return a version string from git: hash, date, and subject line."""
@@ -284,6 +350,7 @@ def setup_ui(self):
     band_toolbar.setFloatable(False)
     band_toolbar.addWidget(QtWidgets.QLabel("  Band: "))
     self._band_combo = QtWidgets.QComboBox()
+    self._bands = MSK144_BANDS           # set_band_list() swaps it per mode
     for _bl, _, _ in MSK144_BANDS:
         self._band_combo.addItem(_bl)
     # Restore saved selection (match by frequency)
@@ -1127,7 +1194,10 @@ def _retune_active_source(self, freq_mhz: float):
 def on_band_changed(self, idx: int):
     """Handle band combo selection: update freq, filter source menu, retune if active."""
     from .visualizer import _SETTINGS as _VS
-    _label, freq, supported = MSK144_BANDS[idx]
+    bands = _bands(self)
+    if not 0 <= idx < len(bands):
+        return
+    _label, freq, supported = bands[idx]
 
     # Update engine state
     self.calling_freq_mhz = freq
@@ -1166,8 +1236,8 @@ def on_band_changed(self, idx: int):
     if hasattr(self, '_band_combo') and mode != 'wav':
         self._band_combo.setEnabled(True)
 
-    # Persist
-    _VS.setValue('calling_freq_mhz', freq)
+    # Persist (per mode: the MSK144 calling frequency keeps its old key)
+    _VS.setValue(band_setting_key(getattr(self, 'mode', 'MSK144')), freq)
 
 
 def _on_about(self):
