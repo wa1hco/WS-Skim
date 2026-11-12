@@ -1729,5 +1729,12 @@ def closeEvent(self, event):
         except Exception:
             pass
 
+    # Join TFMF / extract_and_decode / block-runtime workers so native
+    # work is finished before the process exits. Leaving them running
+    # can abort at interpreter shutdown (exit 134).
+    stop = getattr(self, 'stop_background_workers', None)
+    if callable(stop):
+        stop(timeout_s=15.0)
+
     print("Shutdown complete")
     event.accept()

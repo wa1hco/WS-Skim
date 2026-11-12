@@ -1269,6 +1269,7 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     if (self.timebase.is_anchored()
             and _tfmf_wanted
             and not self._tfmf_worker_busy
+            and not getattr(self, '_background_stopping', False)
             and (_loop_wall - self._tfmf_last_dispatch_time
                  >= _TFMF_REDISPLAY_INTERVAL_S)):
         _period_idx = int(_loop_wall / self.history_secs)
@@ -1299,12 +1300,13 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                          if np.any(_wb_v_raw) else None)
                 self._tfmf_worker_busy = True
                 self._tfmf_last_dispatch_time = _loop_wall
-                threading.Thread(
+                self._tfmf_thread = threading.Thread(
                     target=_tfmf_period_worker,
                     args=(self, _wb_h, _wb_v, _offset_s, _period_idx,
                           _period_start_utc),
                     daemon=True, name='tfmf-period',
-                ).start()
+                )
+                self._tfmf_thread.start()
 
     while self._ch_buf_end >= CH_DETECT_SIZE and not getattr(self, '_tx_settle_remaining', 0):
         ch_block   = self._ch_buf[:, :CH_DETECT_SIZE]            # (48, 512) H channel
@@ -1992,7 +1994,8 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                     except Exception as _exc:    # noqa: BLE001
                         launch_metrics['sq_new_error_v'] = str(_exc)[:80]
 
-            if not getattr(self, '_analysis_no_decode', False):
+            if (not getattr(self, '_analysis_no_decode', False)
+                    and not getattr(self, '_background_stopping', False)):
                 t = threading.Thread(
                     target=extract_and_decode,
                     args=(self._iq_ring, ring_state_fn,

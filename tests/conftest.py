@@ -8,22 +8,47 @@
 
 from __future__ import annotations
 
-import os
+import logging
+import threading
 
-_exitstatus = 0
+import pytest
+
+log = logging.getLogger(__name__)
+
+_WORKER_NAME_MARKERS = ("tfmf-period", "extract_and_decode")
+
+
+@pytest.fixture(autouse=True)
+def _join_engine_background_workers():
+    """After each test, join Engine TFMF / decode workers left running."""
+    yield
+    from map144_app.engine import stop_all_background_workers
+    stop_all_background_workers(timeout_s=15.0)
+
+
+def _live_worker_threads() -> list[threading.Thread]:
+    return [
+        t for t in threading.enumerate()
+        if t is not threading.main_thread()
+        and any(mark in t.name for mark in _WORKER_NAME_MARKERS)
+        and t.is_alive()
+    ]
 
 
 def pytest_sessionfinish(session, exitstatus):
-    global _exitstatus
-    _exitstatus = int(exitstatus)
-
-
-def pytest_unconfigure(config):
-    # Some tests leave C++/Qt/numba worker threads behind. During
-    # interpreter shutdown those can call std::terminate ("terminate
-    # called without an active exception") and make a fully passing
-    # run exit 134 in GitHub Actions. On CI, skip that destructor
-    # path and exit with pytest's already-determined status.
-    if os.environ.get("GITHUB_ACTIONS") != "true":
-        return
-    os._exit(_exitstatus)
+    # Last-chance join in case a test created workers without an Engine
+    # instance in the live set. Then report anything still running so a
+    # shutdown abort has a clear cause in the log.
+    from map144_app.engine import stop_all_background_workers
+    stop_all_background_workers(timeout_s=15.0)
+    leftover = _live_worker_threads()
+    if leftover:
+        names = ", ".join(f"{t.name}(daemon={t.daemon})" for t in leftover)
+        log.warning(
+            "pytest_sessionfinish: %d leftover worker thread(s): %s",
+            len(leftover), names,
+        )
+        print(
+            f"\nWARNING: leftover worker threads at session end: {names}",
+            flush=True,
+        )
