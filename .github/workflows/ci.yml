@@ -111,5 +111,6 @@ jobs:
           python -m pytest -q --tb=short
           tests/test_layout_and_icons.py
           tests/test_installer.py
+          tests/test_app_identity.py
           tests/test_user_paths.py
           tests/test_user_facing_docs.py

@@ -73,8 +73,10 @@ Type: filesandordirs; Name: "{app}\fortran_bp_test"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"
-Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; Tasks: desktopicon
+; AppUserModelID must match ws_skim.app_identity.WINDOWS_APP_USER_MODEL_ID
+; so the pinned shortcut and the running window share a taskbar button.
+Name: "{autoprograms}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; AppUserModelID: "wa1hco.WSSkim"
+Name: "{autodesktop}\{#AppName}"; Filename: "{#PyW}"; Parameters: """{app}\ws_skim.py"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIco}"; Comment: "Wideband MSK144 skimmer"; AppUserModelID: "wa1hco.WSSkim"; Tasks: desktopicon
 
 [Run]
 ; Build the Python environment.  Interactive installs show the console and

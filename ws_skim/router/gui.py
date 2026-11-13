@@ -585,7 +585,13 @@ class RouterWindow(QtWidgets.QMainWindow):
 
 
 def run_app():
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from ws_skim.app_identity import apply as apply_app_identity, prepare_process
+
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        prepare_process()  # Windows AppUserModelID + X11 WM_CLASS; before QApplication
+        app = QtWidgets.QApplication(sys.argv)
+    apply_app_identity(app)
     app.setStyle("Fusion")
     pal = QtGui.QPalette()
     pal.setColor(QtGui.QPalette.Window, QtGui.QColor(245, 245, 245))

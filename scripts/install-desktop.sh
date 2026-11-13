@@ -75,6 +75,7 @@ Icon=$ICON
 Terminal=false
 Categories=HamRadio;Network;
 StartupNotify=true
+StartupWMClass=ws-skim
 EOF
     chmod 755 "$1"
 }
