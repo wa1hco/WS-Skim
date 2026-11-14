@@ -348,6 +348,7 @@ def decode_record(d) -> dict:
         "dial_khz": d.dial_hz / 1000.0, "jt9_snr": d.snr_db, "t_sec": d.dt_s,
         "utc_time": when.strftime("%H:%M:%S"),
         "timestamp": when.strftime("%Y-%m-%d_%H:%M:%S"),
+        "low_confidence": bool(getattr(d, "low_confidence", False)),
     }
 
 

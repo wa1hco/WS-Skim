@@ -8,6 +8,18 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### WSJT-X UDP / WS Hub
+
+- **Decodes are exported the way a real WSJT-X instance would.**  Each
+  (radio, band, mode, dial) gets its own id, for example
+  ``SKIM-FLEX-2m-FT8`` or ``SKIM-B210-6m-FT8-50323``, with its own
+  Heartbeat and Status.  The Decode mode field is the WSJT-X character
+  (``~`` FT8, ``+`` FT4, ``&`` MSK144), and the audio offset is
+  ``signal − dial`` so WS Hub can add them to get RF.  Close is sent
+  when the program stops.  The default destination is the WS Hub
+  multicast group ``224.0.0.73:2237`` (the Host field still accepts
+  ``127.0.0.1``).  Instance ids are shown read-only in Reporting.
+
 ### FT8 decoding fixes
 
 - **The FT8 sub-band section follows the radio.**  If the band pulldown

@@ -12,16 +12,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Reporting — WSJT-X UDP broadcast and PSKReporter upload for decoded MSK144.
+"""Reporting — WSJT-X UDP export and PSKReporter upload for decoded spots.
 
 Two output protocols mirror what WSJT-X produces:
 
-WSJT-X UDP (port 2237 by default)
-    Sends a Heartbeat (type 0) every 15 s and a Decode (type 2) for each
-    successfully decoded message.  GridTracker, N1MM Logger+ (via its
-    built-in WSJT-X integration), JTAlert, and Log4OM all subscribe to
-    this stream.  The wire format follows the WSJT-X Network Message
-    Protocol as documented in NetworkMessage.hpp from the WSJT-X source.
+WSJT-X UDP (224.0.0.73:2237 by default, the WS Hub multicast group)
+    One emulated WSJT-X instance per (source, band, mode, dial), each with
+    its own id (``SKIM-FLEX-2m-FT8``), Heartbeat (type 0, every 15 s),
+    Status (type 1, on change and with each heartbeat), and Decode
+    (type 2) whose mode field is the WSJT-X character and whose
+    delta_frequency is the audio offset from that instance's dial.
+    Close (type 6) and Clear (type 3) are sent on shutdown.  The wire
+    format follows NetworkMessage.hpp from the WSJT-X source.  WS Hub
+    ingests these datagrams the same way it ingests a real WSJT-X
+    instance.
 
 PSKReporter (https://pskreporter.info)
     Spots are accumulated and uploaded via HTTPS POST to
@@ -57,15 +61,20 @@ from pathlib import Path
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-WSJTX_MAGIC   = 0xADBCCBDA
-WSJTX_SCHEMA  = 3
-WSJTX_ID      = "map144"
+from .wsjtx_udp import (  # noqa: E402
+    MAGIC as WSJTX_MAGIC,
+    SCHEMA as WSJTX_SCHEMA,
+    DEFAULT_ID as WSJTX_ID,
+    MSG_HEARTBEAT, MSG_STATUS, MSG_DECODE, MSG_CLEAR, MSG_CLOSE,
+    HEARTBEAT_INTERVAL_S,
+    DEFAULT_HOST as WSJTX_DEFAULT_HOST,
+    DEFAULT_PORT as WSJTX_DEFAULT_PORT,
+    MULTICAST_TTL,
+    build_heartbeat, build_status, build_decode, build_clear, build_close,
+    instance_id, choose_dial, rf_dial_audio, mode_name, mode_spec,
+    standard_dials, in_passband, is_multicast_ip, band_label, source_tag,
+)
 
-MSG_HEARTBEAT = 0
-MSG_STATUS    = 1
-MSG_DECODE    = 2
-
-HEARTBEAT_INTERVAL_S    = 15
 PSKREPORTER_INTERVAL_S  = 300   # 5 minutes — pskreporter asks for ≥5 min
 DX_DUPE_INTERVAL_S      = 1200  # 20 minutes — informal DX cluster etiquette
 DX_FREQ_CHANGE_KHZ      = 3.0   # re-spot if station moved ≥ this far (kHz)
@@ -75,162 +84,6 @@ PSKREPORTER_PORT = 4739
 PSKREPORTER_ENTERPRISE  = 30351
 PSKREPORTER_SENDER_TMPL = 0x50e3   # template ID for spot data sets
 PSKREPORTER_RECV_TMPL   = 0x50e2   # template ID for receiver options set
-
-
-# ── WSJT-X wire format helpers ───────────────────────────────────────────────
-
-def _pack_utf8(s: str) -> bytes:
-    """WSJT-X length-prefixed UTF-8 string: uint32 length + bytes.
-    Empty string is encoded as length=0xFFFFFFFF (null QByteArray convention).
-    """
-    if s == "":
-        return struct.pack(">I", 0xFFFFFFFF)
-    b = s.encode("utf-8")
-    return struct.pack(">I", len(b)) + b
-
-
-def _pack_bool(v: bool) -> bytes:
-    return struct.pack(">?", v)
-
-
-def _pack_u32(v: int) -> bytes:
-    return struct.pack(">I", v)
-
-
-def _pack_i32(v: int) -> bytes:
-    return struct.pack(">i", v)
-
-
-def _pack_u64(v: int) -> bytes:
-    return struct.pack(">Q", v)
-
-
-def _pack_f64(v: float) -> bytes:
-    return struct.pack(">d", v)
-
-
-def _header(msg_type: int) -> bytes:
-    return (struct.pack(">I", WSJTX_MAGIC)
-            + struct.pack(">I", WSJTX_SCHEMA)
-            + struct.pack(">I", msg_type)
-            + _pack_utf8(WSJTX_ID))
-
-
-def build_heartbeat(max_schema: int = 3, version: str = "2.7.0",
-                    revision: str = "") -> bytes:
-    """Build a WSJT-X Heartbeat (type 0) datagram."""
-    return (_header(MSG_HEARTBEAT)
-            + _pack_u32(max_schema)
-            + _pack_utf8(version)
-            + _pack_utf8(revision))
-
-
-def build_status(dial_freq_hz: int, my_call: str, my_grid: str) -> bytes:
-    """Build a WSJT-X Status (type 1) datagram.
-
-    Sends the minimum fields GridTracker and N1MM need to place map144 on
-    the band map: dial frequency, mode, DE callsign, DE grid.
-
-    TX fields are all false/zero — map144 is receive-only.
-
-    Field order from WSJT-X NetworkMessage.hpp:
-        quint64  Dial Frequency (Hz)
-        utf8     Mode
-        utf8     DX Call
-        utf8     Report
-        utf8     TX Mode
-        bool     TX Enabled
-        bool     Transmitting
-        bool     Decoding
-        quint32  RX DF  (audio Hz offset)
-        quint32  TX DF
-        utf8     DE Call (my callsign)
-        utf8     DE Grid (my grid)
-        utf8     DX Grid
-        bool     TX Watchdog
-        utf8     Sub-mode
-        bool     Fast mode
-        quint8   Special operation mode
-        quint32  Frequency tolerance (Hz)
-        quint32  T/R period (s)
-        utf8     Configuration Name
-        utf8     TX message
-    """
-    return (_header(MSG_STATUS)
-            + _pack_u64(dial_freq_hz)     # Dial Frequency
-            + _pack_utf8("MSK144")        # Mode
-            + _pack_utf8("")              # DX Call
-            + _pack_utf8("")              # Report
-            + _pack_utf8("MSK144")        # TX Mode
-            + _pack_bool(False)           # TX Enabled
-            + _pack_bool(False)           # Transmitting
-            + _pack_bool(True)            # Decoding
-            + _pack_u32(1500)             # RX DF (audio centre Hz)
-            + _pack_u32(1500)             # TX DF
-            + _pack_utf8(my_call)         # DE Call
-            + _pack_utf8(my_grid)         # DE Grid
-            + _pack_utf8("")              # DX Grid
-            + _pack_bool(False)           # TX Watchdog
-            + _pack_utf8("")              # Sub-mode
-            + _pack_bool(True)            # Fast mode (MSK144 uses fast/short T/R)
-            + struct.pack(">B", 0)        # Special operation mode
-            + _pack_u32(100)              # Frequency tolerance (Hz)
-            + _pack_u32(15)               # T/R period (s)
-            + _pack_utf8("Default")       # Configuration Name
-            + _pack_utf8(""))             # TX message
-
-
-def build_decode(decode: dict, my_call: str, dial_freq_hz: int) -> bytes:
-    """Build a WSJT-X Decode (type 2) datagram.
-
-    decode dict keys (from detection.py decode_queue):
-        message   str    raw MSK144 text (e.g. "W1AW WA1HCO FN42")
-        jt9_snr   int|None   SNR in dB
-        t_sec     float  time offset within the 15-s period
-        radio_khz float  dial frequency in kHz
-        utc_time  str    "HH:MM:SS"
-        mode      str    optional, "MSK144" (default), "FT8" or "FT4"
-        audio_hz  float  optional audio offset from the dial (default 1500,
-                         the MSK144 jt9 centre); FT8/FT4 give each decode's own
-    """
-    msg     = decode.get('message', '')
-    snr     = decode.get('jt9_snr') or 0
-    delta_t = float(decode.get('t_sec', 0.0))
-    # dial_freq_hz from the engine's center_freq_mhz or radio_khz
-    freq_hz = dial_freq_hz
-
-    # WSJT-X Decode fields (in order from NetworkMessage.hpp):
-    #   bool     new (always True for live decodes)
-    #   bool     is_new (True)
-    #   QTime    time — ms since midnight UTC
-    #   qint32   snr
-    #   double   delta_time (s)
-    #   quint32  delta_frequency (Hz offset from dial — 1500 Hz convention)
-    #   utf8     mode
-    #   utf8     message
-    #   bool     low_confidence (False)
-    #   bool     off_air (False)
-
-    utc_str = decode.get('utc_time', datetime.now(timezone.utc).strftime('%H:%M:%S'))
-    try:
-        h, m, s = (int(x) for x in utc_str.split(':'))
-        ms_since_midnight = (h * 3600 + m * 60 + s) * 1000
-    except Exception:
-        ms_since_midnight = 0
-
-    delta_freq = int(round(float(decode.get('audio_hz', 1500))))
-    mode       = decode.get('mode', 'MSK144')
-
-    return (_header(MSG_DECODE)
-            + _pack_bool(True)           # is_new
-            + _pack_u32(ms_since_midnight)
-            + _pack_i32(int(snr))
-            + _pack_f64(delta_t)
-            + _pack_u32(delta_freq)
-            + _pack_utf8(mode)
-            + _pack_utf8(msg)
-            + _pack_bool(False)          # low_confidence
-            + _pack_bool(False))         # off_air
 
 
 # ── MSK144 message parser ────────────────────────────────────────────────────
@@ -406,8 +259,8 @@ class Reporter:
         self.my_grid   = ''
 
         self.wsjtx_enabled = False
-        self.wsjtx_host    = '127.0.0.1'
-        self.wsjtx_port    = 2237
+        self.wsjtx_host    = WSJTX_DEFAULT_HOST
+        self.wsjtx_port    = WSJTX_DEFAULT_PORT
 
         self.pskreporter_enabled = False
         self.dial_freq_hz        = 0    # updated by report_freq()
@@ -430,6 +283,14 @@ class Reporter:
         self._dx_dupe_cache: dict[str, tuple[float, float]] = {}  # call → (last_time, last_freq_khz)
         self._dx_log_path = (Path(__file__).parent.parent
                              / 'MSK144' / 'detections' / 'dx_spots.log')
+
+        # Emulated WSJT-X instances: id -> {dial_hz, mode, rx_df}
+        # One instance per (source, band, mode, dial).  Guarded by _udp_lock.
+        self._udp_lock   = threading.Lock()
+        self._instances: dict[str, dict] = {}
+        self.source      = ''
+        self.center_hz   = 0
+        self.bandwidth_hz = 0
 
         # Runtime state
         self._sock       = None
@@ -481,24 +342,23 @@ class Reporter:
             threading.Thread(target=self._dx_connect,
                              daemon=True, name='dx-connect').start()
 
-        self._send_heartbeat()
-        self._send_status()
+        self._open_udp_socket(reopen=True)
+        self._send_all_heartbeats()
+        self._send_all_status()
 
     def start(self):
         if self._running:
             return
         self._running = True
-        try:
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        except OSError as e:
-            self.stat_last_error = f"UDP socket: {e}"
+        self._open_udp_socket()
 
         self._hb_thread = threading.Thread(target=self._heartbeat_loop,
                                            daemon=True, name='reporter-hb')
         self._hb_thread.start()
-        # Send heartbeat immediately so GridTracker registers this client
-        # before the first decode arrives (don't wait up to 15 s)
-        self._send_heartbeat()
+        # Send heartbeat immediately so WS Hub / GridTracker registers
+        # each instance before the first decode arrives.
+        self._send_all_heartbeats()
+        self._send_all_status()
 
         self._work_thread = threading.Thread(target=self._work_loop,
                                              daemon=True, name='reporter-work')
@@ -510,6 +370,8 @@ class Reporter:
         self._decode_q.put(None)
         if self._work_thread:
             self._work_thread.join(timeout=3.0)
+        # WSJT-X sends Clear then Close immediately before a graceful exit.
+        self._send_shutdown()
         if self._sock:
             try:
                 self._sock.close()
@@ -526,10 +388,41 @@ class Reporter:
         self._decode_q.put(decode)
 
     def report_freq(self, freq_hz: int):
-        """Called when the tuned frequency changes — triggers a Status send."""
-        if freq_hz != self.dial_freq_hz:
-            self.dial_freq_hz = freq_hz
-            self._send_status()
+        """Record the IQ centre.  Does not emit Status for that frequency:
+        Status dials are the per-mode standard / section dials, not the
+        panadaptor centre.
+        """
+        self.center_hz = int(freq_hz)
+        self.dial_freq_hz = int(freq_hz)
+        self._refresh_passband_instances()
+
+    def set_context(self, source: str | None = None,
+                    center_hz: int | None = None,
+                    bandwidth_hz: int | None = None):
+        """Tell the reporter which radio and passband are live.
+
+        Called from the display loop.  Standard dials that fall inside
+        the passband are announced as receive-only WSJT-X instances so
+        WS Hub can show them before the first decode arrives.
+        """
+        changed = False
+        if source is not None and source != self.source:
+            self.source = str(source)
+            changed = True
+        if center_hz is not None and int(center_hz) != self.center_hz:
+            self.center_hz = int(center_hz)
+            self.dial_freq_hz = int(center_hz)
+            changed = True
+        if bandwidth_hz is not None and int(bandwidth_hz) != self.bandwidth_hz:
+            self.bandwidth_hz = int(bandwidth_hz)
+            changed = True
+        if changed:
+            self._refresh_passband_instances()
+
+    def instance_ids(self) -> list[str]:
+        """Live emulated WSJT-X ids, for the read-only GUI list."""
+        with self._udp_lock:
+            return list(self._instances)
 
     # ── Internal threads ──────────────────────────────────────────────────────
 
@@ -638,31 +531,124 @@ class Reporter:
             if attempt == 0:
                 self._dx_connect()
 
-    def _send_heartbeat(self):
+    def _open_udp_socket(self, reopen: bool = False):
+        """Create (or recreate) the datagram socket.  Multicast destinations
+        get TTL=1 (LAN) and loopback enabled so a WS Hub on this PC hears us.
+        """
+        if self._sock is not None and not reopen:
+            return
+        if reopen and self._sock is not None:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if is_multicast_ip(self.wsjtx_host):
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL,
+                                MULTICAST_TTL)
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+            self._sock = sock
+        except OSError as e:
+            self.stat_last_error = f"UDP socket: {e}"
+
+    def _udp_send(self, pkt: bytes):
         if not (self.wsjtx_enabled and self.my_call and self._sock):
             return
         try:
-            pkt = build_heartbeat()
             self._sock.sendto(pkt, (self.wsjtx_host, self.wsjtx_port))
             self.stat_udp_sent += 1
         except OSError as e:
             self.stat_last_error = f"UDP send: {e}"
 
-    def _send_status(self):
-        """Send a WSJT-X Status (type 1) datagram if conditions are met."""
-        if not (self.wsjtx_enabled and self.my_call and self._sock):
+    def _register_instance(self, mid: str, dial_hz: int, mode: str,
+                           rx_df: int = 1500) -> bool:
+        """Add or update an instance.  Returns True if Status should be sent."""
+        mode_n = mode_name(mode)
+        with self._udp_lock:
+            prev = self._instances.get(mid)
+            rec = {"dial_hz": int(dial_hz), "mode": mode_n, "rx_df": int(rx_df)}
+            self._instances[mid] = rec
+            return prev != rec
+
+    def _retire_instances(self, ids: list[str]):
+        """Send Clear+Close and drop instances that are no longer in the passband
+        or belonged to a previous source."""
+        for mid in ids:
+            self._udp_send(build_clear(id=mid))
+            self._udp_send(build_close(id=mid))
+            with self._udp_lock:
+                self._instances.pop(mid, None)
+
+    def _refresh_passband_instances(self):
+        """Announce every standard dial that sits in the current passband.
+
+        Instances whose dial has left the passband (a band change) or
+        whose id does not match the current source are closed so WS Hub
+        does not keep a stale 2m instance after a QSY to 6m.
+        """
+        if not (self.center_hz and self.bandwidth_hz):
             return
-        try:
-            pkt = build_status(self.dial_freq_hz, self.my_call, self.my_grid)
-            self._sock.sendto(pkt, (self.wsjtx_host, self.wsjtx_port))
-            self.stat_udp_sent += 1
-        except OSError as e:
-            self.stat_last_error = f"UDP send: {e}"
+        tag = source_tag(self.source)
+        prefix = f"SKIM-{tag}-"
+        with self._udp_lock:
+            stale = [
+                mid for mid, rec in self._instances.items()
+                if not mid.startswith(prefix)
+                or not in_passband(rec["dial_hz"], self.center_hz, self.bandwidth_hz)
+            ]
+        if stale:
+            self._retire_instances(stale)
+        from .wsjtx_udp import MODES as _MODES
+        for mode in _MODES:
+            for dial in standard_dials(mode):
+                if not in_passband(dial, self.center_hz, self.bandwidth_hz):
+                    continue
+                mid = instance_id(self.source, dial, mode)
+                if self._register_instance(mid, dial, mode):
+                    self._send_heartbeat(mid)
+                    self._send_status(mid, decoding=False)
+
+    def _send_heartbeat(self, mid: str):
+        self._udp_send(build_heartbeat(id=mid))
+
+    def _send_status(self, mid: str, *, decoding: bool = False):
+        with self._udp_lock:
+            rec = self._instances.get(mid)
+        if not rec:
+            return
+        pkt = build_status(rec["dial_hz"], self.my_call, self.my_grid,
+                           mode=rec["mode"], id=mid, decoding=decoding,
+                           rx_df=rec.get("rx_df", 1500),
+                           tx_df=rec.get("rx_df", 1500))
+        self._udp_send(pkt)
+
+    def _send_all_heartbeats(self):
+        with self._udp_lock:
+            ids = list(self._instances)
+        for mid in ids:
+            self._send_heartbeat(mid)
+
+    def _send_all_status(self, *, decoding: bool = False):
+        with self._udp_lock:
+            ids = list(self._instances)
+        for mid in ids:
+            self._send_status(mid, decoding=decoding)
+
+    def _send_shutdown(self):
+        with self._udp_lock:
+            ids = list(self._instances)
+        # Leave UDP enabled long enough to emit Clear + Close.
+        for mid in ids:
+            self._udp_send(build_clear(id=mid))
+            self._udp_send(build_close(id=mid))
 
     def _heartbeat_loop(self):
         while self._running:
-            self._send_heartbeat()
-            self._send_status()
+            self._send_all_heartbeats()
+            self._send_all_status(decoding=False)
             for _ in range(HEARTBEAT_INTERVAL_S * 10):
                 if not self._running:
                     return
@@ -692,15 +678,21 @@ class Reporter:
         snr       = decode.get('jt9_snr')
 
         de_call, to_call, grid = _parse_msk144(msg)
+        mode = mode_name(decode.get("mode") or "MSK144")
 
         # ── WSJT-X UDP ────────────────────────────────────────────────────────
+        # One instance per (source, band, mode, dial).  Status dial is the
+        # section / calling frequency; Decode delta_frequency is RF − dial.
         if self.wsjtx_enabled and self.my_call and self._sock:
-            try:
-                pkt = build_decode(decode, self.my_call, freq_hz)
-                self._sock.sendto(pkt, (self.wsjtx_host, self.wsjtx_port))
-                self.stat_udp_sent += 1
-            except OSError as e:
-                self.stat_last_error = f"UDP send: {e}"
+            rf_hz, dial_hz, audio_hz = rf_dial_audio(decode, freq_hz or self.center_hz)
+            mid = instance_id(self.source, dial_hz, mode)
+            rx_df = int(round(audio_hz or 1500))
+            self._register_instance(mid, dial_hz, mode, rx_df=rx_df)
+            self._send_status(mid, decoding=True)
+            payload = dict(decode)
+            payload.setdefault("mode", mode)
+            self._udp_send(build_decode(payload, self.my_call, dial_hz, id=mid))
+            self._send_status(mid, decoding=False)
 
         # ── PSKReporter ───────────────────────────────────────────────────────
         # Skip self-spots and spots without a grid (PSKReporter requires both)
