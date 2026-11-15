@@ -201,8 +201,11 @@ def main():
     jt9_path = find_jt9()
 
     from PyQt5 import QtCore, QtWidgets
+    from ws_skim.app_identity import apply as apply_app_identity, prepare_process
 
+    prepare_process()  # Windows AppUserModelID + X11 WM_CLASS; before QApplication
     app = QtWidgets.QApplication(sys.argv)
+    apply_app_identity(app)
     if jt9_path is None:
         # Not fatal: the SPD decoder is primary; jt9 is only the fallback.
         # Started from an icon there is no console, so say it in a dialog.

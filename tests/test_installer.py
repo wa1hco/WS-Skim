@@ -192,6 +192,9 @@ def test_inno_script_references_existing_files():
     assert "PrivilegesRequired=lowest" in iss
     # Shortcuts start the GUI with pythonw.exe (no console window).
     assert r"\.venv\Scripts\pythonw.exe" in iss
+    # Taskbar grouping: same id as ws_skim.app_identity.WINDOWS_APP_USER_MODEL_ID.
+    assert 'AppUserModelID: "wa1hco.WSSkim"' in iss
+
 
 
 # ── install.sh Python choice (numpy 1.26 + Python 3.14 overwrites arrays) ──

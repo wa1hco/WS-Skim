@@ -8,6 +8,13 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Fixed
+
+- **Desktop and taskbar icon.** The running window now uses the WS Skim
+  icon in the GNOME dock, Alt-Tab, and the Windows taskbar, instead of a
+  generic or Python icon.  Existing Linux installs pick this up after
+  re-running Install (so the launcher gets ``StartupWMClass=ws-skim``).
+
 ### WSJT-X UDP / WS Hub
 
 - **Decodes are exported the way a real WSJT-X instance would.**  Each
