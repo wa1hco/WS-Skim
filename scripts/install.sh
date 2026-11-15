@@ -18,23 +18,59 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-# Find a working Python ≥ 3.10.  Prefer ``python3`` since that's the
-# convention every modern distro uses.
-PYTHON_CMD="${WS_SKIM_PYTHON:-${MAP144_PYTHON:-python3}}"
-if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
-    echo "ERROR: '$PYTHON_CMD' not found." >&2
-    echo "  Install Python 3.10+ from your distro package manager." >&2
-    echo "  Or set WS_SKIM_PYTHON to the full path of a python3 binary." >&2
-    exit 1
+# Find a Python WS Skim supports: 3.10 .. 3.13 (3.12 preferred).
+#
+# NOT 3.14: requirements pin numpy==1.26.4 (UHD's bindings are built against
+# it), and numpy 1.26 on Python 3.14 silently overwrites arrays in place
+# ("temporary elision" trusts a reference count that 3.14 no longer keeps
+# the same way).  Seen on a 3.14 box as FT8 audio scrambled before jt9 read
+# it: 0 decodes where the same IQ decodes 50 stations.  If the system Python
+# is 3.14 and no 3.10-3.13 is installed, fetch a private Python 3.12 with uv
+# (no root, nothing system-wide changes).
+py_ok() {  # $1 = python command; true if it exists and is 3.10..3.13
+    command -v "$1" >/dev/null 2>&1 &&
+        "$1" -c 'import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)' 2>/dev/null
+}
+PYTHON_CMD="${WS_SKIM_PYTHON:-${MAP144_PYTHON:-}}"
+if [ -n "$PYTHON_CMD" ]; then
+    if ! py_ok "$PYTHON_CMD"; then
+        echo "ERROR: WS_SKIM_PYTHON='$PYTHON_CMD' is not Python 3.10-3.13." >&2
+        exit 1
+    fi
+else
+    for c in python3.12 python3.13 python3.11 python3.10 python3; do
+        if py_ok "$c"; then PYTHON_CMD="$c"; break; fi
+    done
 fi
+if [ -z "$PYTHON_CMD" ]; then
+    echo "This computer's Python is not one WS Skim supports; setting up a private Python 3.12 ..."
+    UV="$(command -v uv || true)"
+    [ -z "$UV" ] && [ -x "$HOME/.local/bin/uv" ] && UV="$HOME/.local/bin/uv"
+    if [ -z "$UV" ]; then
+        if command -v curl >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >/dev/null
+        else
+            wget -qO- https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >/dev/null
+        fi
+        UV="$HOME/.local/bin/uv"
+    fi
+    "$UV" python install 3.12 >/dev/null
+    PYTHON_CMD="$("$UV" python find 3.12)"
+    if ! py_ok "$PYTHON_CMD"; then
+        echo "ERROR: could not set up Python 3.12." >&2
+        echo "  Install Python 3.12 from your distro, then run the installer again." >&2
+        exit 1
+    fi
+fi
+"$PYTHON_CMD" -c 'import sys; print("Python %d.%d.%d OK" % sys.version_info[:3])'
 
-# Version check — bail early so we don't ship a confusing pip/wheel error.
-"$PYTHON_CMD" -c '
-import sys
-if sys.version_info < (3, 10):
-    sys.exit(f"Python {sys.version_info[:3]} found; WS Skim needs >= 3.10.")
-print(f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} OK")
-'
+# An existing venv on an unsupported Python (e.g. 3.14 from an earlier
+# install) is rebuilt; the old one is kept beside it until the next update.
+if [ -x "$REPO_DIR/.venv/bin/python" ] && ! py_ok "$REPO_DIR/.venv/bin/python"; then
+    echo "Rebuilding the WS Skim environment on a supported Python ..."
+    rm -rf "$REPO_DIR/.venv.old"
+    mv "$REPO_DIR/.venv" "$REPO_DIR/.venv.old"
+fi
 
 # Debian/Ubuntu ship python3 without venv/ensurepip; catch that here with a
 # clear fix instead of a confusing "ensurepip is not available" traceback.

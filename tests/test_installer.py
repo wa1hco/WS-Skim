@@ -192,3 +192,49 @@ def test_inno_script_references_existing_files():
     assert "PrivilegesRequired=lowest" in iss
     # Shortcuts start the GUI with pythonw.exe (no console window).
     assert r"\.venv\Scripts\pythonw.exe" in iss
+
+
+# ── install.sh Python choice (numpy 1.26 + Python 3.14 overwrites arrays) ──
+
+def _python_block() -> str:
+    text = (ROOT / "scripts" / "install.sh").read_text()
+    a = text.index("# Find a Python WS Skim supports")
+    b = text.index("# Debian/Ubuntu ship python3 without venv/ensurepip")
+    return text[a:b]
+
+
+def _fake(path, ok: bool):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    real = sys.executable
+    path.write_text("#!/bin/sh\n" + (f'exec "{real}" "$@"\n' if ok else "exit 1\n"))
+    path.chmod(0o755)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="bash script")
+@pytest.mark.skipif(not ((3, 10) <= sys.version_info[:2] <= (3, 13)),
+                    reason="needs a supported Python to stand in for one")
+def test_install_sh_skips_unsupported_python_and_rebuilds_venv(tmp_path):
+    bin_ = tmp_path / "bin"
+    _fake(bin_ / "python3", ok=False)          # system Python: "3.14"
+    _fake(bin_ / "python3.12", ok=True)        # a supported one is installed
+    _fake(tmp_path / "repo" / ".venv" / "bin" / "python", ok=False)  # old 3.14 venv
+    script = tmp_path / "block.sh"
+    script.write_text("set -euo pipefail\n" + _python_block() + 'echo "CHOSE=$PYTHON_CMD"\n')
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "HOME": str(tmp_path),
+           "REPO_DIR": str(tmp_path / "repo")}
+    r = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert "CHOSE=python3.12" in r.stdout
+    assert (tmp_path / "repo" / ".venv.old").is_dir()
+    assert not (tmp_path / "repo" / ".venv").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="bash script")
+def test_install_sh_rejects_unsupported_ws_skim_python(tmp_path):
+    _fake(tmp_path / "py314", ok=False)
+    script = tmp_path / "block.sh"
+    script.write_text("set -euo pipefail\n" + _python_block())
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "REPO_DIR": str(tmp_path),
+           "WS_SKIM_PYTHON": str(tmp_path / "py314")}
+    r = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+    assert r.returncode != 0 and "not Python 3.10-3.13" in r.stderr
