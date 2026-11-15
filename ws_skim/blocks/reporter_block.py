@@ -228,7 +228,9 @@ class ReporterBlock(Block):
         Everything else is auxiliary.
         """
         p = evt.payload or {}
-        return {
+        # Pass every field the UDP layer needs (mode, dial, audio offset,
+        # low_confidence) plus the original legacy keys.
+        out = {
             "outcome":   "decoded",
             "message":   p.get("message", ""),
             "jt9_snr":   p.get("jt9_snr"),
@@ -239,6 +241,11 @@ class ReporterBlock(Block):
             # the legacy GUI does — no harm if unused.
             "marker_id": p.get("marker_id"),
         }
+        for key in ("mode", "audio_hz", "dial_hz", "dial_khz",
+                    "low_confidence", "ap", "dt_s", "off_air"):
+            if key in p:
+                out[key] = p[key]
+        return out
 
     # --- Public settings-passthrough API -----------------------------
 

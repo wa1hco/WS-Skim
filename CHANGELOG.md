@@ -15,8 +15,27 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   generic or Python icon.  Existing Linux installs pick this up after
   re-running Install (so the launcher gets ``StartupWMClass=ws-skim``).
 
+### WSJT-X UDP / WS Hub
+
+- **Decodes are exported the way a real WSJT-X instance would.**  Each
+  (radio, band, mode, dial) gets its own id, for example
+  ``SKIM-FLEX-2m-FT8`` or ``SKIM-B210-6m-FT8-50323``, with its own
+  Heartbeat and Status.  The Decode mode field is the WSJT-X character
+  (``~`` FT8, ``+`` FT4, ``&`` MSK144), and the audio offset is
+  ``signal − dial`` so WS Hub can add them to get RF.  Close is sent
+  when the program stops.  The default destination is the WS Hub
+  multicast group ``224.0.0.73:2237`` (the Host field still accepts
+  ``127.0.0.1``).  Instance ids are shown read-only in Reporting.
+
 ### FT8 decoding fixes
 
+- **Linux: WS Skim no longer runs on Python 3.14.**  With the numpy version
+  WS Skim uses, Python 3.14 silently overwrote audio before jt9 read it, so
+  FT8 gave 0-2 decodes where the same radio data decodes ~50 stations.  The
+  installer now uses Python 3.10-3.13 (3.12 preferred).  If the computer only
+  has 3.14 it sets up a private Python 3.12 for WS Skim (no admin rights, no
+  system change) and rebuilds the WS Skim environment on the next update.
+  On such computers the USRP B210 needs UHD for that Python.
 - **The FT8 sub-band section follows the radio.**  If the band pulldown
   is on another band (e.g. still 6 m MSK144) the always-decoded section
   now uses the standard FT8/FT4 dial inside the tuned band (7.074 on 40 m).

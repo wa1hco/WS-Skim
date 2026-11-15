@@ -99,6 +99,7 @@ class Decode:
     rf_hz: float             # absolute RF of tone 0
     dial_hz: float           # RF of the section's 0 Hz audio (base_hz)
     message: str
+    low_confidence: bool = False  # WSJT-X '?': AP quality is poor
 
 
 def section_audio(iq: np.ndarray, fs: float, base_hz: float, t0_s: float,
@@ -146,6 +147,16 @@ def write_wav(path: Path, audio: np.ndarray) -> None:
 
 def parse_jt9(stdout: str) -> list[tuple[int, float, float, str]]:
     """``(snr, dt, audio_hz, message)`` for each decode line of jt9 output."""
+    return [(s, d, a, m) for s, d, a, m, _low in parse_jt9_ex(stdout)]
+
+
+def parse_jt9_ex(stdout: str) -> list[tuple[int, float, float, str, bool]]:
+    """Like :func:`parse_jt9`, plus ``low_confidence`` (the WSJT-X ``?`` flag).
+
+    a1..a7 AP annotations are stripped from the message and do not by
+    themselves set low_confidence — that matches WSJT-X, which only
+    flags a decode when the 37-character message field ends in ``?``.
+    """
     out = []
     for line in stdout.splitlines():
         if line.startswith("<") or "EOF" in line:
@@ -153,8 +164,13 @@ def parse_jt9(stdout: str) -> list[tuple[int, float, float, str]]:
         m = _LINE_RE.match(line)
         if not m:
             continue
-        msg = re.split(r"\s{2,}", m["msg"].strip())[0]   # drop AP / '?' flags
-        out.append((int(m["snr"]), float(m["dt"]), float(m["af"]), " ".join(msg.split())))
+        raw = m["msg"].strip()
+        parts = re.split(r"\s{2,}", raw)
+        msg = " ".join(parts[0].split())
+        flags = " ".join(parts[1:]) if len(parts) > 1 else ""
+        # '?' at the end of the 37-char field, or a standalone '?' token.
+        low = flags.strip() == "?" or msg.endswith("?") or raw.rstrip().endswith("?")
+        out.append((int(m["snr"]), float(m["dt"]), float(m["af"]), msg, low))
     return out
 
 
@@ -197,8 +213,9 @@ def decode_period(iq: np.ndarray, fs: float, mode: str, sections, *, t0_s: float
                 return []
         dial = center_hz + sec.base_hz
         return [Decode(mode=mode, period_start_utc=period_start_utc, snr_db=snr, dt_s=dt,
-                       audio_hz=af, rf_hz=dial + af, dial_hz=dial, message=msg)
-                for snr, dt, af, msg in parse_jt9(out)]
+                       audio_hz=af, rf_hz=dial + af, dial_hz=dial, message=msg,
+                       low_confidence=low)
+                for snr, dt, af, msg, low in parse_jt9_ex(out)]
 
     sections = list(sections)
     if not sections:

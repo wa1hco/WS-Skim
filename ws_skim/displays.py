@@ -211,7 +211,12 @@ def update_displays(self):
             self._rebuild_channelizer_state()
         rpt = getattr(self, 'reporter', None)
         if rpt is not None:
-            rpt.report_freq(int(round(center_freq_mhz * 1e6)))
+            bw = tuned_bandwidth_hz if tuned_bandwidth_hz else getattr(self, 'sample_rate', 0)
+            rpt.set_context(
+                source=getattr(self, 'source_mode', '') or (tuned_source or ''),
+                center_hz=int(round(center_freq_mhz * 1e6)),
+                bandwidth_hz=int(round(bw or 0)),
+            )
 
         from .channel_plan import (
             channel_summary_lines,

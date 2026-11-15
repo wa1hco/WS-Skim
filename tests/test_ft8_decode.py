@@ -185,17 +185,27 @@ def test_publish_decodes_queue_and_jsonl(tmp_path, monkeypatch):
     assert spot.freq_hz == pytest.approx(7_075_200.0)
 
 
+def test_parse_jt9_ex_flags_low_confidence():
+    got = fd.parse_jt9_ex(JT9_OUT)
+    assert [g[3] for g in got] == ["CQ K1ABC FN42", "W9XYZ K1ABC RR73", "CQ DX JA1XYZ PM95"]
+    assert [g[4] for g in got] == [False, False, True]
+
+
 def test_wsjtx_decode_datagram_carries_mode_and_audio_offset():
     from ws_skim import reporting
+    from ws_skim.wsjtx_udp import parse
     rec = ft8_engine.decode_record(_decode())
     pkt = reporting.build_decode(rec, "WA1HCO", 7_074_000)
-    assert b"FT8" in pkt and b"CQ K1ABC FN42" in pkt
+    msg = parse(pkt)
+    assert msg["mode"] == "~" and msg["message"] == "CQ K1ABC FN42"
+    assert msg["delta_frequency"] == 1200
     msk = reporting.build_decode({"message": "W1AW WA1HCO FN42", "utc_time": "00:00:15"},
                                  "WA1HCO", 50_260_000)
-    assert b"MSK144" in msk
-    # delta_frequency sits right before the mode string: u32 then utf8 (u32 len + bytes)
-    i = pkt.index(b"FT8") - 8
-    assert int.from_bytes(pkt[i:i + 4], "big") == 1200
+    msk_msg = parse(msk)
+    assert msk_msg["mode"] == "&"
+    # Status still uses the mode *name*.
+    st = reporting.build_status(50_260_000, "WA1HCO", "FN42", mode="MSK144")
+    assert parse(st)["mode"] == "MSK144"
 
 
 # ── end to end with real WSJT-X tools ─────────────────────────────────

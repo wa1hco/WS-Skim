@@ -63,18 +63,36 @@ def setup_reporting_window(self, view_action):
     self._rpt_wsjtx_cb.stateChanged.connect(lambda: _on_enable_changed(self))
     udp_form.addRow("", self._rpt_wsjtx_cb)
 
+    from .reporting import WSJTX_DEFAULT_HOST, WSJTX_DEFAULT_PORT
     self._rpt_wsjtx_host = QtWidgets.QLineEdit(
-        str(_SETTINGS.value('reporting_wsjtx_host', '127.0.0.1'))
+        str(_SETTINGS.value('reporting_wsjtx_host', WSJTX_DEFAULT_HOST))
+    )
+    self._rpt_wsjtx_host.setPlaceholderText(WSJTX_DEFAULT_HOST)
+    self._rpt_wsjtx_host.setToolTip(
+        "WS Hub listens on 224.0.0.73 (multicast, whole LAN) or 127.0.0.1 "
+        "(this computer only). Port 2237 is the WSJT-X default."
     )
     udp_form.addRow("Host:", self._rpt_wsjtx_host)
 
     self._rpt_wsjtx_port = QtWidgets.QSpinBox()
     self._rpt_wsjtx_port.setRange(1024, 65535)
     try:
-        self._rpt_wsjtx_port.setValue(int(_SETTINGS.value('reporting_wsjtx_port', 2237)))
+        self._rpt_wsjtx_port.setValue(int(_SETTINGS.value('reporting_wsjtx_port', WSJTX_DEFAULT_PORT)))
     except (ValueError, TypeError):
-        self._rpt_wsjtx_port.setValue(2237)
+        self._rpt_wsjtx_port.setValue(WSJTX_DEFAULT_PORT)
     udp_form.addRow("Port:", self._rpt_wsjtx_port)
+
+    self._rpt_instance_ids = QtWidgets.QLabel("—")
+    self._rpt_instance_ids.setWordWrap(True)
+    self._rpt_instance_ids.setTextInteractionFlags(
+        QtCore.Qt.TextSelectableByMouse)
+    self._rpt_instance_ids.setStyleSheet(
+        "QLabel { color: #333; font-family: monospace; }")
+    self._rpt_instance_ids.setToolTip(
+        "Each id is one emulated WSJT-X instance that WS Hub will show, "
+        "named automatically from the radio, band, mode and dial."
+    )
+    udp_form.addRow("Instances:", self._rpt_instance_ids)
 
     layout.addWidget(udp_grp)
 
@@ -224,6 +242,11 @@ def update_reporting_window(self):
         if lbl is not None:
             lbl.setText(text)
 
+    ids = []
+    getter = getattr(rpt, "instance_ids", None)
+    if callable(getter):
+        ids = getter()
+    _set('_rpt_instance_ids', ", ".join(ids) if ids else "—")
     _set('_rpt_udp_sent_val',    f"{rpt.stat_udp_sent:,}")
     _set('_rpt_psk_queued_val',  str(rpt.stat_psk_queued))
     _set('_rpt_psk_uploaded_val',f"{rpt.stat_psk_uploaded:,}")

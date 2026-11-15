@@ -53,10 +53,12 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Heartbeat + Status so GridTracker registers "map144" as a live client.
-    sock.sendto(build_heartbeat(), dest)
-    sock.sendto(build_status(dial_hz, args.call.upper(), args.grid.upper()), dest)
+    mid = "SKIM-INJECT"
+    sock.sendto(build_heartbeat(id=mid), dest)
+    sock.sendto(build_status(dial_hz, args.call.upper(), args.grid.upper(),
+                             mode="MSK144", id=mid), dest)
     print(f"[inject] heartbeat + status -> {args.host}:{args.port}  "
-          f"({args.call.upper()} {args.grid.upper()} @ {args.freq:.3f} MHz)")
+          f"id={mid}  ({args.call.upper()} {args.grid.upper()} @ {args.freq:.3f} MHz)")
 
     for i in range(max(1, args.repeat)):
         decode = {
@@ -66,7 +68,7 @@ def main():
             'radio_khz': args.freq * 1000.0,
             'utc_time': datetime.now(timezone.utc).strftime('%H:%M:%S'),
         }
-        pkt = build_decode(decode, args.call.upper(), dial_hz)
+        pkt = build_decode({**decode, 'mode': 'MSK144', 'dial_hz': dial_hz}, args.call.upper(), dial_hz, id=mid)
         sock.sendto(pkt, dest)
         print(f"[inject] decode {i+1}/{args.repeat}: '{decode['message']}' "
               f"SNR {args.snr:+d} -> {args.host}:{args.port}  ({len(pkt)} bytes)")
