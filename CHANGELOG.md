@@ -14,8 +14,9 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   ``docs/plan/decode-stream.md`` describes a web protocol (live
   WebSocket plus an HTTPS history API) for publishing and subscribing
   to real-time decodes, with timing and a comparison to DX cluster,
-  RBN, and PSK Reporter.  Remote spots reappear to WS Hub as local
-  WSJT-X UDP instances.
+  RBN, and PSK Reporter.  The first public relay is a home Proxmox
+  LXC published as ``live.wa1hco.net``.  Remote spots reappear to
+  WS Hub as local WSJT-X UDP instances.
 
 ### Fixed
 

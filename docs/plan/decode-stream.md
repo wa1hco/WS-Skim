@@ -284,13 +284,13 @@ a tunnel for WSJT-X UDP.
   a LAN or a VPN such as Tailscale, so the server need not be on
   the public internet.
 
-A self-hosted relay is the first deployment. Jeff's
-[wa1hco.net](https://wa1hco.net) is the candidate public source:
-a local skimmer (including a KiwiSDR, below) publishes to a relay
-there, and other sites and the public subscribe. DreamHost shared
-hosting cannot run a long-lived WebSocket service or open custom
-ports; this needs a VPS or DreamCompute (or any always-on host).
-The load for one station with a handful of bands is tiny.
+The first public deployment is a home relay on Jeff's Proxmox
+server, published as `live.wa1hco.net` (see
+[Home relay on Proxmox](#home-relay-on-proxmox)). The existing
+[wa1hco.net](https://wa1hco.net) site stays on DreamHost Shared
+Unlimited, which can serve static pages and docs but cannot run a
+long-lived WebSocket service or open custom ports. The load for
+one station with a handful of bands is tiny.
 
 ### Message format
 
@@ -427,10 +427,11 @@ De-duplication:
 - For site-to-site, prefer a relay that is not exposed on the
   public internet (Tailscale, a LAN, or a VPN) unless the intent
   really is a public source.
-- A public relay (wa1hco.net or any later shared host) authenticates
-  publishers, rate-limits them, and may let subscribers trust only
-  a list of named calls. Guarding against spam and fake spots is a
-  server-and-key problem, not something the local UDP hop can fix.
+- A public relay (`live.wa1hco.net`, or any later host)
+  authenticates publishers, rate-limits them, and may let
+  subscribers trust only a list of named calls. Guarding against
+  spam and fake spots is a server-and-key problem, not something
+  the local UDP hop can fix.
 
 ### Contest use
 
@@ -489,11 +490,86 @@ Writing our own client from the published protocol avoids both
 problems. The work is about the size of the Airspy source plus a
 protocol module of a few hundred lines.
 
-The intended first public path is: Kiwi (and/or the Flex or B210)
-at home → WS Skim decodes → `wss://` publish to the relay on
-wa1hco.net → subscribers, including WS Hub at other sites via the
-local UDP hop. The same WS Skim can still upload to PSK Reporter
-as it does today.
+The intended first public path is: the Kiwi (or a Flex over DAX
+IQ) streams to a WS Skim instance, which publishes to the home
+relay; the public and other sites subscribe at `live.wa1hco.net`,
+and WS Hub takes the last hop as local UDP. A USB-attached radio
+such as a B210 still needs WS Skim on the machine it is plugged
+into; that copy publishes to the same relay over the LAN. The
+same WS Skim can still upload to PSK Reporter as it does today.
+
+## Home relay on Proxmox
+
+Jeff's decision is to run the live relay at home on his Proxmox
+server, not on DreamHost. A read-only look at wa1hco.net confirmed
+it is DreamHost Shared Unlimited (`iad1-shared-b8-09`, Ubuntu
+24.04, Python 3.12, Node 18). Shared hosting does not allow
+persistent processes or custom ports, so it cannot run the
+WebSocket relay. It can still host the public website: static
+pages, a landing page, and docs that link to the live feed.
+
+Two unprivileged LXC containers are enough (preferred over full
+VMs). Both run Debian 12 or Ubuntu 24.04, with chrony or NTP so
+receive timestamps and decode periods stay honest, and both are
+covered by Proxmox snapshots and backups so an update can be
+rolled back.
+
+- **Relay container**, kept small: 1 vCPU, 512 MB–1 GB of RAM,
+  about 8 GB of disk. It runs the relay as a systemd service, a
+  ring-buffer of recent history (optional SQLite for a longer
+  window), and `cloudflared` (Cloudflare Tunnel) so the feed is
+  published as `https://live.wa1hco.net` with TLS. No ports need
+  opening on the home router, and the home IP stays hidden.
+- **WS Skim container**, sized for decoding, when the radio is
+  on the network. A KiwiSDR and a Flex's DAX IQ already stream
+  over IP, so WS Skim does not have to sit on the radio or Kiwi
+  host. It can run in this always-on container next to the relay:
+  Kiwi or Flex → WS Skim → relay, all on the LAN. For four to
+  eight Kiwi channels, plan on 2–4 cores and enough RAM for
+  several jt9 processes. A USB-attached radio such as a B210 is
+  the exception: that copy of WS Skim has to run on the machine
+  the radio is plugged into, and it publishes to the relay over
+  the LAN (or, if that machine is away from home, through the
+  tunnel).
+
+WS Hub, at home or elsewhere, subscribes to the relay (locally
+on the LAN, or at `live.wa1hco.net`) and keeps using WSJT-X UDP
+as the last hop.
+
+**DNS for `live.wa1hco.net`.** A Cloudflare Tunnel needs the
+hostname to be in a Cloudflare zone so Cloudflare can issue the
+certificate and route the tunnel. Two practical options, without
+moving the existing wa1hco.net website off DreamHost:
+
+- Add `wa1hco.net` to a Cloudflare account and point the domain's
+  nameservers at Cloudflare (Full Setup). The apex and `www`
+  records can still aim at the DreamHost shared server, and
+  Cloudflare can then attach `live` to the tunnel automatically.
+  This is the path Cloudflare documents as the smoothest for
+  Tunnel.
+- Keep DreamHost as the DNS host and use Cloudflare's Partial
+  (CNAME) setup. DreamHost allows a custom CNAME on a Fully
+  Hosted domain for a subdomain that does not already have an A
+  record; the whole domain does not have to be switched to "DNS
+  Only" just for `live`. The CNAME target in that arrangement is
+  `live.wa1hco.net.cdn.cloudflare.net`, not a raw
+  `<id>.cfargotunnel.com` name. A CNAME at DreamHost alone, with
+  no Cloudflare zone, is not enough for a normal Tunnel hostname.
+
+If neither is convenient, use a different public hostname that
+is already on Cloudflare, and link to it from the wa1hco.net
+pages. The exact DNS choice can wait until setup.
+
+The downside of a home relay is that the public stream goes down
+whenever home internet or power does. A later move to a VPS can
+reuse the same container image; it is a fallback, not the first
+cut.
+
+This section is a plan, not an install guide. When the time
+comes, bringing the containers up should be a one-click or
+GUI-friendly script under `scripts/`, in the same zero-knowledge
+style as the rest of WS Skim: no CLI flags, environment
+variables, or `python -m` for Jeff to remember.
 
 ## Phased work
 
@@ -512,12 +588,15 @@ as it does today.
    optional DX-cluster telnet adapter.
 7. Optional PSK Reporter MQTT read-only subscribe, adapted into
    `SKIM-PSKR-…` instances.
-8. Public relay on a suitable always-on host (wa1hco.net if the
-   plan there is a VPS), publisher keys, rate limits, and a trust
-   list.
-9. KiwiSDR input, so that public feed can be driven from Jeff's
-   Kiwi as well as from a Flex or B210. Tailscale remains a
-   deployment choice, not a separate code path.
+8. Public relay in a small Proxmox LXC at home, published through
+   a Cloudflare Tunnel as `live.wa1hco.net`, with publisher keys,
+   rate limits, and a trust list. wa1hco.net on DreamHost keeps
+   the landing page and docs.
+9. KiwiSDR input, with WS Skim in its own Proxmox LXC next to the
+   relay (or on the USB-radio host for a B210), so the public
+   feed can be driven from Jeff's Kiwi as well as from a Flex.
+   Tailscale remains a deployment choice, not a separate code
+   path.
 
 ## Test plan
 
@@ -554,8 +633,11 @@ as it does today.
 
 ## Open questions
 
-- First relay host: a VPS for wa1hco.net, versus another always-on
-  machine, versus Tailscale-only for the private first cut.
+- DNS for `live.wa1hco.net`: move the zone to Cloudflare, or keep
+  DreamHost DNS and use a Partial CNAME. A different public
+  hostname is the fallback.
+- Whether `cloudflared` shares the relay container or gets its
+  own.
 - How finely the first GUI subscribe list is specified (whole
   station, or per band and mode).
 - Whether a later public feed needs callsign verification beyond a
