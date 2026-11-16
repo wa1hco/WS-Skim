@@ -11,9 +11,11 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 ### Docs
 
 - **Bidirectional decode stream plan.**  A design note at
-  ``docs/plan/decode-stream.md`` describes publishing and subscribing
-  to real-time WSJT-X-style decodes over a secure link, so a remote
-  skimmer appears to WS Hub as just another instance.
+  ``docs/plan/decode-stream.md`` describes a web protocol (live
+  WebSocket plus an HTTPS history API) for publishing and subscribing
+  to real-time decodes, with timing and a comparison to DX cluster,
+  RBN, and PSK Reporter.  Remote spots reappear to WS Hub as local
+  WSJT-X UDP instances.
 
 ### Fixed
 
