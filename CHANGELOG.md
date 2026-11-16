@@ -8,6 +8,13 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Docs
+
+- **Bidirectional decode stream plan.**  A design note at
+  ``docs/plan/decode-stream.md`` describes publishing and subscribing
+  to real-time WSJT-X-style decodes over a secure link, so a remote
+  skimmer appears to WS Hub as just another instance.
+
 ### Fixed
 
 - **Desktop and taskbar icon.** The running window now uses the WS Skim

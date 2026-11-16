@@ -4,7 +4,8 @@ Status: in progress. Tasks 1, 2 (launchers), 4, 5, 6 and 8 are done;
 see the task list and [releasing.md](../dev/releasing.md).
 Repository: `wa1hco/WS-Skim`.
 
-Related: [docs/plan/ft8-ft4-wims-udp.md](ft8-ft4-wims-udp.md).
+Related: [docs/plan/ft8-ft4-wims-udp.md](ft8-ft4-wims-udp.md),
+[docs/plan/decode-stream.md](decode-stream.md).
 
 ## Goal
 

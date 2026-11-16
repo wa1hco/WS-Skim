@@ -83,6 +83,10 @@ The plans live on `main`. The feature work itself is not done yet.
   are built and tested in CI; a version tag publishes them
   ([plan](docs/plan/installer-and-release.md),
   [releasing](docs/dev/releasing.md))
+- A bidirectional real-time decode stream: each WS Skim can publish
+  its decodes and subscribe to other skimmers, re-emitting them as
+  local WSJT-X UDP so WS Hub sees a remote skimmer as another instance
+  ([plan](docs/plan/decode-stream.md))
 
 ## Supported hardware
 
