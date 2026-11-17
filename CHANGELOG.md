@@ -20,6 +20,13 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Fixed
 
+- **FT8 Sync Map no longer jumps: one map update per period, before decoding, with fixed axes.**
+  A later decode for the same period updates only the Decodes table and the
+  status line.  The Y axis is the mode's fixed DT window, and a manual zoom
+  is kept until the frequency, mode, or extent changes.
+- **Graph axis labels and tick numbers are larger** (12 pt labels, 11 pt ticks)
+  on the Sync Map and the other WS Skim plots, with more room so the text is
+  not clipped.
 - **Desktop and taskbar icon.** The running window now uses the WS Skim
   icon in the GNOME dock, Alt-Tab, and the Windows taskbar, instead of a
   generic or Python icon.  Existing Linux installs pick this up after

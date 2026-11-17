@@ -31,6 +31,8 @@ from PyQt5 import QtCore, QtWidgets
 from .user_paths import SETTINGS as _USER_SETTINGS
 import pyqtgraph as pg
 
+from .plot_style import style_plot
+
 from .channelizer import N_CHANNELS
 from .processing import DETECT_THRESH_DB
 from .displays import _align_msk144_message
@@ -41,6 +43,12 @@ from .detection import BURST_WAV_MAX_DURATION_S
 # titles, and curve foreground swap from dark→light.
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
+
+
+def _plot(*args, **kwargs):
+    w = pg.PlotWidget(*args, **kwargs)
+    style_plot(w)
+    return w
 
 
 # ── colormap (same as main window) ────────────────────────────────────────────
@@ -287,7 +295,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         row0_specs = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         self._row0_specs = row0_specs   # stored for dual-pol resize
 
-        self._spec_plot = pg.PlotWidget(title="Wideband IQ Spectrogram")
+        self._spec_plot = _plot(title="Wideband IQ Spectrogram")
         self._spec_plot.setLabel('left',   'H  Freq offset (kHz)')
         self._spec_plot.getAxis('bottom').hide()
         self._spec_img = pg.ImageItem(axisOrder='col-major')
@@ -300,7 +308,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         self._spec_plot.scene().sigMouseClicked.connect(self._on_spec_click)
         row0_specs.addWidget(self._spec_plot)
 
-        self._spec_plot_v = pg.PlotWidget()
+        self._spec_plot_v = _plot()
         self._spec_plot_v.setLabel('left',   'V  Freq offset (kHz)')
         self._spec_plot_v.setLabel('bottom', 'Time (s)')
         self._spec_img_v = pg.ImageItem(axisOrder='col-major')
@@ -330,7 +338,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         row_tfmf_specs = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         self._row_tfmf_specs = row_tfmf_specs
 
-        self._tfmf_plot = pg.PlotWidget(title="TFMF Spectrum")
+        self._tfmf_plot = _plot(title="TFMF Spectrum")
         self._tfmf_plot.setLabel('left',   'H  Freq offset (kHz)')
         self._tfmf_plot.getAxis('bottom').hide()
         self._tfmf_img = pg.ImageItem(axisOrder='col-major')
@@ -345,7 +353,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         self._tfmf_plot.addItem(self._tfmf_scatter)
         row_tfmf_specs.addWidget(self._tfmf_plot)
 
-        self._tfmf_plot_v = pg.PlotWidget()
+        self._tfmf_plot_v = _plot()
         self._tfmf_plot_v.setLabel('left',   'V  Freq offset (kHz)')
         self._tfmf_plot_v.setLabel('bottom', 'Time (s)')
         self._tfmf_img_v = pg.ImageItem(axisOrder='col-major')
@@ -379,7 +387,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         _half_ch = N_CHANNELS // 2
         self._det_freq_min_khz  = -float(_half_ch) - 0.5
         self._det_freq_span_khz =  float(N_CHANNELS)
-        self._det_plot = pg.PlotWidget(title="Squared Detection Spectrum")
+        self._det_plot = _plot(title="Squared Detection Spectrum")
         self._det_plot.setLabel('left',   'H  Squared-spec freq (kHz)')
         self._det_plot.getAxis('bottom').hide()
         self._det_img = pg.ImageItem(axisOrder='col-major')
@@ -398,7 +406,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         self._det_plot.scene().sigMouseClicked.connect(self._on_heatmap_click)
         row1_hms.addWidget(self._det_plot)
 
-        self._det_plot_v = pg.PlotWidget()
+        self._det_plot_v = _plot()
         self._det_plot_v.setLabel('left',   'V  Squared-spec freq (kHz)')
         self._det_plot_v.setLabel('bottom', 'Time (s)')
         self._det_img_v = pg.ImageItem(axisOrder='col-major')
@@ -435,7 +443,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         # different velocities) become visually obvious.
         row_ft = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         self._row_ft = row_ft
-        self._env_plot = pg.PlotWidget(title="TFMF Peak SNR per frame")
+        self._env_plot = _plot(title="TFMF Peak SNR per frame")
         self._env_plot.setLabel('left', 'dB')
         self._env_plot.getAxis('bottom').hide()
         self._env_plot.setAspectLocked(False)
@@ -454,7 +462,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         self._env_plot.addItem(self._env_thresh_line)
         row_ft.addWidget(self._env_plot)
 
-        self._ift_plot = pg.PlotWidget(title="TFMF Peak Frequency plot")
+        self._ift_plot = _plot(title="TFMF Peak Frequency plot")
         self._ift_plot.setLabel('left',   'Freq (kHz)')
         self._ift_plot.setLabel('bottom', 'Time within 15-s period (s)')
         self._ift_plot.setAspectLocked(False)
@@ -555,7 +563,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         # have coherence ≈ 1, noise ≈ 0.1.  TFMF candidates above SNR-only
         # threshold form a diffuse cloud; coherence is what separates real
         # signal frames from threshold-edge noise.
-        self._epoch_plot = pg.PlotWidget(title="Sync Frame Phase + Coherence")
+        self._epoch_plot = _plot(title="Sync Frame Phase + Coherence")
         self._epoch_plot.setLabel('left',   'Frame phase (ms)')
         self._epoch_plot.setLabel('bottom', 'Time within 15-s period (s)')
         self._epoch_plot.setAspectLocked(False)
@@ -601,7 +609,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         # Left sub-splitter: audio spectrogram and ping spectrum side by side
         row2_plots = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
 
-        self._audio_plot = pg.PlotWidget(title="Audio Spectrum")
+        self._audio_plot = _plot(title="Audio Spectrum")
         self._audio_plot.setLabel('left',   'Frequency (kHz)')
         self._audio_plot.setLabel('bottom', 'Time within 15-s period (s)')
         self._audio_img = pg.ImageItem(axisOrder='col-major')
@@ -612,7 +620,7 @@ class AnalysisWindow(QtWidgets.QWidget):
         row2_plots.addWidget(self._audio_plot)
 
         # Ping spectrum — Y-linked to audio spectrogram for vertical alignment
-        self._tone_plot = pg.PlotWidget(title="Ping Spectrum")
+        self._tone_plot = _plot(title="Ping Spectrum")
         self._tone_plot.hideAxis('left')
         self._tone_plot.setLabel('bottom', 'dB above noise')
         self._tone_plot.setAspectLocked(False)

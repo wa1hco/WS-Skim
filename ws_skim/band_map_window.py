@@ -32,6 +32,8 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pyqtgraph as pg
+
+from .plot_style import style_plot
 from PyQt5 import QtCore, QtWidgets
 
 from . import geo
@@ -190,6 +192,7 @@ def setup_band_map_window(self, view_action):
     plot.getViewBox().setMouseEnabled(x=True, y=True)
     plot.setLabel("bottom", "")
     plot.setLabel("left", "")
+    style_plot(plot)
     for _axname in ("bottom", "left"):
         _ax = plot.getAxis(_axname)
         _ax.setPen("#555555")

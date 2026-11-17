@@ -249,11 +249,9 @@ def test_apply_mode_switches_blanker_per_mode(qapp, monkeypatch):
     assert ft8_window.blanker_key("MSK144") == "nb_backend"
 
 
-def test_draw_result_smoke(qapp):
+def _sync_map_win():
     from PyQt5 import QtWidgets
-    from ws_skim import ft8_window
     import pyqtgraph as pg
-
     win = QtWidgets.QWidget()
     win._ft8_plot = pg.PlotWidget()
     win._ft8_img = pg.ImageItem()
@@ -262,14 +260,29 @@ def test_draw_result_smoke(qapp):
     win._ft8_status = QtWidgets.QLabel()
     win._ft8_decodes = QtWidgets.QTableWidget(0, 4)
     win._ft8_regions = []
+    win._ft8_drawn = None
+    win._ft8_drawn_key = None
+    win._ft8_axis_key = None
+    return win
+
+
+@pytest.fixture(scope="module")
+def ft8_period():
     n = int(17 * FS)
     rng = np.random.default_rng(2)
     x = cs.synth_noise(FS, n, rng=rng) + cs.synth_signal(
         cs.FT8, FS, n, freq_hz=1000.0, snr_db=-8, t0_s=-2.0, rng=rng)
-    r = ft8_engine.search_period(x, FS, "FT8", t0_s=-2.0, period_start_utc=1_700_000_010.0,
-                                 center_freq_mhz=28.074, data_fraction=0.8)
-    ft8_window.draw_result(win, r)
-    ft8_window.draw_result(win, r)                          # redraw replaces regions
+    return ft8_engine.search_period(
+        x, FS, "FT8", t0_s=-2.0, period_start_utc=1_700_000_010.0,
+        center_freq_mhz=28.074, data_fraction=0.8)
+
+
+def test_draw_result_smoke(qapp, ft8_period):
+    from ws_skim import ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    ft8_window.apply_result(win, r)
+    ft8_window.apply_result(win, r)                         # same period: no extra regions
     assert win._ft8_table.rowCount() == len(r.candidates) >= 1
     assert len(win._ft8_regions) == len(r.sections)
     assert "80% of period" in win._ft8_status.text()
@@ -279,12 +292,69 @@ def test_draw_result_smoke(qapp):
     d = ft8_decode.Decode(mode="FT8", period_start_utc=r.period_start_utc, snr_db=-9, dt_s=0.1,
                           audio_hz=1000.0, rf_hz=28_075_000.0, dial_hz=28_074_000.0,
                           message="CQ K1ABC FN42")
-    ft8_window.draw_result(win, replace(r, decodes=[d], decoded=True))
+    ft8_window.apply_result(win, replace(r, decodes=[d], decoded=True))
     assert win._ft8_decodes.rowCount() == 1
     assert win._ft8_decodes.item(0, 3).text() == "CQ K1ABC FN42"
     assert "1 decoded" in win._ft8_status.text()
     assert float(win._ft8_table.item(0, 0).text()) == pytest.approx(
         28.074 + r.candidates[0].freq_hz / 1e6, abs=1e-6)
+
+
+def test_decode_replace_does_not_reset_sync_map_image(qapp, ft8_period):
+    from dataclasses import replace
+    from ws_skim import ft8_decode, ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    calls = {"n": 0}
+    orig = win._ft8_img.setImage
+
+    def counted(*a, **k):
+        calls["n"] += 1
+        return orig(*a, **k)
+
+    win._ft8_img.setImage = counted
+    ft8_window.apply_result(win, r)
+    assert calls["n"] == 1
+    first_regions = list(win._ft8_regions)
+    d = ft8_decode.Decode(mode="FT8", period_start_utc=r.period_start_utc, snr_db=-9, dt_s=0.1,
+                          audio_hz=1000.0, rf_hz=28_075_000.0, dial_hz=28_074_000.0,
+                          message="CQ K1ABC FN42")
+    ft8_window.apply_result(win, replace(r, decodes=[d], decoded=True, decode_note=""))
+    assert calls["n"] == 1
+    assert win._ft8_regions is first_regions or list(win._ft8_regions) == first_regions
+    assert win._ft8_decodes.rowCount() == 1
+    assert "1 decoded" in win._ft8_status.text()
+
+
+def test_sync_map_axes_use_fixed_dt_window(qapp, ft8_period):
+    from dataclasses import replace
+    from ws_skim import ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    ft8_window.apply_result(win, r)
+    x0, x1, y0, y1 = ft8_window.map_view_extent(r)
+    spec = cs.MODES["FT8"]
+    assert y0 == pytest.approx(spec.nominal_start_s + spec.dt_min_s)
+    assert y1 == pytest.approx(spec.nominal_start_s + spec.dt_max_s)
+    vb = win._ft8_plot.getViewBox()
+    xr, yr = vb.viewRange()
+    assert xr[0] == pytest.approx(x0) and xr[1] == pytest.approx(x1)
+    assert yr[0] == pytest.approx(y0) and yr[1] == pytest.approx(y1)
+
+    # A manual zoom is kept across periods when the extent is unchanged.
+    vb.setRange(xRange=(28.07, 28.08), yRange=(0.0, 1.0), padding=0)
+    ft8_window.apply_result(win, replace(r, period_start_utc=r.period_start_utc + 15))
+    xr, yr = vb.viewRange()
+    assert xr[0] == pytest.approx(28.07) and xr[1] == pytest.approx(28.08)
+    assert yr[0] == pytest.approx(0.0) and yr[1] == pytest.approx(1.0)
+
+    # A centre-frequency change resets the view to the new fixed window.
+    shifted = replace(r, period_start_utc=r.period_start_utc + 30, center_freq_mhz=14.074)
+    ft8_window.apply_result(win, shifted)
+    x0, x1, y0, y1 = ft8_window.map_view_extent(shifted)
+    xr, yr = vb.viewRange()
+    assert xr[0] == pytest.approx(x0) and xr[1] == pytest.approx(x1)
+    assert yr[0] == pytest.approx(y0) and yr[1] == pytest.approx(y1)
 
 
 def test_band_list_follows_mode(qapp, monkeypatch):

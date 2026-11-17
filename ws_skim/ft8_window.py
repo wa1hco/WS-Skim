@@ -15,9 +15,13 @@
 """Mode menu (MSK144 / FT8 / FT4) and the FT8 Sync Map window.
 
 The window draws ``engine._ft8_result`` (``ft8_engine.PeriodResult``) once
-per period: the Costas sync score over RF frequency (x) and signal start
-time (y), each candidate circled, and the ~2.8 kHz sections that will go to
-jt9 shaded.  A table lists the candidates, strongest first.
+per period, when the Costas search finishes: the sync score over RF
+frequency (x) and signal start time (y), each candidate circled, and the
+~2.8 kHz sections that will go to jt9 shaded.  A later decode result for
+the same period updates only the Decodes table and the status line; the
+map and section shading stay put.  The axes are locked to the mode's
+fixed DT window and the map's frequency range, so a manual zoom is kept
+across periods until the frequency, mode, or extent changes.
 """
 from __future__ import annotations
 
@@ -28,6 +32,7 @@ import pyqtgraph as pg
 from PyQt5 import QtCore, QtWidgets
 
 from . import ft8_engine
+from .plot_style import style_plot
 
 #: Score shown at the top of the colour scale (noise is ~1).
 SCORE_MAX = 6.0
@@ -143,7 +148,9 @@ def _build_window(self, view_action) -> None:
     plot = pg.PlotWidget()
     plot.setLabel("bottom", "Frequency (MHz)")
     plot.setLabel("left", "Start time in period (s)")
+    style_plot(plot)
     plot.showGrid(x=True, y=True, alpha=0.2)
+    plot.getViewBox().disableAutoRange()
     img = pg.ImageItem()
     img.setColorMap(pg.colormap.get("viridis"))
     img.setLevels((1.0, SCORE_MAX))
@@ -183,6 +190,8 @@ def _build_window(self, view_action) -> None:
     win._ft8_decodes = decodes
     win._ft8_regions = []
     win._ft8_drawn = None
+    win._ft8_drawn_key = None   # (mode, period_start_utc) of the drawn map
+    win._ft8_axis_key = None    # last (mode, centre, extent) used for setRange
     self._ft8_win = win
     win.hide()
 
@@ -202,10 +211,9 @@ def _tick(eng, win) -> None:
         if res is None:
             win._ft8_status.setText("Waiting for the first full period…")
             return
-        if res is win._ft8_drawn or not win.isVisible():
+        if not win.isVisible():
             return
-        draw_result(win, res)
-        win._ft8_drawn = res
+        apply_result(win, res)
     except Exception as e:                       # never let a bad frame kill the panel
         win._ft8_status.setText(f"redraw error: {e}")
 
@@ -214,8 +222,131 @@ def rf_mhz(res, offset_hz) -> np.ndarray:
     return res.center_freq_mhz + np.asarray(offset_hz, dtype=float) / 1e6
 
 
+def period_key(res):
+    """Identity of one search period: mode plus UTC period start."""
+    return (res.mode, res.period_start_utc)
+
+
+def map_view_extent(res) -> tuple[float, float, float, float]:
+    """Fixed axis window: full map frequency range, mode DT window.
+
+    Y is ``nominal_start_s + dt_min_s`` … ``+ dt_max_s``, not the data's
+    own lag extent (which can vary by a lag or two and made the map jump).
+    """
+    from .costas_search import MODES
+    spec = MODES[res.mode]
+    y0 = spec.nominal_start_s + spec.dt_min_s
+    y1 = spec.nominal_start_s + spec.dt_max_s
+    freqs = getattr(res, "map_freqs_hz", None)
+    f = rf_mhz(res, freqs) if freqs is not None else np.array([])
+    if np.size(f) == 0:
+        x0, x1 = float(res.center_freq_mhz) - 0.024, float(res.center_freq_mhz) + 0.024
+    elif np.size(f) == 1:
+        x0 = float(f[0]) - 0.0001
+        x1 = float(f[0]) + 0.0001
+    else:
+        df = (float(f[-1]) - float(f[0])) / max(1, len(f) - 1)
+        x0 = float(f[0] - df / 2)
+        x1 = float(f[-1] + df / 2)
+    return x0, x1, y0, y1
+
+
+def apply_result(win, res) -> None:
+    """Draw a new period's map, or only the decodes if this period is on screen."""
+    key = period_key(res)
+    if getattr(win, "_ft8_drawn_key", None) == key:
+        update_decodes(win, res)
+        update_status(win, res)
+        win._ft8_drawn = res
+        return
+    draw_result(win, res)
+    win._ft8_drawn = res
+    win._ft8_drawn_key = key
+
+
+def lock_axes(win, res) -> None:
+    """Set the view to the fixed DT / frequency window when the extent changes.
+
+    Autorange stays off.  A manual zoom is left alone until the centre
+    frequency, mode, or map extent changes.
+    """
+    x0, x1, y0, y1 = map_view_extent(res)
+    key = (res.mode, round(float(res.center_freq_mhz), 9),
+           round(x0, 9), round(x1, 9), y0, y1)
+    if getattr(win, "_ft8_axis_key", None) == key:
+        return
+    vb = win._ft8_plot.getViewBox()
+    vb.disableAutoRange()
+    win._ft8_plot.setRange(xRange=(x0, x1), yRange=(y0, y1), padding=0)
+    win._ft8_axis_key = key
+
+
+def sync_regions(win, res) -> dict:
+    """Reuse section region items, setting values and hiding extras.
+
+    Returns a map of ``id(candidate)`` to 1-based section number.
+    """
+    section_of = {}
+    existing = list(getattr(win, "_ft8_regions", []))
+    used = 0
+    for n, sec in enumerate(res.sections, 1):
+        lo = float(rf_mhz(res, sec.base_hz + sec.low_audio_hz))
+        hi = float(rf_mhz(res, sec.base_hz + sec.high_audio_hz))
+        if used < len(existing):
+            reg = existing[used]
+            reg.setRegion((lo, hi))
+            reg.show()
+        else:
+            reg = pg.LinearRegionItem(values=(lo, hi), movable=False,
+                                      brush=pg.mkBrush(255, 255, 255, 28),
+                                      pen=pg.mkPen(255, 255, 255, 60))
+            reg.setZValue(-5)
+            win._ft8_plot.addItem(reg)
+            existing.append(reg)
+        used += 1
+        for c in sec.candidates:
+            section_of[id(c)] = n
+    for reg in existing[used:]:
+        reg.hide()
+    win._ft8_regions = existing
+    return section_of
+
+
+def update_decodes(win, res) -> None:
+    """Fill the Decodes table from ``res`` (safe to call on a decode-only update)."""
+    dtab = getattr(win, "_ft8_decodes", None)
+    decodes = list(getattr(res, "decodes", []))
+    if dtab is None:
+        return
+    dtab.setRowCount(len(decodes))
+    for row, d in enumerate(decodes):
+        vals = (f"{d.rf_hz / 1e6:.6f}", f"{d.snr_db:+d}", f"{d.dt_s:+.1f}", d.message)
+        for col, v in enumerate(vals):
+            item = QtWidgets.QTableWidgetItem(v)
+            if col < 3:
+                item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            dtab.setItem(row, col, item)
+
+
+def update_status(win, res) -> None:
+    when = time.strftime("%H:%M:%S", time.gmtime(res.period_start_utc))
+    partial = "" if res.data_fraction >= 0.99 else f" · {res.data_fraction:.0%} of period"
+    decodes = list(getattr(res, "decodes", []))
+    if getattr(res, "decode_note", ""):
+        dec = f" · {res.decode_note}"
+    elif getattr(res, "decoded", False):
+        dec = f" · {len(decodes)} decoded"
+    elif res.sections:
+        dec = " · decoding…"
+    else:
+        dec = ""
+    win._ft8_status.setText(
+        f"{res.mode} period {when} UTC · {len(res.candidates)} candidates in "
+        f"{len(res.sections)} sections · search {res.compute_s:.2f} s{dec}{partial}")
+
+
 def draw_result(win, res) -> None:
-    """Redraw the window for one ``PeriodResult``."""
+    """Redraw the map, regions, candidates, decodes and status for one period."""
     from .costas_search import MODES
     spec = MODES[res.mode]
     m = res.map_score
@@ -229,26 +360,14 @@ def draw_result(win, res) -> None:
         win._ft8_img.setRect(QtCore.QRectF(f[0] - df / 2, t[0] - dt / 2,
                                            df * len(f), dt * len(t)))
 
+    lock_axes(win, res)
+
     half_bw = spec.bandwidth_hz / 2
     xs = rf_mhz(res, [c.freq_hz + half_bw for c in res.candidates])
     ys = [c.dt_s + spec.nominal_start_s for c in res.candidates]
     win._ft8_scatter.setData(xs, ys)
 
-    for r in win._ft8_regions:
-        win._ft8_plot.removeItem(r)
-    win._ft8_regions = []
-    section_of = {}
-    for n, sec in enumerate(res.sections, 1):
-        lo = rf_mhz(res, sec.base_hz + sec.low_audio_hz)
-        hi = rf_mhz(res, sec.base_hz + sec.high_audio_hz)
-        reg = pg.LinearRegionItem(values=(float(lo), float(hi)), movable=False,
-                                  brush=pg.mkBrush(255, 255, 255, 28),
-                                  pen=pg.mkPen(255, 255, 255, 60))
-        reg.setZValue(-5)
-        win._ft8_plot.addItem(reg)
-        win._ft8_regions.append(reg)
-        for c in sec.candidates:
-            section_of[id(c)] = n
+    section_of = sync_regions(win, res)
 
     table = win._ft8_table
     table.setRowCount(len(res.candidates))
@@ -260,28 +379,5 @@ def draw_result(win, res) -> None:
             item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             table.setItem(row, col, item)
 
-    dtab = getattr(win, "_ft8_decodes", None)
-    decodes = list(getattr(res, "decodes", []))
-    if dtab is not None:
-        dtab.setRowCount(len(decodes))
-        for row, d in enumerate(decodes):
-            vals = (f"{d.rf_hz / 1e6:.6f}", f"{d.snr_db:+d}", f"{d.dt_s:+.1f}", d.message)
-            for col, v in enumerate(vals):
-                item = QtWidgets.QTableWidgetItem(v)
-                if col < 3:
-                    item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-                dtab.setItem(row, col, item)
-
-    when = time.strftime("%H:%M:%S", time.gmtime(res.period_start_utc))
-    partial = "" if res.data_fraction >= 0.99 else f" · {res.data_fraction:.0%} of period"
-    if getattr(res, "decode_note", ""):
-        dec = f" · {res.decode_note}"
-    elif getattr(res, "decoded", False):
-        dec = f" · {len(decodes)} decoded"
-    elif res.sections:
-        dec = " · decoding…"
-    else:
-        dec = ""
-    win._ft8_status.setText(
-        f"{res.mode} period {when} UTC · {len(res.candidates)} candidates in "
-        f"{len(res.sections)} sections · search {res.compute_s:.2f} s{dec}{partial}")
+    update_decodes(win, res)
+    update_status(win, res)

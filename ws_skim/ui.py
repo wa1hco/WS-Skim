@@ -48,6 +48,9 @@ import pyqtgraph as pg
 
 from . import __version__
 from .widgets import ClickableImageItem
+from .plot_style import (
+    AXIS_LEFT_WIDTH, RULER_MAX_HEIGHT, RULER_MIN_HEIGHT, style_plot,
+)
 
 # MSK144 calling frequencies (US convention) and compatible source modes.
 # All frequencies are North American (US) convention per WSJT-X defaults.
@@ -385,9 +388,15 @@ def setup_ui(self):
     # axis so every data viewbox gets identical height (stretch=1 with no axis).
     _time_ticks = [[(i, str(i)) for i in range(self.history_secs + 1)]]
 
+    def _plot(*args, **kwargs):
+        w = pg.PlotWidget(*args, **kwargs)
+        style_plot(w)
+        return w
+
     def _make_time_ruler():
         """PlotWidget with viewbox collapsed to zero — just a time axis bar."""
-        _r = pg.PlotWidget()
+        _r = _plot()
+        _r.getAxis('left').setWidth(AXIS_LEFT_WIDTH)
         _r.getAxis('left').hide()
         _r.getAxis('right').hide()
         _r.getAxis('top').hide()
@@ -399,11 +408,11 @@ def setup_ui(self):
         for _row in (0, 1, 2):   # title, top-axis, viewbox
             _pi.layout.setRowMaximumHeight(_row, 0)
             _pi.layout.setRowMinimumHeight(_row, 0)
-        _r.setMinimumHeight(44)
-        _r.setMaximumHeight(50)
+        _r.setMinimumHeight(RULER_MIN_HEIGHT)
+        _r.setMaximumHeight(RULER_MAX_HEIGHT)
         return _r
 
-    self.realtime_plot = pg.PlotWidget()
+    self.realtime_plot = _plot()
     self.realtime_plot.setLabel('left', 'H  Freq (MHz)')
     self.realtime_plot.getAxis('bottom').hide()
     self.realtime_plot.getViewBox().disableAutoRange()
@@ -417,7 +426,7 @@ def setup_ui(self):
         lambda x, y, mod: self._on_fast_graph_click(x, y, mod, window='current')
     )
 
-    self.spectrogram_plot = pg.PlotWidget()
+    self.spectrogram_plot = _plot()
     self.spectrogram_plot.setLabel('left', 'H  Freq (MHz)')
     self.spectrogram_plot.getAxis('bottom').hide()
     self.spectrogram_plot.getViewBox().disableAutoRange()
@@ -432,7 +441,7 @@ def setup_ui(self):
 
     # V-channel panes (dual-pol only — hidden in single-pol mode).
     # Bottom axis always hidden — the shared time ruler widget carries the scale.
-    self.realtime_plot_v = pg.PlotWidget()
+    self.realtime_plot_v = _plot()
     self.realtime_plot_v.setLabel('left', 'V  Freq (MHz)')
     self.realtime_plot_v.getAxis('bottom').hide()
     self.realtime_plot_v.getAxis('bottom').setTicks(_time_ticks)
@@ -446,7 +455,7 @@ def setup_ui(self):
         lambda x, y, mod: self._on_fast_graph_click(x, y, mod, window='current')
     )
 
-    self.spectrogram_plot_v = pg.PlotWidget()
+    self.spectrogram_plot_v = _plot()
     self.spectrogram_plot_v.setLabel('left', 'V  Freq (MHz)')
     self.spectrogram_plot_v.getAxis('bottom').hide()
     self.spectrogram_plot_v.getAxis('bottom').setTicks(_time_ticks)
@@ -470,7 +479,7 @@ def setup_ui(self):
 
     _detect_title = (f"Channel Detection SNR  (threshold {DETECT_THRESH_DB:.0f} dB above noise)"
                      f"   circles: green=decoded  red=running  orange=no_decode")
-    self.ch_detect_plot = pg.PlotWidget(title="H — " + _detect_title)
+    self.ch_detect_plot = _plot(title="H — " + _detect_title)
     self.ch_detect_plot.setLabel('left', 'Dial offset (kHz)')
     self.ch_detect_plot.setAspectLocked(False)
     self.ch_detect_img = pg.ImageItem(axisOrder='col-major')
@@ -493,7 +502,7 @@ def setup_ui(self):
     )
 
     # V-channel detection heatmap (hidden in single-pol mode)
-    self.ch_detect_plot_v = pg.PlotWidget(title="V — " + _detect_title)
+    self.ch_detect_plot_v = _plot(title="V — " + _detect_title)
     self.ch_detect_plot_v.setLabel('left', 'Dial offset (kHz)')
     self.ch_detect_plot_v.getAxis('bottom').hide()
     self.ch_detect_plot_v.setAspectLocked(False)
@@ -525,7 +534,7 @@ def setup_ui(self):
     # the tone-detection heatmap which retains the full-bandwidth channel view).
     _sync_title = ("TFMF Peak Detection  (dual-sync template, ±24 kHz wideband)"
                    "   yellow dots = peak-picked candidates")
-    self.sync_detect_plot = pg.PlotWidget(title="H — " + _sync_title)
+    self.sync_detect_plot = _plot(title="H — " + _sync_title)
     self.sync_detect_plot.setLabel('left', 'Audio freq (kHz)')
     self.sync_detect_plot.setLabel('bottom', 'Time in period (s)')
     self.sync_detect_plot.setAspectLocked(False)
@@ -551,7 +560,7 @@ def setup_ui(self):
     self.sync_detect_plot.getAxis('bottom').hide()
     self.sync_detect_plot.setYRange(-24.5, 24.5, padding=0)
 
-    self.sync_detect_plot_v = pg.PlotWidget(title="V — " + _sync_title)
+    self.sync_detect_plot_v = _plot(title="V — " + _sync_title)
     self.sync_detect_plot_v.setLabel('left', 'Audio freq (kHz)')
     # Bottom axis hidden — shared time_ruler at the bottom of the window
     # carries the scale (same convention as H, see comment above).
@@ -730,7 +739,7 @@ def setup_ui(self):
     # size=SNR, colour hue=sample-epoch (same hue ⇒ same propagation delay ⇒
     # same station, even across frequencies), alpha=within-frame sync coherence
     # (vivid = MSK144-like, faded = incoherent spur).  Reads _tfmf_candidates_h.
-    self.cand_map_plot = pg.PlotWidget(
+    self.cand_map_plot = _plot(
         title="Sync Candidate Map — colour=epoch  α=coherence  size=SNR")
     self.cand_map_plot.setLabel('left', 'Audio freq (kHz)')
     self.cand_map_plot.setLabel('bottom', 'Time in period (s)')

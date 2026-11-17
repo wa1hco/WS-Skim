@@ -37,6 +37,10 @@ import numpy as np
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 
+from .plot_style import (
+    AXIS_LEFT_WIDTH, RULER_MAX_HEIGHT, RULER_MIN_HEIGHT, style_plot,
+)
+
 from .user_paths import config_dir as _ws_skim_config_dir
 
 
@@ -282,9 +286,10 @@ def setup_iq_nb_window(self, view_action):
 
     def _make_td_plot(label):
         p = pg.PlotWidget()
-        p.setLabel('left', label, color='k')
         p.setBackground('w')
-        p.getAxis('left').setWidth(55)
+        p.setLabel('left', label, color='k')
+        style_plot(p)
+        p.getAxis('left').setWidth(AXIS_LEFT_WIDTH)
         p.getAxis('left').setTextPen('k')
         p.getAxis('left').setPen('k')
         p.setMinimumHeight(100)
@@ -297,7 +302,8 @@ def setup_iq_nb_window(self, view_action):
         """Collapsed-viewbox time ruler widget shared by H and V td plots."""
         r = pg.PlotWidget()
         r.setBackground('w')
-        r.getAxis('left').setWidth(55)   # match data plot left-axis width
+        style_plot(r)
+        r.getAxis('left').setWidth(AXIS_LEFT_WIDTH)   # match data plot left-axis width
         r.getAxis('left').hide()
         r.getAxis('right').hide()
         r.getAxis('top').hide()
@@ -311,8 +317,8 @@ def setup_iq_nb_window(self, view_action):
         for _row in (0, 1, 2):   # title, top-axis, viewbox
             _pi.layout.setRowMaximumHeight(_row, 0)
             _pi.layout.setRowMinimumHeight(_row, 0)
-        r.setMinimumHeight(44)
-        r.setMaximumHeight(50)
+        r.setMinimumHeight(RULER_MIN_HEIGHT)
+        r.setMaximumHeight(RULER_MAX_HEIGHT)
         return r
 
     self.td_plot = _make_td_plot('H')
@@ -416,7 +422,8 @@ def setup_iq_nb_window(self, view_action):
         p = pg.PlotWidget()
         p.setBackground('w')
         p.setLabel('left', '', color='k')
-        p.getAxis('left').setWidth(45)
+        style_plot(p)
+        p.getAxis('left').setWidth(AXIS_LEFT_WIDTH)
         p.getAxis('left').setTextPen('k')
         p.getAxis('left').setPen('k')
         p.setMinimumHeight(100)
@@ -434,7 +441,8 @@ def setup_iq_nb_window(self, view_action):
         """Collapsed-viewbox frequency ruler shared by H and V nb spectrum plots."""
         r = pg.PlotWidget()
         r.setBackground('w')
-        r.getAxis('left').setWidth(45)   # match data plot left-axis width
+        style_plot(r)
+        r.getAxis('left').setWidth(AXIS_LEFT_WIDTH)   # match data plot left-axis width
         r.getAxis('left').hide()
         r.getAxis('right').hide()
         r.getAxis('top').hide()
@@ -448,8 +456,8 @@ def setup_iq_nb_window(self, view_action):
         for _row in (0, 1, 2):   # title, top-axis, viewbox
             _pi.layout.setRowMaximumHeight(_row, 0)
             _pi.layout.setRowMinimumHeight(_row, 0)
-        r.setMinimumHeight(44)
-        r.setMaximumHeight(50)
+        r.setMinimumHeight(RULER_MIN_HEIGHT)
+        r.setMaximumHeight(RULER_MAX_HEIGHT)
         return r
 
     self.nb_spec_plot = _make_nb_plot(show_title=True)
