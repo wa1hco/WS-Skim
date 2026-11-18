@@ -16,12 +16,14 @@
 
 The window draws ``engine._ft8_result`` (``ft8_engine.PeriodResult``) once
 per period, when the Costas search finishes: the sync score over RF
-frequency (x) and signal start time (y), each candidate circled, and the
-~2.8 kHz sections that will go to jt9 shaded.  A later decode result for
-the same period updates only the Decodes table and the status line; the
-map and section shading stay put.  The axes are locked to the mode's
-fixed DT window and the map's frequency range, so a manual zoom is kept
-across periods until the frequency, mode, or extent changes.
+frequency (x) and signal start time (y), each jt9 section outlined and
+numbered, and each candidate as a short bar as wide as the signal,
+coloured by sync strength.  A later decode result for the same period
+updates only the Decodes table, the status line, and callsign/SNR labels
+next to the bars; the map, sections and axes stay put.  The axes are
+locked to the mode's fixed DT window and the map's frequency range, so a
+manual zoom is kept across periods until the frequency, mode, or extent
+changes.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ import time
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 from . import ft8_engine
 from .plot_style import style_plot
@@ -41,6 +43,139 @@ SCORE_MAX = 6.0
 DEFAULT_BLANKER = {"MSK144": "Linrad", "FT8": "Bypass", "FT4": "Bypass"}
 #: MSK144-only panels, hidden when switching into a period mode.
 _MSK144_WINDOWS = ("_fast_graph_win", "_detect_win", "_sync_detect_win", "_cand_map_win")
+
+
+# White → amber → red, so the bars read on the viridis map.
+BAR_CMAP = pg.ColorMap(
+    np.array([0.0, 0.5, 1.0]),
+    np.array([[255, 255, 255, 255],
+              [255, 200, 40, 255],
+              [220, 20, 20, 255]], dtype=np.ubyte),
+)
+# Match a decode to a candidate: this close in RF and DT.
+_LABEL_DF_HZ = 80.0
+_LABEL_DT_S = 0.4
+
+
+def bar_color(score: float) -> tuple[int, int, int]:
+    """RGB for a sync score on :data:`BAR_CMAP` (1 = weak, SCORE_MAX = strong)."""
+    t = (float(score) - 1.0) / max(1e-6, SCORE_MAX - 1.0)
+    t = 0.0 if t < 0.0 else 1.0 if t > 1.0 else t
+    c = BAR_CMAP.map(t, mode="qcolor")
+    return (int(c.red()), int(c.green()), int(c.blue()))
+
+
+def call_from_message(message: str) -> str:
+    """The transmitting callsign in a WSJT-X message, or '' if none is clear.
+
+    For CQ messages the call is the first token after CQ that looks like a
+    callsign (skipping DX / TEST / POTA and similar).  For a two-call
+    message it is the sender, the second call.
+    """
+    raw = (message or "").replace(".", " ")
+    toks = [t.strip("<>") for t in raw.split() if t.strip("<>")]
+    if not toks:
+        return ""
+
+    def looks_like_call(tok: str) -> bool:
+        t = tok.strip("+")
+        if len(t) < 3 or len(t) > 10:
+            return False
+        # Maidenhead grid, not a call.
+        if len(t) in (4, 6) and t[0:2].isalpha() and t[2:4].isdigit() and (
+                len(t) == 4 or t[4:6].isalpha()):
+            if t[0].upper() <= "R" and t[1].upper() <= "R":
+                return False
+        return any(ch.isdigit() for ch in t) and any(ch.isalpha() for ch in t)
+
+    if toks[0].upper() in ("CQ", "DE", "QRZ"):
+        for t in toks[1:]:
+            if looks_like_call(t):
+                return t
+        return toks[1] if len(toks) > 1 else ""
+    if len(toks) >= 2 and looks_like_call(toks[1]):
+        return toks[1]          # two-call message: the sender
+    if looks_like_call(toks[0]):
+        return toks[0]          # "CALL RR73" / a single call
+    return toks[1] if len(toks) >= 2 else toks[0]
+
+
+class CandidateBarsItem(pg.GraphicsObject):
+    """One item that paints every candidate as a horizontal bar, coloured by score."""
+
+    def __init__(self):
+        super().__init__()
+        self._picture = QtGui.QPicture()
+        self._x0 = np.zeros(0)
+        self._x1 = np.zeros(0)
+        self._y = np.zeros(0)
+        self._colors: list[tuple[int, int, int]] = []
+        self._bounds = QtCore.QRectF()
+
+    def bar_count(self) -> int:
+        return int(self._x0.size)
+
+    def bar_colors(self) -> list[tuple[int, int, int]]:
+        return list(self._colors)
+
+    def bar_spans(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return self._x0, self._x1, self._y
+
+    def set_bars(self, x0, x1, y, scores) -> None:
+        self._x0 = np.asarray(x0, dtype=float).reshape(-1)
+        self._x1 = np.asarray(x1, dtype=float).reshape(-1)
+        self._y = np.asarray(y, dtype=float).reshape(-1)
+        self._colors = [bar_color(s) for s in np.asarray(scores, dtype=float).reshape(-1)]
+        self._rebuild()
+        self.prepareGeometryChange()
+        self.update()
+
+    def _rebuild(self) -> None:
+        pic = QtGui.QPicture()
+        painter = QtGui.QPainter(pic)
+        for x0, x1, y, col in zip(self._x0, self._x1, self._y, self._colors):
+            pen = QtGui.QPen(QtGui.QColor(*col))
+            pen.setWidth(3)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawLine(QtCore.QPointF(float(x0), float(y)),
+                             QtCore.QPointF(float(x1), float(y)))
+        painter.end()
+        self._picture = pic
+        if self._x0.size:
+            pad = 0.05
+            self._bounds = QtCore.QRectF(
+                float(self._x0.min()), float(self._y.min()) - pad,
+                float(self._x1.max() - self._x0.min()),
+                float(self._y.max() - self._y.min()) + 2 * pad)
+        else:
+            self._bounds = QtCore.QRectF()
+
+    def boundingRect(self):
+        return self._bounds
+
+    def paint(self, painter, *_args):
+        # Prefer a live paint so a zoomed-out 50 Hz bar still has a
+        # minimum pixel width; fall back to the cached picture.
+        view = self.getViewBox()
+        if view is None or not self._x0.size:
+            painter.drawPicture(0, 0, self._picture)
+            return
+        px_x, _px_y = view.viewPixelSize()
+        min_dx = 10.0 * float(px_x)          # at least ~10 px wide
+        for x0, x1, y, col in zip(self._x0, self._x1, self._y, self._colors):
+            xa, xb = float(x0), float(x1)
+            if xb - xa < min_dx:
+                mid = 0.5 * (xa + xb)
+                xa, xb = mid - min_dx / 2.0, mid + min_dx / 2.0
+            pen = QtGui.QPen(QtGui.QColor(*col))
+            pen.setWidth(3)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawLine(QtCore.QPointF(xa, float(y)),
+                             QtCore.QPointF(xb, float(y)))
+
+
 
 
 def blanker_key(mode: str) -> str:
@@ -146,18 +281,37 @@ def _build_window(self, view_action) -> None:
     layout.addWidget(status)
 
     plot = pg.PlotWidget()
+    plot.setBackground("w")
     plot.setLabel("bottom", "Frequency (MHz)")
     plot.setLabel("left", "Start time in period (s)")
     style_plot(plot)
+    for _name in ("bottom", "left"):
+        plot.getAxis(_name).setPen("k")
+        plot.getAxis(_name).setTextPen("k")
     plot.showGrid(x=True, y=True, alpha=0.2)
     plot.getViewBox().disableAutoRange()
     img = pg.ImageItem()
     img.setColorMap(pg.colormap.get("viridis"))
     img.setLevels((1.0, SCORE_MAX))
     plot.addItem(img)
-    scatter = pg.ScatterPlotItem(size=12, symbol="o", brush=None,
-                                 pen=pg.mkPen("w", width=1.5))
-    plot.addItem(scatter)
+    bars = CandidateBarsItem()
+    bars.setZValue(10)
+    plot.addItem(bars)
+
+    cbar_host = pg.GraphicsLayoutWidget()
+    cbar_host.setBackground("w")
+    cbar_host.setMinimumWidth(72)
+    cbar_host.setMaximumWidth(96)
+    cbar = pg.ColorBarItem(values=(1.0, SCORE_MAX), colorMap=BAR_CMAP,
+                           label="Sync", interactive=False, colorMapMenu=False,
+                           pen="k", width=14)
+    cbar_host.addItem(cbar, row=0, col=0)
+    plot_row = QtWidgets.QWidget()
+    plot_h = QtWidgets.QHBoxLayout(plot_row)
+    plot_h.setContentsMargins(0, 0, 0, 0)
+    plot_h.setSpacing(2)
+    plot_h.addWidget(plot, stretch=1)
+    plot_h.addWidget(cbar_host)
 
     table = QtWidgets.QTableWidget(0, 4)
     table.setHorizontalHeaderLabels(["Frequency (MHz)", "DT (s)", "Sync", "Section"])
@@ -177,7 +331,7 @@ def _build_window(self, view_action) -> None:
     tabs.addTab(table, "Candidates")
 
     split = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-    split.addWidget(plot)
+    split.addWidget(plot_row)
     split.addWidget(tabs)
     split.setSizes([400, 200])
     layout.addWidget(split, stretch=1)
@@ -185,10 +339,13 @@ def _build_window(self, view_action) -> None:
     win._ft8_status = status
     win._ft8_plot = plot
     win._ft8_img = img
-    win._ft8_scatter = scatter
+    win._ft8_bars = bars
+    win._ft8_cbar = cbar
     win._ft8_table = table
     win._ft8_decodes = decodes
     win._ft8_regions = []
+    win._ft8_section_labels = []
+    win._ft8_labels = []        # callsign TextItems, reused across periods
     win._ft8_drawn = None
     win._ft8_drawn_key = None   # (mode, period_start_utc) of the drawn map
     win._ft8_axis_key = None    # last (mode, centre, extent) used for setRange
@@ -257,6 +414,7 @@ def apply_result(win, res) -> None:
     if getattr(win, "_ft8_drawn_key", None) == key:
         update_decodes(win, res)
         update_status(win, res)
+        update_labels(win, res)          # labels only; map / regions / axes stay
         win._ft8_drawn = res
         return
     draw_result(win, res)
@@ -281,34 +439,73 @@ def lock_axes(win, res) -> None:
     win._ft8_axis_key = key
 
 
+
+def section_rf_mhz(res, sec) -> tuple[float, float]:
+    """RF limits of the audio window jt9 actually searches in this section.
+
+    ``Section.low/high_audio_hz`` only bracket the Costas hits; jt9 is run
+    over at least 200–3200 Hz around ``base_hz`` (see ``ft8_decode``).
+    """
+    from . import ft8_decode
+    lo_hz = min(float(ft8_decode.JT9_LOW_HZ), float(sec.low_audio_hz))
+    hi_hz = max(float(ft8_decode.JT9_HIGH_HZ), float(sec.high_audio_hz))
+    return float(rf_mhz(res, sec.base_hz + lo_hz)), float(rf_mhz(res, sec.base_hz + hi_hz))
+
+
 def sync_regions(win, res) -> dict:
     """Reuse section region items, setting values and hiding extras.
 
-    Returns a map of ``id(candidate)`` to 1-based section number.
+    Each section is a clearly outlined band with a number at the top of
+    the plot.  Returns a map of ``id(candidate)`` to 1-based section number.
     """
     section_of = {}
     existing = list(getattr(win, "_ft8_regions", []))
+    labels = list(getattr(win, "_ft8_section_labels", []))
     used = 0
+    _x0, _x1, _y0, y1 = map_view_extent(res)
+    # In front of the (opaque) map image so the outlines show; fill stays
+    # light so the sync score still reads through the band.
+    brush = pg.mkBrush(255, 240, 120, 35)
+    pen = pg.mkPen((255, 230, 80, 255), width=2)
     for n, sec in enumerate(res.sections, 1):
-        lo = float(rf_mhz(res, sec.base_hz + sec.low_audio_hz))
-        hi = float(rf_mhz(res, sec.base_hz + sec.high_audio_hz))
+        lo, hi = section_rf_mhz(res, sec)
+        mid = 0.5 * (lo + hi)
         if used < len(existing):
             reg = existing[used]
             reg.setRegion((lo, hi))
+            reg.setBrush(brush)
+            for ln in getattr(reg, "lines", []):
+                ln.setPen(pen)
+            reg.setZValue(2)
             reg.show()
         else:
             reg = pg.LinearRegionItem(values=(lo, hi), movable=False,
-                                      brush=pg.mkBrush(255, 255, 255, 28),
-                                      pen=pg.mkPen(255, 255, 255, 60))
-            reg.setZValue(-5)
+                                      brush=brush, pen=pen)
+            reg.setZValue(2)
             win._ft8_plot.addItem(reg)
             existing.append(reg)
+        if used < len(labels):
+            lab = labels[used]
+            lab.setText(str(n))
+            lab.setPos(mid, y1)
+            lab.show()
+        else:
+            lab = pg.TextItem(str(n), color=(20, 20, 20),
+                              fill=pg.mkBrush(255, 255, 255, 200),
+                              anchor=(0.5, 0))
+            lab.setZValue(15)
+            lab.setPos(mid, y1)
+            win._ft8_plot.addItem(lab)
+            labels.append(lab)
         used += 1
         for c in sec.candidates:
             section_of[id(c)] = n
     for reg in existing[used:]:
         reg.hide()
+    for lab in labels[used:]:
+        lab.hide()
     win._ft8_regions = existing
+    win._ft8_section_labels = labels
     return section_of
 
 
@@ -345,10 +542,93 @@ def update_status(win, res) -> None:
         f"{len(res.sections)} sections · search {res.compute_s:.2f} s{dec}{partial}")
 
 
-def draw_result(win, res) -> None:
-    """Redraw the map, regions, candidates, decodes and status for one period."""
+def ensure_bars(win) -> CandidateBarsItem:
+    """The bars item, created on first use so tests can omit it from the stub."""
+    bars = getattr(win, "_ft8_bars", None)
+    if bars is None:
+        bars = CandidateBarsItem()
+        bars.setZValue(10)
+        win._ft8_plot.addItem(bars)
+        win._ft8_bars = bars
+    return bars
+
+
+def set_candidate_bars(win, res) -> None:
+    """Replace the candidate marks with one set of bandwidth-wide score bars."""
     from .costas_search import MODES
     spec = MODES[res.mode]
+    bw = float(spec.bandwidth_hz)
+    x0 = rf_mhz(res, [c.freq_hz for c in res.candidates])
+    x1 = rf_mhz(res, [c.freq_hz + bw for c in res.candidates])
+    ys = [c.dt_s + spec.nominal_start_s for c in res.candidates]
+    scores = [c.score for c in res.candidates]
+    ensure_bars(win).set_bars(x0, x1, ys, scores)
+
+
+def label_position(res, dec, candidates) -> tuple[float, float]:
+    """x, y for a decode label: nearest candidate bar, else the decode itself."""
+    from .costas_search import MODES
+    spec = MODES[res.mode]
+    y_d = dec.dt_s + spec.nominal_start_s
+    rf = float(dec.rf_hz)
+    best = None
+    best_m = None
+    for c in candidates:
+        rf_c = res.center_freq_mhz * 1e6 + c.freq_hz + spec.bandwidth_hz / 2.0
+        df = abs(rf_c - rf)
+        dt = abs((c.dt_s + spec.nominal_start_s) - y_d)
+        if df <= _LABEL_DF_HZ and dt <= _LABEL_DT_S:
+            m = (df / 25.0) ** 2 + (dt / 0.16) ** 2
+            if best_m is None or m < best_m:
+                best, best_m = c, m
+    if best is not None:
+        x = float(rf_mhz(res, best.freq_hz + spec.bandwidth_hz))
+        y = best.dt_s + spec.nominal_start_s
+    else:
+        x = rf / 1e6
+        y = y_d
+    return x, y
+
+
+def clear_labels(win) -> None:
+    """Hide every callsign label (a new period is about to be drawn)."""
+    for item in getattr(win, "_ft8_labels", []):
+        item.hide()
+
+
+def update_labels(win, res) -> None:
+    """Place 'CALL SNR' text next to each decoded station.  Reuses TextItems."""
+    labels = list(getattr(win, "_ft8_labels", []))
+    decodes = list(getattr(res, "decodes", []) or [])
+    candidates = list(res.candidates)
+    used = 0
+    for dec in decodes:
+        call = call_from_message(dec.message)
+        if not call:
+            continue
+        text = f"{call} {dec.snr_db:+d}"
+        x, y = label_position(res, dec, candidates)
+        if used < len(labels):
+            item = labels[used]
+            item.setText(text)
+            item.setPos(x, y)
+            item.show()
+        else:
+            item = pg.TextItem(text, color=(255, 255, 255),
+                               fill=pg.mkBrush(0, 0, 0, 150),
+                               anchor=(0, 0.5))
+            item.setZValue(20)
+            item.setPos(x, y)
+            win._ft8_plot.addItem(item)
+            labels.append(item)
+        used += 1
+    for item in labels[used:]:
+        item.hide()
+    win._ft8_labels = labels
+
+
+def draw_result(win, res) -> None:
+    """Redraw the map, regions, candidate bars, decodes and status for one period."""
     m = res.map_score
     if m.size:
         f = rf_mhz(res, res.map_freqs_hz)
@@ -361,11 +641,8 @@ def draw_result(win, res) -> None:
                                            df * len(f), dt * len(t)))
 
     lock_axes(win, res)
-
-    half_bw = spec.bandwidth_hz / 2
-    xs = rf_mhz(res, [c.freq_hz + half_bw for c in res.candidates])
-    ys = [c.dt_s + spec.nominal_start_s for c in res.candidates]
-    win._ft8_scatter.setData(xs, ys)
+    set_candidate_bars(win, res)
+    clear_labels(win)
 
     section_of = sync_regions(win, res)
 
@@ -381,3 +658,4 @@ def draw_result(win, res) -> None:
 
     update_decodes(win, res)
     update_status(win, res)
+    update_labels(win, res)

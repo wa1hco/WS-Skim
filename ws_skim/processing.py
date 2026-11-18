@@ -2104,11 +2104,13 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     full_scale  = 1.0
     _fg_win     = getattr(self, '_fast_graph_win', None)
     _fg_visible = _fg_win is None or _fg_win.isVisible()
+    _wf_wanted  = bool(getattr(self, '_waterfall_wanted', False))
+    _compute_fft = _fg_visible or _wf_wanted
     _wf_hop     = self.fft_size // 2   # constant; moved out of the loop
 
     while self._sbuf_end >= self.fft_size:
         try:
-            if _fg_visible:
+            if _compute_fft:
                 block = self._sbuf[:self.fft_size]
 
                 X         = np.fft.fftshift(np.fft.fft(block * fft_window))
@@ -2121,87 +2123,92 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                 current_wall_time = self._sbuf_t0
                 time_in_window = current_wall_time % self.history_secs
 
-                # ── Accumulated spectrogram ───────────────────────────────────────
-                # Each block is written at the row corresponding to its receive time so
-                # the column position matches wall-clock time modulo the 15-second window,
-                # matching the WSJTX Fast Graph convention.
-                spec_boundary = int(current_wall_time / self.history_secs)
-                if spec_boundary != self.spec_boundary:
-                    self.spectrogram_data    = self.spec_staging.copy()
-                    self.spec_staging_filled = True
-                    self.accumulated_noise_floor = np.percentile(self.spec_staging, 10, axis=0)
-                    self.spec_staging        = np.full((self.max_history, self.fft_size), -130.0)
-                    self.spec_boundary       = spec_boundary
-                    self.next_boundary = current_wall_time + (
-                        self.history_secs - (current_wall_time % self.history_secs)
-                    )
-                    self._prev_staging_idx = None   # reset gap-fill cursor at window boundary
-                    if dual_pol:
-                        self.spectrogram_data_v = self.spec_staging_v.copy()
-                        self.spec_staging_v     = np.full((self.max_history, self.fft_size), -130.0)
+                if _wf_wanted:
+                    from .waterfall_window import push_row_from_engine
+                    push_row_from_engine(self, power_db, current_wall_time)
 
-                # Compute the row index for this block once — accumulated and realtime
-                # spectrograms share the same time_in_window so the index is identical.
-                # Use round() not int(): FP reconstruction of the VITA timestamp is
-                # systematically a few tens of picoseconds low, giving values like
-                # 46.99999999 that int() would floor to 46 instead of 47.
-                row_idx = min(max(round(time_in_window * self.blocks_per_sec), 0), self.max_history - 1)
-
-                # ── Gap fill: repeat last spectrum into any skipped rows ──────────
-                # Skipped rows arise from batched packet delivery — the VITA timestamps
-                # correctly place each block, so gaps are real.  Filling prevents dark
-                # vertical stripes.  Cursors are reset at each 15 s boundary above /
-                # below so gap-fill never bridges across windows.
-                _prev_staging = self._prev_staging_idx
-                if _prev_staging is not None and row_idx > _prev_staging + 1:
-                    _gap = row_idx - _prev_staging - 1
-                    # Diagnostic: gaps > 2 rows (~43 ms) are worth investigating;
-                    # with sample-clock-anchored _sbuf_t0 these should not happen
-                    # in steady state.  Log size + recent timing context.
-                    if _gap > 2:
-                        logger.info(
-                            "spec_staging gap-fill: %d rows (~%.0f ms) at row_idx=%d "
-                            "_sbuf_t0=%.6f _sbuf_end_before=%d",
-                            _gap, _gap * 1000.0 / self.blocks_per_sec,
-                            row_idx, self._sbuf_t0, _sbuf_end_before,
+                if _fg_visible:
+                    # ── Accumulated spectrogram ───────────────────────────────────────
+                    # Each block is written at the row corresponding to its receive time so
+                    # the column position matches wall-clock time modulo the 15-second window,
+                    # matching the WSJTX Fast Graph convention.
+                    spec_boundary = int(current_wall_time / self.history_secs)
+                    if spec_boundary != self.spec_boundary:
+                        self.spectrogram_data    = self.spec_staging.copy()
+                        self.spec_staging_filled = True
+                        self.accumulated_noise_floor = np.percentile(self.spec_staging, 10, axis=0)
+                        self.spec_staging        = np.full((self.max_history, self.fft_size), -130.0)
+                        self.spec_boundary       = spec_boundary
+                        self.next_boundary = current_wall_time + (
+                            self.history_secs - (current_wall_time % self.history_secs)
                         )
-                    self.spec_staging[_prev_staging + 1:row_idx] = power_db
-                self._prev_staging_idx = row_idx
-                self.spec_staging[row_idx] = power_db
+                        self._prev_staging_idx = None   # reset gap-fill cursor at window boundary
+                        if dual_pol:
+                            self.spectrogram_data_v = self.spec_staging_v.copy()
+                            self.spec_staging_v     = np.full((self.max_history, self.fft_size), -130.0)
 
-                # ── Real-time spectrogram ─────────────────────────────────────────
-                realtime_boundary = int(current_wall_time / self.history_secs)
-                if realtime_boundary != self._realtime_boundary:
-                    # Allocate new arrays before replacing the references so the display
-                    # thread reads either the complete old array or the complete new one,
-                    # never a partially-reset one.
-                    self.realtime_data      = np.full((self.max_history, self.fft_size), -130.0)
-                    self._realtime_boundary = realtime_boundary
-                    self._prev_rt_idx       = None   # reset gap-fill cursor
-                    if dual_pol:
-                        self.realtime_data_v = np.full((self.max_history, self.fft_size), -130.0)
+                    # Compute the row index for this block once — accumulated and realtime
+                    # spectrograms share the same time_in_window so the index is identical.
+                    # Use round() not int(): FP reconstruction of the VITA timestamp is
+                    # systematically a few tens of picoseconds low, giving values like
+                    # 46.99999999 that int() would floor to 46 instead of 47.
+                    row_idx = min(max(round(time_in_window * self.blocks_per_sec), 0), self.max_history - 1)
 
-                _prev_rt = self._prev_rt_idx
-                if _prev_rt is not None and row_idx > _prev_rt + 1:
-                    self.realtime_data[_prev_rt + 1:row_idx] = power_db
-                self._prev_rt_idx = row_idx
-                self.realtime_data[row_idx] = power_db
-                self.realtime_filled = True
-                self._realtime_dirty = True
-
-                # ── V-channel waterfall (dual-pol only) ───────────────────────────
-                if dual_pol and self._sbuf_v_end >= self.fft_size:
-                    block_v    = self._sbuf_v[:self.fft_size]
-                    X_v        = np.fft.fftshift(np.fft.fft(block_v * fft_window))
-                    power_db_v = 20.0 * np.log10(
-                        np.abs(X_v) / (self.fft_size * window_gain) / full_scale + 1e-12
-                    )
+                    # ── Gap fill: repeat last spectrum into any skipped rows ──────────
+                    # Skipped rows arise from batched packet delivery — the VITA timestamps
+                    # correctly place each block, so gaps are real.  Filling prevents dark
+                    # vertical stripes.  Cursors are reset at each 15 s boundary above /
+                    # below so gap-fill never bridges across windows.
+                    _prev_staging = self._prev_staging_idx
                     if _prev_staging is not None and row_idx > _prev_staging + 1:
-                        self.spec_staging_v[_prev_staging + 1:row_idx] = power_db_v
-                    self.spec_staging_v[row_idx] = power_db_v
+                        _gap = row_idx - _prev_staging - 1
+                        # Diagnostic: gaps > 2 rows (~43 ms) are worth investigating;
+                        # with sample-clock-anchored _sbuf_t0 these should not happen
+                        # in steady state.  Log size + recent timing context.
+                        if _gap > 2:
+                            logger.info(
+                                "spec_staging gap-fill: %d rows (~%.0f ms) at row_idx=%d "
+                                "_sbuf_t0=%.6f _sbuf_end_before=%d",
+                                _gap, _gap * 1000.0 / self.blocks_per_sec,
+                                row_idx, self._sbuf_t0, _sbuf_end_before,
+                            )
+                        self.spec_staging[_prev_staging + 1:row_idx] = power_db
+                    self._prev_staging_idx = row_idx
+                    self.spec_staging[row_idx] = power_db
+
+                    # ── Real-time spectrogram ─────────────────────────────────────────
+                    realtime_boundary = int(current_wall_time / self.history_secs)
+                    if realtime_boundary != self._realtime_boundary:
+                        # Allocate new arrays before replacing the references so the display
+                        # thread reads either the complete old array or the complete new one,
+                        # never a partially-reset one.
+                        self.realtime_data      = np.full((self.max_history, self.fft_size), -130.0)
+                        self._realtime_boundary = realtime_boundary
+                        self._prev_rt_idx       = None   # reset gap-fill cursor
+                        if dual_pol:
+                            self.realtime_data_v = np.full((self.max_history, self.fft_size), -130.0)
+
+                    _prev_rt = self._prev_rt_idx
                     if _prev_rt is not None and row_idx > _prev_rt + 1:
-                        self.realtime_data_v[_prev_rt + 1:row_idx] = power_db_v
-                    self.realtime_data_v[row_idx] = power_db_v
+                        self.realtime_data[_prev_rt + 1:row_idx] = power_db
+                    self._prev_rt_idx = row_idx
+                    self.realtime_data[row_idx] = power_db
+                    self.realtime_filled = True
+                    self._realtime_dirty = True
+
+                    # ── V-channel waterfall (dual-pol only) ───────────────────────────
+                    if dual_pol and self._sbuf_v_end >= self.fft_size:
+                        block_v    = self._sbuf_v[:self.fft_size]
+                        X_v        = np.fft.fftshift(np.fft.fft(block_v * fft_window))
+                        power_db_v = 20.0 * np.log10(
+                            np.abs(X_v) / (self.fft_size * window_gain) / full_scale + 1e-12
+                        )
+                        if _prev_staging is not None and row_idx > _prev_staging + 1:
+                            self.spec_staging_v[_prev_staging + 1:row_idx] = power_db_v
+                        self.spec_staging_v[row_idx] = power_db_v
+                        if _prev_rt is not None and row_idx > _prev_rt + 1:
+                            self.realtime_data_v[_prev_rt + 1:row_idx] = power_db_v
+                        self.realtime_data_v[row_idx] = power_db_v
 
         except Exception as _wf_exc:
             import logging as _lg

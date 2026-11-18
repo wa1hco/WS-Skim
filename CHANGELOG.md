@@ -8,6 +8,25 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Changed
+
+- **FT8 Sync Map marks sections, candidates, and decodes more clearly.**
+  The ~3 kHz jt9 sections are outlined bands numbered across the top of the
+  map.  Each sync candidate is a short horizontal bar as wide as the signal
+  (~50 Hz in FT8), coloured by sync strength (white = weak, red = strong,
+  with a Sync colour bar).  After decoding, each decoded station gets a
+  ``CALL SNR`` label next to its bar; undecoded candidates stay unlabeled.
+  Labels are a second, labels-only update and are cleared at the next period.
+
+### Added
+
+- **View → Waterfall**, an optional classic scrolling spectrogram of the
+  incoming IQ (newest at the top, frequency in MHz).  Off by default; the
+  window's size, position and visibility are remembered.  It is a separate
+  window from the Sync Map and works in MSK144, FT8, FT4, and simulation
+  (WAV) mode.  It reuses the existing overlap-FFT and does no extra work
+  while hidden.
+
 ### Docs
 
 - **Bidirectional decode stream plan.**  A design note at
@@ -120,9 +139,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   blanker choice is saved separately for each mode).
 - **FT8 Sync Map window** (View → FT8 Sync Map).  At the end of every UTC
   period the Costas sync search runs on the whole IQ band and the window
-  shows the sync score by frequency and start time, each candidate circled,
-  the ~2.8 kHz sections that will go to jt9 shaded, and a candidate table.
-  Decoding comes next.
+  shows the sync score by frequency and start time, jt9 sections outlined
+  and numbered, each candidate as a bar coloured by sync strength, and a
+  candidate table.  After decoding, callsign and SNR labels appear next
+  to the bars that decoded.
 
 - **Updates itself.**  About 15 s after it starts, an installed WS Skim asks
   GitHub for a newer release and offers **Update Now / Later / Skip This

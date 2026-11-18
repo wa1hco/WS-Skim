@@ -1661,6 +1661,7 @@ def closeEvent(self, event):
         (getattr(self, '_reporting_win',  None), 'reporting_geometry',  'reporting_visible'),
         (getattr(self, '_map65_win',      None), 'map65_geometry',      'map65_visible'),
         (getattr(self, '_band_map_win',   None), 'band_map_geometry',   'band_map_visible'),
+        (getattr(self, '_waterfall_win',  None), 'waterfall_geometry',  'waterfall_visible'),
         (getattr(self, '_flex_win',       None), 'flex_geometry',       None),
         (getattr(self, '_usrp_win',       None), 'usrp_geometry',       None),
         (getattr(self, '_airspy_win',     None), 'airspy_geometry',     None),

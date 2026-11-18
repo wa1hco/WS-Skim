@@ -878,7 +878,9 @@ def setup_ui(self):
     # Mode menu (MSK144 / FT8 / FT4) and View → FT8 Sync Map; restores the
     # saved mode, which also picks that mode's blanker.
     from .ft8_window import setup_ft8
+    from .waterfall_window import setup_waterfall
     setup_ft8(self, menu_bar, view_menu)
+    setup_waterfall(self, view_menu)
 
     # ── Info panel — vertical stack below decode list ─────────────────────────
     # Four compact rows: receiver | centre freq | channel range | UTC

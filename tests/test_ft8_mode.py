@@ -260,6 +260,8 @@ def _sync_map_win():
     win._ft8_status = QtWidgets.QLabel()
     win._ft8_decodes = QtWidgets.QTableWidget(0, 4)
     win._ft8_regions = []
+    win._ft8_section_labels = []
+    win._ft8_labels = []
     win._ft8_drawn = None
     win._ft8_drawn_key = None
     win._ft8_axis_key = None
@@ -355,6 +357,72 @@ def test_sync_map_axes_use_fixed_dt_window(qapp, ft8_period):
     xr, yr = vb.viewRange()
     assert xr[0] == pytest.approx(x0) and xr[1] == pytest.approx(x1)
     assert yr[0] == pytest.approx(y0) and yr[1] == pytest.approx(y1)
+
+
+def test_call_from_message():
+    from ws_skim.ft8_window import call_from_message
+    assert call_from_message("CQ K1ABC FN42") == "K1ABC"
+    assert call_from_message("CQ DX W1XYZ FN42") == "W1XYZ"
+    assert call_from_message("CQ TEST K1ABC FN42") == "K1ABC"
+    assert call_from_message("W1AAA K1ABC FN42") == "K1ABC"
+    assert call_from_message("K1ABC RR73") == "K1ABC"
+    assert call_from_message("<W1AAA> K1ABC R-12") == "K1ABC"
+    assert call_from_message("") == ""
+
+
+def test_candidate_bars_count_and_colors(qapp, ft8_period):
+    from ws_skim import ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    ft8_window.apply_result(win, r)
+    bars = win._ft8_bars
+    assert bars.bar_count() == len(r.candidates) >= 1
+    x0, x1, ys = bars.bar_spans()
+    bw_mhz = cs.FT8.bandwidth_hz / 1e6
+    assert x1[0] - x0[0] == pytest.approx(bw_mhz, rel=1e-6)
+    colors = bars.bar_colors()
+    assert len(colors) == bars.bar_count()
+    # A stronger score is redder (or at least not the weak-end white).
+    if len(r.candidates) >= 2 and r.candidates[0].score != r.candidates[-1].score:
+        assert colors[0] != colors[-1]
+    # White-to-red: a high score must not be white.
+    hi = max(range(len(r.candidates)), key=lambda i: r.candidates[i].score)
+    assert colors[hi] != (255, 255, 255) or r.candidates[hi].score <= 1.05
+    visible = [lab for lab in win._ft8_section_labels if lab.isVisible()]
+    assert [lab.toPlainText() for lab in visible] == [str(i) for i in range(1, len(r.sections) + 1)]
+    from ws_skim import ft8_decode
+    lo, hi = ft8_window.section_rf_mhz(r, r.sections[0])
+    assert (hi - lo) * 1e6 >= (ft8_decode.JT9_HIGH_HZ - ft8_decode.JT9_LOW_HZ) - 1
+
+
+def test_decode_labels_added_without_resetting_image_and_cleared_next_period(qapp, ft8_period):
+    from dataclasses import replace
+    from ws_skim import ft8_decode, ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    calls = {"n": 0}
+    orig = win._ft8_img.setImage
+
+    def counted(*a, **k):
+        calls["n"] += 1
+        return orig(*a, **k)
+
+    win._ft8_img.setImage = counted
+    ft8_window.apply_result(win, r)
+    assert calls["n"] == 1
+    assert all(not lab.isVisible() for lab in win._ft8_labels)
+    d = ft8_decode.Decode(mode="FT8", period_start_utc=r.period_start_utc, snr_db=-9, dt_s=0.1,
+                          audio_hz=1000.0, rf_hz=28_075_000.0, dial_hz=28_074_000.0,
+                          message="CQ K1ABC FN42")
+    ft8_window.apply_result(win, replace(r, decodes=[d], decoded=True, decode_note=""))
+    assert calls["n"] == 1
+    visible = [lab for lab in win._ft8_labels if lab.isVisible()]
+    assert len(visible) == 1
+    assert visible[0].toPlainText() == "K1ABC -9"
+    # Next period clears the labels and redraws the map once more.
+    ft8_window.apply_result(win, replace(r, period_start_utc=r.period_start_utc + 15))
+    assert calls["n"] == 2
+    assert all(not lab.isVisible() for lab in win._ft8_labels)
 
 
 def test_band_list_follows_mode(qapp, monkeypatch):
