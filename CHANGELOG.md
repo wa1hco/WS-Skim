@@ -10,6 +10,14 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Changed
 
+- **The Sync Map vertical axis is now DT, and mid-period noise is no longer marked as a candidate.**
+  0 s is on time (the same DT as in the Decodes tab).  A faint line marks
+  DT = 0, and a light band shows the preferred window (FT8: −0.5 to +1.0 s;
+  FT4: −0.3 to +0.6 s).  Real signals almost all start in that window, so
+  a peak outside it is kept only when it is clearly stronger than anything
+  on time — a late station with a solid sync still shows up, but the
+  scatter of mid-window noise bars is gone.
+
 - **FT8 Sync Map marks sections, candidates, and decodes more clearly.**
   The ~3 kHz jt9 sections are outlined bands numbered across the top of the
   map.  Each sync candidate is a short horizontal bar as wide as the signal

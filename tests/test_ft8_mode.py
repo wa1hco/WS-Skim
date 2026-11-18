@@ -336,8 +336,8 @@ def test_sync_map_axes_use_fixed_dt_window(qapp, ft8_period):
     ft8_window.apply_result(win, r)
     x0, x1, y0, y1 = ft8_window.map_view_extent(r)
     spec = cs.MODES["FT8"]
-    assert y0 == pytest.approx(spec.nominal_start_s + spec.dt_min_s)
-    assert y1 == pytest.approx(spec.nominal_start_s + spec.dt_max_s)
+    assert y0 == pytest.approx(spec.dt_min_s)
+    assert y1 == pytest.approx(spec.dt_max_s)
     vb = win._ft8_plot.getViewBox()
     xr, yr = vb.viewRange()
     assert xr[0] == pytest.approx(x0) and xr[1] == pytest.approx(x1)
@@ -357,6 +357,41 @@ def test_sync_map_axes_use_fixed_dt_window(qapp, ft8_period):
     xr, yr = vb.viewRange()
     assert xr[0] == pytest.approx(x0) and xr[1] == pytest.approx(x1)
     assert yr[0] == pytest.approx(y0) and yr[1] == pytest.approx(y1)
+
+
+def test_sync_map_y_axis_is_dt(qapp, ft8_period):
+    """The map, bars, labels, and guides are plotted in DT (0 = on time)."""
+    from dataclasses import replace
+    from ws_skim import ft8_decode, ft8_window
+    r = ft8_period
+    win = _sync_map_win()
+    ft8_window.apply_result(win, r)
+    spec = cs.MODES["FT8"]
+    # Image rectangle is in DT, not start-time-in-period.
+    # setRect is applied as a transform; item boundingRect stays in image pixels.
+    rect = win._ft8_img.mapRectToParent(win._ft8_img.boundingRect())
+    assert rect.top() == pytest.approx(r.map_start_s[0] - spec.nominal_start_s, abs=0.2)
+    assert rect.bottom() == pytest.approx(r.map_start_s[-1] - spec.nominal_start_s, abs=0.2)
+    # Candidate bars sit at the candidate's DT.
+    _x0, _x1, ys = win._ft8_bars.bar_spans()
+    assert ys == pytest.approx([c.dt_s for c in r.candidates])
+    # Preferred-window band and the DT = 0 line.
+    lo, hi = win._ft8_dt_pref.getRegion()
+    assert lo == pytest.approx(spec.dt_pref_min_s)
+    assert hi == pytest.approx(spec.dt_pref_max_s)
+    assert win._ft8_dt_pref.isVisible()
+    assert win._ft8_dt_zero.value() == pytest.approx(0.0)
+    assert win._ft8_dt_zero.isVisible()
+    # A decode label is also placed in DT.
+    d = ft8_decode.Decode(mode="FT8", period_start_utc=r.period_start_utc, snr_db=-9, dt_s=0.1,
+                          audio_hz=1000.0, rf_hz=28_075_000.0, dial_hz=28_074_000.0,
+                          message="CQ K1ABC FN42")
+    ft8_window.apply_result(win, replace(r, decodes=[d], decoded=True, decode_note=""))
+    visible = [lab for lab in win._ft8_labels if lab.isVisible()]
+    assert visible
+    assert visible[0].pos().y() == pytest.approx(
+        ft8_window.label_position(r, d, r.candidates)[1])
+    assert abs(visible[0].pos().y() - 0.5) < 2.0   # a DT, not start+0.5
 
 
 def test_call_from_message():

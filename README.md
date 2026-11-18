@@ -54,7 +54,7 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   paired-tone detection, a coincidence gate, an optional noise
   blanker, and a GUI (live spectrogram, detection heatmap, decode
   panel). **View → FT8 Sync Map** shows the Costas sections, candidate
-  bars and decode labels; **View → Waterfall** is an optional scrolling
+  bars and decode labels, with DT (0 = on time) on the vertical axis; **View → Waterfall** is an optional scrolling
   spectrogram, off by default. A 15-second IQ window is passed to the decoder when a
   channel exceeds the threshold. Saved IQ files can be replayed from
   the **Source** menu.

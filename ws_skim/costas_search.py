@@ -31,11 +31,17 @@ baseband IQ (e.g. 48 kHz from the radio) or real audio (12 kHz).
    mean power of the other tones at the same symbols
    ``t0 = (sum_all_tones - t) / (n_tones - 1)``.  ``sync = t / t0``.
    Noncoherent (power) accumulation; no phase is used.
-3. **Baseline**: per frequency, the best ``sync`` over start times, divided
-   by its 40th percentile across frequency (WSJT-X's "red" spectrum), so a
-   score of ~1 is noise and the threshold is in noise-relative units.
+3. **Baseline**: per frequency, the best ``sync`` in the preferred DT
+   window (see below), divided by its 40th percentile across frequency
+   (WSJT-X's "red" spectrum), so a score of ~1 is noise and the
+   threshold is in noise-relative units.
 4. **Candidates** (:func:`find_candidates`): local maxima across frequency
    (within ± one signal bandwidth) above ``threshold``, strongest first.
+   Each frequency's lag is the peak inside the preferred DT window
+   (FT8: −0.5…+1.0 s, FT4: −0.3…+0.6 s) unless an out-of-window peak
+   both exceeds a higher threshold and clearly beats the in-window
+   score — the same narrow-then-wide idea as WSJT-X ``sync8``.  The
+   sync map image itself still covers the full DT search range.
 
 Output: :class:`Candidate` (tone-0 frequency, DT relative to the mode's
 nominal start, score).  Candidates are hints for a real decoder (jt9); this
@@ -78,11 +84,22 @@ class SyncSpec:
     nominal_start_s: float = 0.5          # tx start after period start (DT = 0)
     dt_min_s: float = -2.5
     dt_max_s: float = 2.5
+    # Preferred DT window for candidate picking (0 = on time).  Real
+    # FT8 signals almost all start in this range; a peak outside it is
+    # kept only when it also clears the stricter outside threshold
+    # (threshold * outside_threshold_factor) and beats the in-window
+    # peak by outside_margin.  The displayed sync map still uses the
+    # full dt_min_s…dt_max_s range.
+    dt_pref_min_s: float = -0.5
+    dt_pref_max_s: float = 1.0
+    outside_threshold_factor: float = 1.4
+    outside_margin: float = 1.2
     # Default candidate threshold (noise-relative score), from synthetic
-    # white-noise runs at 48 kHz IQ (20 periods).  FT8 at 1.7: ~2.6 noise
-    # candidates per period across ±24 kHz.  Candidates only choose which
-    # sections go to jt9, which runs its own search, so false candidates
-    # cost CPU, not false decodes.
+    # white-noise runs at 48 kHz IQ (20 periods).  After the preferred
+    # window, FT8 at 1.7: see tests for the current noise-candidate
+    # rate across ±24 kHz.  Candidates only choose which sections go
+    # to jt9, which runs its own search, so false candidates cost CPU,
+    # not false decodes.
     threshold: float = 1.7
 
     @property
@@ -122,10 +139,11 @@ FT4 = SyncSpec(
     costas=((0, 1, 3, 2), (1, 0, 2, 3), (2, 3, 1, 0), (3, 2, 0, 1)),
     costas_pos=(0, 33, 66, 99),
     dt_min_s=-1.0, dt_max_s=1.0,
+    dt_pref_min_s=-0.3, dt_pref_max_s=0.6,
     # FT4 carries 6.4 dB less sync energy than FT8 (16 x 48 ms vs
-    # 21 x 160 ms), so its scores run lower at a given SNR.  At 1.5: ~30
-    # noise candidates per period across ±24 kHz, and the search still
-    # finds only ~70% of -16 dB signals (jt9 decodes FT4 to ~-17.5 dB).
+    # 21 x 160 ms), so its scores run lower at a given SNR.  At 1.5 the
+    # preferred window cuts mid-period noise; the search still finds
+    # only ~70% of -16 dB signals (jt9 decodes FT4 to ~-17.5 dB).
     # Coherent correlation within each 4-symbol array (WSJT-X sync4d)
     # should close that gap; not done yet.
     threshold=1.5,
@@ -299,17 +317,13 @@ def search(
     sg = normalize_frames(spectrogram(x, fs, spec, t0_s))
     sync, start_times, freqs = sync_map(sg, spec)
 
-    best_lag = np.argmax(sync, axis=0)
-    red = sync[best_lag, np.arange(sync.shape[1])]
-
     keep = np.ones_like(freqs, dtype=bool)
     if freq_range_hz is not None:
         keep &= (freqs >= freq_range_hz[0]) & (freqs <= freq_range_hz[1])
+    best_lag, red, base = _choose_lags(sync, start_times, spec, keep, threshold)
     if not keep.any():
         return SearchResult(sync, start_times, freqs, 1.0,
                             np.zeros_like(red), best_lag, [])
-    base = float(np.percentile(red[keep], 40))
-    base = max(base, float(np.finfo(np.float32).tiny))
     score = red / base
     score[~keep] = 0.0
     cands = _pick_candidates(score, best_lag, start_times, freqs, sg.bin_hz,
@@ -336,6 +350,65 @@ def find_candidates(
     return search(x, fs, spec, t0_s=t0_s, threshold=threshold,
                   max_candidates=max_candidates,
                   freq_range_hz=freq_range_hz).candidates
+
+
+def preferred_lag_mask(start_times: np.ndarray, spec: SyncSpec) -> np.ndarray:
+    """True for lags whose DT falls in ``spec``'s preferred window.
+
+    If the search produced no lags in that window (short capture, unusual
+    t0), every lag is treated as preferred so picking still works.
+    """
+    dt = start_times - spec.nominal_start_s
+    mask = (dt >= spec.dt_pref_min_s) & (dt <= spec.dt_pref_max_s)
+    if not mask.any():
+        return np.ones(start_times.shape, dtype=bool)
+    return mask
+
+
+def in_preferred_dt(spec: SyncSpec, dt_s: float) -> bool:
+    """True if DT is inside the mode's preferred candidate window."""
+    return spec.dt_pref_min_s <= dt_s <= spec.dt_pref_max_s
+
+
+def _choose_lags(sync: np.ndarray, start_times: np.ndarray, spec: SyncSpec,
+                 keep: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray, float]:
+    """Per frequency, pick the preferred-window lag unless a late/early
+    peak is clearly stronger.
+
+    Returns ``(best_lag, red, baseline)``.  ``red`` is the raw sync at the
+    chosen lag.  The baseline is the 40th percentile of the *in-window*
+    peaks (noise-typical, not pulled around by mid-period maxima).  An
+    out-of-window peak is used only when its noise-relative score exceeds
+    ``spec.threshold * spec.outside_threshold_factor`` and is at least
+    ``spec.outside_margin`` times the in-window peak.  The full ``sync``
+    array is left unchanged for the displayed map.
+    """
+    n_freqs = sync.shape[1]
+    idx = np.arange(n_freqs)
+    pref = preferred_lag_mask(start_times, spec)
+    best_all = np.argmax(sync, axis=0)
+    sync_in = np.where(pref[:, None], sync, -np.inf)
+    best_in = np.argmax(sync_in, axis=0)
+    red_in = sync[best_in, idx]
+    red_all = sync[best_all, idx]
+
+    if keep.any():
+        base = float(np.percentile(red_in[keep], 40))
+    else:
+        base = 1.0
+    base = max(base, float(np.finfo(np.float32).tiny))
+
+    score_in = red_in / base
+    score_all = red_all / base
+    outside_thr = threshold * spec.outside_threshold_factor
+    use_all = (
+        ~pref[best_all]
+        & (score_all >= outside_thr)
+        & (score_all >= score_in * spec.outside_margin)
+    )
+    best_lag = np.where(use_all, best_all, best_in)
+    red = np.where(use_all, red_all, red_in)
+    return best_lag, red, base
 
 
 def _pick_candidates(score, best_lag, start_times, freqs, bin_hz, spec,

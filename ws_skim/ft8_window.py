@@ -283,7 +283,7 @@ def _build_window(self, view_action) -> None:
     plot = pg.PlotWidget()
     plot.setBackground("w")
     plot.setLabel("bottom", "Frequency (MHz)")
-    plot.setLabel("left", "Start time in period (s)")
+    plot.setLabel("left", "DT (s)")
     style_plot(plot)
     for _name in ("bottom", "left"):
         plot.getAxis(_name).setPen("k")
@@ -297,6 +297,21 @@ def _build_window(self, view_action) -> None:
     bars = CandidateBarsItem()
     bars.setZValue(10)
     plot.addItem(bars)
+
+    # Preferred-DT band and the DT = 0 line; values set in set_dt_guides.
+    pref = pg.LinearRegionItem(values=(-0.5, 1.0),
+                               orientation="horizontal", movable=False,
+                               brush=pg.mkBrush(255, 255, 255, 28),
+                               pen=pg.mkPen((230, 230, 230, 160), width=1,
+                                            style=QtCore.Qt.DashLine))
+    pref.setZValue(1)
+    pref.setVisible(False)
+    plot.addItem(pref)
+    zero = pg.InfiniteLine(pos=0.0, angle=0,
+                           pen=pg.mkPen((255, 255, 255, 210), width=1.5))
+    zero.setZValue(3)
+    zero.setVisible(False)
+    plot.addItem(zero)
 
     cbar_host = pg.GraphicsLayoutWidget()
     cbar_host.setBackground("w")
@@ -340,6 +355,8 @@ def _build_window(self, view_action) -> None:
     win._ft8_plot = plot
     win._ft8_img = img
     win._ft8_bars = bars
+    win._ft8_dt_pref = pref
+    win._ft8_dt_zero = zero
     win._ft8_cbar = cbar
     win._ft8_table = table
     win._ft8_decodes = decodes
@@ -387,13 +404,14 @@ def period_key(res):
 def map_view_extent(res) -> tuple[float, float, float, float]:
     """Fixed axis window: full map frequency range, mode DT window.
 
-    Y is ``nominal_start_s + dt_min_s`` … ``+ dt_max_s``, not the data's
-    own lag extent (which can vary by a lag or two and made the map jump).
+    Y is DT in seconds (0 = on time): ``dt_min_s`` … ``dt_max_s``, not
+    the data's own lag extent (which can vary by a lag or two and made
+    the map jump).
     """
     from .costas_search import MODES
     spec = MODES[res.mode]
-    y0 = spec.nominal_start_s + spec.dt_min_s
-    y1 = spec.nominal_start_s + spec.dt_max_s
+    y0 = spec.dt_min_s
+    y1 = spec.dt_max_s
     freqs = getattr(res, "map_freqs_hz", None)
     f = rf_mhz(res, freqs) if freqs is not None else np.array([])
     if np.size(f) == 0:
@@ -553,6 +571,35 @@ def ensure_bars(win) -> CandidateBarsItem:
     return bars
 
 
+def set_dt_guides(win, res) -> None:
+    """Show the preferred-DT band and a faint line at DT = 0."""
+    from .costas_search import MODES
+    spec = MODES[res.mode]
+    pref = getattr(win, "_ft8_dt_pref", None)
+    if pref is None:
+        pref = pg.LinearRegionItem(values=(spec.dt_pref_min_s, spec.dt_pref_max_s),
+                                   orientation="horizontal", movable=False,
+                                   brush=pg.mkBrush(255, 255, 255, 28),
+                                   pen=pg.mkPen((230, 230, 230, 160), width=1,
+                                                style=QtCore.Qt.DashLine))
+        pref.setZValue(1)
+        win._ft8_plot.addItem(pref)
+        win._ft8_dt_pref = pref
+    else:
+        pref.setRegion((spec.dt_pref_min_s, spec.dt_pref_max_s))
+    pref.setVisible(True)
+    zero = getattr(win, "_ft8_dt_zero", None)
+    if zero is None:
+        zero = pg.InfiniteLine(pos=0.0, angle=0,
+                               pen=pg.mkPen((255, 255, 255, 210), width=1.5))
+        zero.setZValue(3)
+        win._ft8_plot.addItem(zero)
+        win._ft8_dt_zero = zero
+    else:
+        zero.setPos(0.0)
+    zero.setVisible(True)
+
+
 def set_candidate_bars(win, res) -> None:
     """Replace the candidate marks with one set of bandwidth-wide score bars."""
     from .costas_search import MODES
@@ -560,7 +607,7 @@ def set_candidate_bars(win, res) -> None:
     bw = float(spec.bandwidth_hz)
     x0 = rf_mhz(res, [c.freq_hz for c in res.candidates])
     x1 = rf_mhz(res, [c.freq_hz + bw for c in res.candidates])
-    ys = [c.dt_s + spec.nominal_start_s for c in res.candidates]
+    ys = [c.dt_s for c in res.candidates]
     scores = [c.score for c in res.candidates]
     ensure_bars(win).set_bars(x0, x1, ys, scores)
 
@@ -569,21 +616,21 @@ def label_position(res, dec, candidates) -> tuple[float, float]:
     """x, y for a decode label: nearest candidate bar, else the decode itself."""
     from .costas_search import MODES
     spec = MODES[res.mode]
-    y_d = dec.dt_s + spec.nominal_start_s
+    y_d = dec.dt_s
     rf = float(dec.rf_hz)
     best = None
     best_m = None
     for c in candidates:
         rf_c = res.center_freq_mhz * 1e6 + c.freq_hz + spec.bandwidth_hz / 2.0
         df = abs(rf_c - rf)
-        dt = abs((c.dt_s + spec.nominal_start_s) - y_d)
+        dt = abs(c.dt_s - y_d)
         if df <= _LABEL_DF_HZ and dt <= _LABEL_DT_S:
             m = (df / 25.0) ** 2 + (dt / 0.16) ** 2
             if best_m is None or m < best_m:
                 best, best_m = c, m
     if best is not None:
         x = float(rf_mhz(res, best.freq_hz + spec.bandwidth_hz))
-        y = best.dt_s + spec.nominal_start_s
+        y = best.dt_s
     else:
         x = rf / 1e6
         y = y_d
@@ -632,15 +679,17 @@ def draw_result(win, res) -> None:
     m = res.map_score
     if m.size:
         f = rf_mhz(res, res.map_freqs_hz)
-        t = res.map_start_s
+        from .costas_search import MODES
+        t = res.map_start_s - MODES[res.mode].nominal_start_s
         df = (f[-1] - f[0]) / max(1, len(f) - 1)
         dt = (t[-1] - t[0]) / max(1, len(t) - 1) if len(t) > 1 else 1.0
-        # ImageItem axes: first index = x (frequency), second = y (time).
+        # ImageItem axes: first index = x (frequency), second = y (DT).
         win._ft8_img.setImage(np.clip(m.T, 0.0, SCORE_MAX), autoLevels=False)
         win._ft8_img.setRect(QtCore.QRectF(f[0] - df / 2, t[0] - dt / 2,
                                            df * len(f), dt * len(t)))
 
     lock_axes(win, res)
+    set_dt_guides(win, res)
     set_candidate_bars(win, res)
     clear_labels(win)
 

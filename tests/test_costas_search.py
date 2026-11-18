@@ -118,14 +118,26 @@ def test_score_rises_with_snr():
 
 # ── timing offsets ───────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("dt", [-0.9, -0.4, 0.0, 1.2, 2.2])
+@pytest.mark.parametrize("dt", [-0.5, -0.4, 0.0, 0.8, 1.0])
 def test_ft8_timing_offsets(dt):
-    """Including dt < -0.5: the first Costas array starts before the data."""
+    """On-time and in-window offsets, including the preferred-window edges."""
     f = -3500.0
     x = _period(cs.FT8, FS_IQ, [(f, dt, -16)], seed=7)
     c = _match(cs.find_candidates(x, FS_IQ, cs.FT8), cs.FT8, f, dt)
     assert c is not None
     assert c.dt_s == pytest.approx(dt, abs=cs.FT8.symbol_s / cs.TIME_OSR)
+
+
+def test_late_strong_signal_is_still_found():
+    """A clearly late but strong station (DT +2.0 s) is kept, like WSJT-X."""
+    f, dt = -3500.0, 2.0
+    # Extra tail so the last Costas array still fits after the late start.
+    x = _period(cs.FT8, FS_IQ, [(f, dt, -8)], seed=17, seconds=18.0)
+    c = _match(cs.find_candidates(x, FS_IQ, cs.FT8), cs.FT8, f, dt)
+    assert c is not None, f"late strong signal not found; top: {cs.find_candidates(x, FS_IQ, cs.FT8)[:3]}"
+    assert not cs.in_preferred_dt(cs.FT8, c.dt_s)
+    assert c.dt_s == pytest.approx(dt, abs=cs.FT8.symbol_s / cs.TIME_OSR)
+    assert c.score >= cs.FT8.threshold * cs.FT8.outside_threshold_factor
 
 
 def test_preroll_t0_is_honoured():
@@ -242,3 +254,69 @@ def test_static_burst_gives_no_flood_of_candidates():
     c = cs.find_candidates(x, fs, cs.FT8, t0_s=-2.0, freq_range_hz=(-21600, 21550))
     assert len(c) <= 3, len(c)
     assert any(abs(k.freq_hz - 5000.0) <= 6.25 and abs(k.dt_s - 0.3) <= 0.08 for k in c)
+
+
+# ── preferred DT window ─────────────────────────────────────────────────
+
+def _wide_spec(spec):
+    """Same thresholds, but the preferred window covers the full search."""
+    from dataclasses import replace
+    return replace(spec, dt_pref_min_s=spec.dt_min_s, dt_pref_max_s=spec.dt_max_s)
+
+
+def _noise_candidates(spec, n_periods=20, seed0=1000):
+    out = []
+    for i in range(n_periods):
+        x = _period(spec, FS_IQ, seed=seed0 + i)
+        out.append(cs.find_candidates(x, FS_IQ, spec))
+    return out
+
+
+def test_noise_candidates_drop_and_cluster_in_preferred_window():
+    """Mid-period noise peaks are no longer offered as candidates.
+
+    Compare the default preferred window against a full-range window on
+    the same 20 white-noise periods across ±24 kHz (48 kHz IQ).
+    """
+    before = _noise_candidates(_wide_spec(cs.FT8))
+    after = _noise_candidates(cs.FT8)
+    n_before = sum(len(c) for c in before) / len(before)
+    n_after = sum(len(c) for c in after) / len(after)
+    # Recorded so the changelog and review can quote the measured rates.
+    print(f"FT8 noise candidates/period: before {n_before:.2f}, after {n_after:.2f}")
+    assert n_after < n_before
+    assert n_after < 1.5
+    dts = [c.dt_s for period in after for c in period]
+    if dts:
+        in_pref = sum(cs.in_preferred_dt(cs.FT8, dt) for dt in dts)
+        assert in_pref == len(dts)
+
+
+def test_ft4_noise_candidates_drop_and_cluster():
+    before = _noise_candidates(_wide_spec(cs.FT4), n_periods=10, seed0=2000)
+    after = _noise_candidates(cs.FT4, n_periods=10, seed0=2000)
+    n_before = sum(len(c) for c in before) / len(before)
+    n_after = sum(len(c) for c in after) / len(after)
+    print(f"FT4 noise candidates/period: before {n_before:.2f}, after {n_after:.2f}")
+    assert n_after < n_before
+    dts = [c.dt_s for period in after for c in period]
+    before_dts = [c.dt_s for period in before for c in period]
+    frac_after = (sum(cs.in_preferred_dt(cs.FT4, dt) for dt in dts) / len(dts)
+                  if dts else 1.0)
+    frac_before = (sum(cs.in_preferred_dt(cs.FT4, dt) for dt in before_dts) / len(before_dts)
+                   if before_dts else 0.0)
+    print(f"FT4 fraction in preferred window: before {frac_before:.1%}, after {frac_after:.1%}")
+    # In-window fallbacks can still clear the regular threshold, so the
+    # count drop is modest; the important change is the clustering.
+    assert frac_after >= 0.9
+    assert frac_after > frac_before + 0.5
+
+
+def test_preferred_window_does_not_reduce_on_time_weak_detection():
+    """The existing weak-SNR on-time cases are still found."""
+    cases = [(cs.FT8, -20, 0.3), (cs.FT8, -20, 0.0), (cs.FT4, -14, 0.3)]
+    for spec, snr, dt in cases:
+        f = 7321.0
+        x = _period(spec, FS_IQ, [(f, dt, snr)], seed=3)
+        assert _match(cs.find_candidates(x, FS_IQ, spec), spec, f, dt) is not None
+
