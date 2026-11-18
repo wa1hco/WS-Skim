@@ -12,7 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Mode menu (MSK144 / FT8 / FT4) and the FT8 Sync Map window.
+"""Mode menu (MSK144 / FT8 / FT4) and the FT8 Sync Map (Diagnostics) window.
+
+The operating view for FT8/FT4 is ``activity_window`` (View → FT8 Activity);
+this Sync Map is the sync detector's diagnostic view, under Diagnostics.
 
 The window draws ``engine._ft8_result`` (``ft8_engine.PeriodResult``) once
 per period, when the Costas search finishes: the sync score over RF
@@ -184,16 +187,38 @@ def blanker_key(mode: str) -> str:
 
 
 def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) -> None:
-    """Add the Mode menu and View → FT8 Sync Map, then restore the saved mode."""
-    from .visualizer import _SETTINGS
+    """Add the Mode menu, View → FT8 Activity and Diagnostics → FT8 Sync Map.
 
+    The Activity window is the operating view and opens with FT8/FT4.  The
+    Sync Map is the sync detector's diagnostic view; it lives under
+    Diagnostics and only opens when asked.  Restores the saved mode.
+    """
+    from .visualizer import _SETTINGS
+    from . import activity_window
+
+    act_action = QtWidgets.QAction("FT8 Activity", self)
+    act_action.setCheckable(True)
+    first = view_menu.actions()[0] if view_menu.actions() else None
+    view_menu.insertAction(first, act_action)         # top of View, easy to find
+    activity_window.build_window(self, act_action)
+    act_action.triggered.connect(
+        lambda checked: self._activity_win.show() if checked else self._activity_win.hide())
+    self._activity_action = act_action
+
+    diag = next((a.menu() for a in menu_bar.actions()
+                 if a.menu() is not None and a.text().replace("&", "") == "Diagnostics"), None)
     view_action = QtWidgets.QAction("FT8 Sync Map", self)
     view_action.setCheckable(True)
-    first = view_menu.actions()[0] if view_menu.actions() else None
-    view_menu.insertAction(first, view_action)        # top of View, easy to find
+    view_action.setToolTip("The sync detector's view of the last period: sync score "
+                           "by frequency and DT, jt9 sections, and candidates")
+    if diag is not None:
+        diag.addAction(view_action)
+    else:
+        view_menu.addAction(view_action)
     _build_window(self, view_action)
     view_action.triggered.connect(
         lambda checked: self._ft8_win.show() if checked else self._ft8_win.hide())
+    self._sync_map_action = view_action
 
     mode_menu = QtWidgets.QMenu("&Mode", self)
     menu_bar.insertMenu(view_menu.menuAction(), mode_menu)
@@ -208,8 +233,6 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
         self._mode_actions[mode] = act
 
     # Diagnostics → Save FT8 period IQ (off by default, not remembered).
-    diag = next((a.menu() for a in menu_bar.actions()
-                 if a.menu() is not None and a.text().replace("&", "") == "Diagnostics"), None)
     if diag is not None:
         save_act = QtWidgets.QAction("Save FT8 period IQ (last 10 min)", self, checkable=True)
         save_act.setToolTip("Write each FT8/FT4 period's radio data to the output "
@@ -249,6 +272,7 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
         self.set_blanker(want)
 
     win = getattr(self, "_ft8_win", None)
+    act = getattr(self, "_activity_win", None)
     if ft8_engine.is_period_mode(mode):
         for name in _MSK144_WINDOWS:
             w = getattr(self, name, None)
@@ -256,9 +280,15 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
                 w.hide()
         if win is not None:
             win.setWindowTitle(f"WS Skim — {mode} Sync Map")
+        if act is not None:
+            act.setWindowTitle(f"WS Skim — {mode} Activity")
+            act.show()
+        elif win is not None:
             win.show()
-    elif win is not None and not startup:
-        win.hide()
+    elif not startup:
+        for w in (win, act):
+            if w is not None:
+                w.hide()
 
 
 # ── Window ─────────────────────────────────────────────────────────────────

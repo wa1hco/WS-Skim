@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Optional classic scrolling IQ waterfall (View → Waterfall).
 
-A separate window from the FT8 Sync Map.  It reuses the overlap-FFT
+A separate window from the FT8 Activity view and the Sync Map.  It reuses the overlap-FFT
 already computed for Fast Graph when either window is visible, and
 keeps a short scrolling history (newest at the top).  Nothing is
 computed for this window while it is hidden.
@@ -108,7 +108,7 @@ def setup_waterfall(self, view_menu: QtWidgets.QMenu) -> None:
     view_action = QtWidgets.QAction("Waterfall", self)
     view_action.setCheckable(True)
     view_action.setChecked(False)
-    # After setup_ft8, FT8 Sync Map is the first View item; put Waterfall next.
+    # After setup_ft8, FT8 Activity is the first View item; put Waterfall next.
     acts = view_menu.actions()
     if len(acts) >= 2:
         view_menu.insertAction(acts[1], view_action)

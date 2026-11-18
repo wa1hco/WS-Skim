@@ -10,6 +10,23 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Changed
 
+- **New FT8/FT4 Activity window; the Sync Map moves to Diagnostics.**
+  View → FT8 Activity is now the window that opens in FT8 and FT4.  It is
+  a sideways waterfall of who was heard: frequency runs up the side with
+  the numbered ~3 kHz jt9 sections shaded in alternate bands, and UTC time
+  runs along the bottom, one column per period, scrolling left as each
+  period ends.  It shows 8 periods (2 minutes of FT8) by default; set
+  *History* in the window to 2–40 periods, and it is remembered.  Each
+  decoded station is a short tick in its period at its frequency,
+  coloured by SNR (light blue = weak, red = strong, with an SNR colour
+  bar).  Callsigns are not printed by default: hover over a tick for the
+  call, SNR, DT, frequency and message, or tick *Show calls* to print them
+  all.  *Show sync candidates* adds every sync hit as a faint grey mark.
+  Your frequency zoom is kept from period to period.  The window is redrawn
+  only when a period ends or its decodes arrive, and not at all while it
+  is closed.  The FT8 Sync Map is unchanged and is now under
+  Diagnostics → FT8 Sync Map, for checking the sync detector.
+
 - **The Sync Map vertical axis is now DT, and mid-period noise is no longer marked as a candidate.**
   0 s is on time (the same DT as in the Decodes tab).  A faint line marks
   DT = 0, and a light band shows the preferred window (FT8: −0.5 to +1.0 s;

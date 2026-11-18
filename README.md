@@ -53,8 +53,12 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   (±20 kHz) on 48 kHz IQ, with a 48-channel polyphase channelizer,
   paired-tone detection, a coincidence gate, an optional noise
   blanker, and a GUI (live spectrogram, detection heatmap, decode
-  panel). **View → FT8 Sync Map** shows the Costas sections, candidate
-  bars and decode labels, with DT (0 = on time) on the vertical axis; **View → Waterfall** is an optional scrolling
+  panel). In FT8/FT4, **View → FT8 Activity** opens with the mode: frequency up
+  the side with the numbered jt9 sections, the last few minutes of periods
+  across the bottom, and one tick per decoded station coloured by SNR
+  (hover for call, SNR, DT and frequency; *Show calls* prints them all).
+  The sync detector's own view, **Diagnostics → FT8 Sync Map**, shows the
+  Costas sections, candidate bars and decode labels by DT; **View → Waterfall** is an optional scrolling
   spectrogram, off by default. A 15-second IQ window is passed to the decoder when a
   channel exceeds the threshold. Saved IQ files can be replayed from
   the **Source** menu.
