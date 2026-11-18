@@ -957,6 +957,79 @@ def _compute_sync_metric_db(sync_window,
     )
 
 
+#: Zero-fill an arrival gap in the IQ stream when it is at least this long.
+#: Network jitter on arrival stamps is milliseconds; a Flex transmission is
+#: ~13 s.
+IQ_GAP_FILL_MIN_S = 0.5
+#: Zero-filled gaps remembered (for the FT8 period skip test).
+IQ_GAPS_KEEP = 32
+
+
+def _zero_fill_iq(self, n: int) -> None:
+    """Append ``n`` zero samples to the IQ ring and record them as a gap."""
+    if n <= 0:
+        return
+    start = self._iq_abs_sample
+    ring = self._iq_ring
+    ring_n = ring.shape[0]
+    n_write = min(n, ring_n)
+    pos = (self._iq_ring_pos + (n - n_write)) % ring_n
+    first = min(n_write, ring_n - pos)
+    ring[pos:pos + first] = 0
+    if n_write > first:
+        ring[:n_write - first] = 0
+    self._iq_ring_pos = (self._iq_ring_pos + n) % ring_n
+    self._iq_abs_sample = start + n
+    gaps = getattr(self, '_iq_gaps', None)
+    if gaps is None:
+        gaps = self._iq_gaps = []
+    if gaps and gaps[-1][1] == start:
+        gaps[-1] = (gaps[-1][0], start + n)          # extend a running gap
+    else:
+        gaps.append((start, start + n))
+    del gaps[:-IQ_GAPS_KEEP]
+
+
+def fill_iq_gap(self, rx_wall: float) -> int:
+    """Zero-fill the IQ ring up to the sample that arrived at ``rx_wall``.
+
+    ``rx_wall`` is the arrival time of the chunk about to be processed.
+    If it is more than :data:`IQ_GAP_FILL_MIN_S` later than the time base
+    expects for the next sample, the missing stretch is written to the ring
+    as zeros and ``_iq_abs_sample`` advanced past it; the gap is appended to
+    ``self._iq_gaps`` as ``(start, end)`` sample indices.  Returns the
+    (possibly advanced) first sample index of the chunk.
+    """
+    gap_s = float(rx_wall) - self.timebase.utc_at(self._iq_abs_sample)
+    if gap_s >= IQ_GAP_FILL_MIN_S:
+        _zero_fill_iq(self, int(round(gap_s * self.sample_rate)))
+        logger.info("IQ gap: %.2f s of IQ did not arrive; zero-filled", gap_s)
+    return self._iq_abs_sample
+
+
+def advance_iq_silence(self, n: int, rx_wall: float = 0.0) -> None:
+    """Keep the FT8/FT4 sample clock running over IQ that is being discarded.
+
+    The Flex source throws IQ away while the radio transmits.  In FT8 / FT4
+    mode this writes the same number of zero samples to the ring instead,
+    so sample index keeps tracking UTC, the period before the transmission
+    is handed to the search on time, and the transmit period is skipped as
+    a gap.  No-op in MSK144 mode (its TX handling is unchanged).
+    """
+    if n <= 0 or getattr(self, 'mode', 'MSK144') == 'MSK144':
+        return
+    tb = getattr(self, 'timebase', None)
+    if tb is None or not tb.is_anchored() or getattr(self, '_timebase_anchor_pending', False):
+        return
+    wall = float(rx_wall) or time.time()
+    fill_iq_gap(self, wall)
+    if tb.should_mark_period(wall):
+        tb.mark_period_start(sample=self._iq_abs_sample, wall=wall)
+    _zero_fill_iq(self, int(n))
+    from .ft8_engine import maybe_dispatch_period
+    maybe_dispatch_period(self)
+
+
 def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     """Process one IQ chunk: wideband FFT blanker, ring buffer, channelised
     detection, and overlap-FFT waterfall.
@@ -1029,8 +1102,20 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     # before the call; using it instead of "now" keeps the (sample, wall) pair
     # right when this thread runs behind the radio (queued packets).  Consumed
     # here so a stale value never outlives its chunk; 0 → fall back to now.
-    _chunk_wall = getattr(self, '_chunk_rx_wall', 0.0) or time.time()
+    _rx_wall = getattr(self, '_chunk_rx_wall', 0.0) or 0.0
+    _chunk_wall = _rx_wall or time.time()
     self._chunk_rx_wall = 0.0
+    if (_rx_wall and not _is_wav_early
+            and getattr(self, 'mode', 'MSK144') != 'MSK144'
+            and not getattr(self, '_timebase_anchor_pending', False)
+            and self.timebase.is_anchored()):
+        # IQ that never arrived (Flex discards packets while transmitting;
+        # a network outage) would otherwise be glued onto the samples before
+        # it, so everything after the gap is stamped seconds too early until
+        # the next period re-peg.  Arrival-stamped chunks show the gap
+        # directly: zero-fill it so sample index keeps tracking UTC.  (FT8 /
+        # FT4 only for now; the MSK144 path resets its own state after TX.)
+        _chunk_start_sample = fill_iq_gap(self, _rx_wall)
     if getattr(self, '_timebase_anchor_pending', False):
         # Every source open re-anchors → a WAV-relative anchor cannot leak into a
         # live run (the 2026-05-31 "1970 TFMF timestamp" bug).

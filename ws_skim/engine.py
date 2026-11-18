@@ -30,6 +30,7 @@ from .channelizer import design_channelizer_filter, make_channelizer_state, N_CH
 from .timebase import TimeBase
 from .processing import (
     process_iq_data as _process_iq_data,
+    advance_iq_silence as _advance_iq_silence,
     N_SNR_HIST, CH_DETECT_SIZE, _METRIC_HIST_DEPTH,
 )
 
@@ -564,6 +565,10 @@ class Engine:
     # ──────────────────────────────────────────────────────────────────
     # Phase 4 cut-over scaffolding (option 1: shadow Block runtime)
     # ──────────────────────────────────────────────────────────────────
+
+    def advance_iq_silence(self, n_samples, rx_wall=0.0):
+        """IQ discarded while transmitting: keep the FT8/FT4 sample clock running."""
+        _advance_iq_silence(self, n_samples, rx_wall)
 
     def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
         """IQ ingress dispatch — Option 2 cut-over semantics.

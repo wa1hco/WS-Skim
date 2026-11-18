@@ -8,7 +8,35 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Fixed
+
+- **FT8 periods around your own transmissions are timed right again.**
+  While a Flex radio transmits, WS Skim throws away its IQ.  The sample
+  clock used to stop with it, so after each transmission the IQ was glued
+  onto the period before: the period before a transmission was searched
+  ~14 s late, and the transmit period was "decoded" from the previous
+  period's audio, 1 s early (DT about −1.0 s) — repeat spots of stations
+  already reported, with the wrong time.  In FT8/FT4 the clock now keeps
+  running over the discarded IQ (and over any IQ that never arrives, by
+  arrival time), the period before a transmission is searched on time,
+  and a period that is mostly transmit is skipped.
+
 ### Changed
+
+- **FT8 jt9 sections follow where FT8 is actually being decoded.**  On a
+  busy band the Costas search also scores RTTY, SSB and other digital
+  traffic, which opened 10–14 jt9 sections on 40 m (7056–7099 kHz) and
+  forced jt9 down to depth 2.  Candidates more than 500 Hz from any decode
+  in the last 8 periods now need a very strong sync to open a section, a
+  section holding a single weak candidate away from activity is dropped,
+  and every 4 minutes two periods (both even and odd) search the whole
+  band so new activity is still found; start-up and band changes search
+  everything until two periods have decoded.  On 40 periods of real 40 m
+  IQ replayed through jt9: 11.7 → 4.9 sections per period (3.4 between
+  full scans), jt9 depth 3 on 33 of 40 periods instead of none, and 2129
+  decodes instead of 1982.  The Sync Map status line counts the set-aside
+  candidates.  `tools/dev/ft8_section_replay.py` reruns that comparison
+  on saved periods.
 
 - **New FT8/FT4 Activity window; the Sync Map moves to Diagnostics.**
   View → FT8 Activity is now the window that opens in FT8 and FT4.  It is

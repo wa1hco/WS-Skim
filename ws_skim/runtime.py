@@ -1503,11 +1503,16 @@ def run_radio_source(self):
                             self._ch_buf_end = 0
                             self._ch_buf[:] = 0
                         # Empty remaining queued packets without processing them.
+                        # FT8/FT4 keep the sample clock running over them as
+                        # zeros (advance_iq_silence) so UTC stays aligned.
+                        _tx_n = len(packet.samples)
+                        _tx_wall = float(getattr(packet, 'rx_wall', 0.0) or 0.0)
                         while True:
                             try:
-                                self.radio_client.sample_queue.get_nowait()
+                                _tx_n += len(self.radio_client.sample_queue.get_nowait().samples)
                             except queue.Empty:
                                 break
+                        self.advance_iq_silence(_tx_n, _tx_wall)
                         break   # exit inner drain loop; outer loop will re-enter
 
                     if was_tx and not now_tx:
@@ -1516,11 +1521,14 @@ def run_radio_source(self):
                         # Also set a settling gate so AGC transients in the first
                         # ~500 ms don't produce broadband false detections.
                         pass  # TX→RX transition: NB state reset (debug)
+                        _tx_n = len(packet.samples)
+                        _tx_wall = float(getattr(packet, 'rx_wall', 0.0) or 0.0)
                         while True:
                             try:
-                                self.radio_client.sample_queue.get_nowait()
+                                _tx_n += len(self.radio_client.sample_queue.get_nowait().samples)
                             except queue.Empty:
                                 break
+                        self.advance_iq_silence(_tx_n, _tx_wall)
                         self._nb_spec_avg = None
                         if hasattr(self, '_pct25'):
                             del self._pct25

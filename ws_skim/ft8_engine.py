@@ -87,6 +87,12 @@ class PeriodResult:
     decoded: bool = False
     #: Why there is no decode, for the window ("" while decoding or done).
     decode_note: str = ""
+    #: Sync candidates set aside by the decode-history filter (no recent
+    #: decodes nearby and not strong enough); not sent to jt9.
+    dropped_candidates: list = field(default_factory=list)
+    #: True when this period searched everything (start-up, or a periodic
+    #: probe for new activity), False when the decode-history filter applied.
+    full_scan: bool = True
 
 
 def is_period_mode(mode: str) -> bool:
@@ -164,32 +170,203 @@ def pick_dial_mhz(mode: str, center_mhz: float, fs: float,
     return min(fits, key=lambda f: abs(f - center_mhz)) if fits else None
 
 
+# ── Decode-history candidate filter ─────────────────────────────────────────
+#
+# On a busy HF band the Costas search also scores RTTY, SSB and other
+# digital traffic (its sync score is a ratio, so any strong narrow energy
+# can look Costas-like): on 40 m about 80% of candidates sit far from any
+# FT8 activity, open 8+ extra jt9 sections, and push jt9 down to depth 2.
+# Real FT8 lives where FT8 has recently been decoded, so:
+#
+# * a candidate within ``ACTIVE_NEAR_HZ`` of a decode in the last
+#   ``HISTORY_PERIODS`` periods (same mode, same centre) is used as before;
+# * any other candidate needs ``COLD_SCORE`` (a strong signal) to open or
+#   join a section;
+# * a section that would hold only one weak candidate (score below
+#   ``SINGLE_MIN_FACTOR`` x the mode threshold) away from activity is
+#   dropped;
+# * every ``PROBE_EVERY`` periods (4 min of FT8), two consecutive periods (both T/R
+#   parities) search everything, as does start-up until ``WARM_PERIODS``
+#   periods have been decoded, so new activity is still found.
+#
+# jt9 searches 200-3200 Hz audio in every kept section regardless of the
+# candidates, so weak stations near activity are still decoded, and the
+# band's dial section is always kept.  Without jt9 (no decodes) the filter
+# never engages.
+
+#: Periods of decode history kept per (mode, centre): 2 min of FT8.
+HISTORY_PERIODS = 8
+#: A candidate this close (tone 0, Hz) to a recent decode is "active".
+ACTIVE_NEAR_HZ = 500.0
+#: Score a candidate away from recent activity needs (noise ~ 1).  Real
+#: 40 m captures put the 95th percentile of non-FT8 candidates near 25.
+COLD_SCORE = {"FT8": 30.0, "FT4": 20.0}
+#: A one-candidate section away from activity needs this x threshold.
+SINGLE_MIN_FACTOR = 2.0
+#: Decoded periods needed before the filter engages.
+WARM_PERIODS = 2
+#: Full-scan probe: periods ``k % PROBE_EVERY in (0, 1)`` search everything
+#: (FT8: 30 s of every 4 min).
+PROBE_EVERY = 16
+
+
+class DecodeHistory:
+    """Recent decode frequencies (RF Hz) per period, for one mode and centre.
+
+    A change of mode or centre frequency (band change, re-tune) clears it,
+    which restarts the warm-up full scans.
+    """
+
+    def __init__(self, periods: int = HISTORY_PERIODS):
+        self.periods = int(periods)
+        self.key: tuple | None = None
+        self._by_period: dict[int, np.ndarray] = {}
+
+    @staticmethod
+    def _key(mode: str, center_mhz: float) -> tuple:
+        return (mode, round(float(center_mhz), 4))       # 100 Hz re-tune tolerance
+
+    def _sync_key(self, mode: str, center_mhz: float) -> None:
+        k = self._key(mode, center_mhz)
+        if k != self.key:
+            self.key = k
+            self._by_period.clear()
+
+    def observe(self, mode: str, center_mhz: float, period_index: int, decodes) -> None:
+        """Record one decoded period's decodes (an empty list counts too)."""
+        self._sync_key(mode, center_mhz)
+        self._by_period[int(period_index)] = np.sort(np.asarray(
+            [float(d.rf_hz) for d in decodes], dtype=float))
+        newest = max(self._by_period)
+        for k in [k for k in self._by_period if k <= newest - self.periods]:
+            del self._by_period[k]
+
+    def decoded_periods(self, mode: str, center_mhz: float) -> int:
+        self._sync_key(mode, center_mhz)
+        return len(self._by_period)
+
+    def active_rf_hz(self, mode: str, center_mhz: float) -> np.ndarray:
+        """Sorted RF (Hz) of every decode in the history window."""
+        self._sync_key(mode, center_mhz)
+        if not self._by_period:
+            return np.zeros(0)
+        return np.sort(np.concatenate(list(self._by_period.values())))
+
+    def is_warm(self, mode: str, center_mhz: float) -> bool:
+        return self.decoded_periods(mode, center_mhz) >= WARM_PERIODS
+
+
+def is_probe_period(period_index: int) -> bool:
+    """Full-scan probe periods: two in a row (both parities) every PROBE_EVERY."""
+    return int(period_index) % PROBE_EVERY in (0, 1)
+
+
+def near_activity(rf_hz, active_rf_hz: np.ndarray, near_hz: float = ACTIVE_NEAR_HZ) -> np.ndarray:
+    """Bool per ``rf_hz``: within ``near_hz`` of any ``active_rf_hz``."""
+    rf = np.atleast_1d(np.asarray(rf_hz, dtype=float))
+    if active_rf_hz.size == 0 or rf.size == 0:
+        return np.zeros(rf.shape, dtype=bool)
+    i = np.searchsorted(active_rf_hz, rf)
+    lo = np.abs(rf - active_rf_hz[np.clip(i - 1, 0, active_rf_hz.size - 1)])
+    hi = np.abs(active_rf_hz[np.clip(i, 0, active_rf_hz.size - 1)] - rf)
+    return np.minimum(lo, hi) <= near_hz
+
+
+def filter_candidates(candidates, spec, center_mhz: float, active_rf_hz: np.ndarray,
+                      *, full_scan: bool) -> tuple[list, list]:
+    """Split candidates into (used, set aside) by recent decode activity.
+
+    ``full_scan`` (start-up / probe periods) keeps every candidate.  Otherwise
+    a candidate near a recent decode is kept at the normal threshold and any
+    other needs ``COLD_SCORE``.
+    """
+    cands = list(candidates)
+    if full_scan or not cands:
+        return cands, []
+    rf = np.array([center_mhz * 1e6 + c.freq_hz for c in cands])
+    near = near_activity(rf, active_rf_hz)
+    cold = COLD_SCORE.get(spec.name, 30.0)
+    used, dropped = [], []
+    for c, n in zip(cands, near):
+        (used if n or c.score >= cold else dropped).append(c)
+    return used, dropped
+
+
+def drop_weak_single_sections(sections, spec, center_mhz: float,
+                              active_rf_hz: np.ndarray) -> tuple[list, list]:
+    """Drop sections holding one weak candidate away from recent activity.
+
+    Returns ``(kept sections, candidates of the dropped sections)``.
+    """
+    kept, dropped = [], []
+    weak = SINGLE_MIN_FACTOR * spec.threshold
+    for sec in sections:
+        c = sec.candidates
+        if len(c) == 1 and c[0].score < weak and not near_activity(
+                center_mhz * 1e6 + c[0].freq_hz, active_rf_hz)[0]:
+            dropped.extend(c)
+            continue
+        kept.append(sec)
+    return kept, dropped
+
+
 def search_period(iq: np.ndarray, fs: float, mode: str, *, t0_s: float,
                   period_start_utc: float, center_freq_mhz: float,
                   data_fraction: float = 1.0,
-                  dial_offset_hz: float | None = None) -> PeriodResult:
+                  dial_offset_hz: float | None = None,
+                  history: DecodeHistory | None = None) -> PeriodResult:
     """Run the Costas search on one period of complex IQ (pure DSP, no engine).
 
     ``dial_offset_hz``: the band's FT8/FT4 dial frequency relative to the IQ
     centre; when inside the band, a jt9 section starting there is always
     included (see :func:`with_dial_section`).
+
+    ``history``: recent decodes for the decode-history candidate filter
+    (see :func:`filter_candidates`); None searches everything, as before.
     """
     spec = cs.MODES[mode]
     lo = -EDGE_FRACTION * fs
     hi = EDGE_FRACTION * fs - spec.bandwidth_hz
     t = time.perf_counter()
     res = cs.search(iq, fs, spec, t0_s=t0_s, freq_range_hz=(lo, hi))
-    sections = with_dial_section(cs.group_into_sections(res.candidates, spec),
-                                 dial_section(dial_offset_hz, fs, spec))
+    k = int(math.floor(period_start_utc / spec.period_s + 1e-9))
+    if history is None:
+        full, active = True, np.zeros(0)
+    else:
+        full = not history.is_warm(mode, center_freq_mhz) or is_probe_period(k)
+        active = history.active_rf_hz(mode, center_freq_mhz)
+    used, dropped = filter_candidates(res.candidates, spec, center_freq_mhz, active,
+                                      full_scan=full)
+    sections = cs.group_into_sections(used, spec)
+    sections, lone = drop_weak_single_sections(sections, spec, center_freq_mhz, active)
+    if lone:
+        ids = {id(c) for c in lone}
+        used = [c for c in used if id(c) not in ids]
+        dropped = dropped + lone
+    sections = with_dial_section(sections, dial_section(dial_offset_hz, fs, spec))
     m, mf = downsample_map(res.sync, res.freqs_hz, res.baseline)
     return PeriodResult(
         mode=mode, period_start_utc=period_start_utc,
         center_freq_mhz=center_freq_mhz, sample_rate=fs,
         compute_s=time.perf_counter() - t,
-        candidates=res.candidates, sections=sections,
+        candidates=used, sections=sections,
         map_score=m, map_freqs_hz=mf, map_start_s=np.asarray(res.start_times_s),
         data_fraction=data_fraction,
+        dropped_candidates=dropped, full_scan=full,
     )
+
+
+#: Skip a period when less than this share of it has real IQ (the rest was
+#: zero-filled because nothing arrived, e.g. while transmitting).
+MIN_REAL_FRACTION = 0.6
+
+
+def gap_samples(gaps, a: int, b: int) -> int:
+    """Samples of ``[a, b)`` covered by the zero-filled ``gaps`` ((start, end) pairs)."""
+    n = 0
+    for g0, g1 in gaps:
+        n += max(0, min(b, g1) - max(a, g0))
+    return n
 
 
 def maybe_dispatch_period(eng) -> None:
@@ -238,15 +415,32 @@ def maybe_dispatch_period(eng) -> None:
     jt9 = _jt9_path(eng)
     hms = time.strftime("%H:%M:%S", time.gmtime(p0))
 
+    # IQ that never arrived (the radio transmitting, a network outage) is
+    # zero-filled in the ring by process_iq_data; a period that is mostly
+    # gap has nothing to decode.
+    gap_n = gap_samples(getattr(eng, "_iq_gaps", ()), tb.sample_at(p0),
+                        tb.sample_at(p0 + period))
+    real_frac = 1.0 - gap_n / max(1.0, period * fs)
+    if real_frac < MIN_REAL_FRACTION:
+        log.info("[ft8] %s period %s: skipped, %.0f%% of it had no IQ (transmitting?)",
+                 mode, hms, 100 * (1.0 - real_frac))
+        return
+    frac = min(frac, real_frac)
+    history = getattr(eng, "_ft8_history", None)
+    if history is None:
+        history = eng._ft8_history = DecodeHistory()
+
     def work():
         try:
             r = search_period(iq, fs, mode, t0_s=t0_s, period_start_utc=p0,
                               center_freq_mhz=center, data_fraction=frac,
-                              dial_offset_hz=dial_off)
+                              dial_offset_hz=dial_off, history=history)
             eng._ft8_result = r
-            log.info("[ft8] %s period %s: %d candidates, %d sections, %.2f s; "
-                     "data %.0f%%, backlog %.2f s, queue %s pkts, drops %s, missed %s",
-                     mode, hms, len(r.candidates), len(r.sections), r.compute_s,
+            log.info("[ft8] %s period %s: %d candidates (%d set aside, %s), %d sections, "
+                     "%.2f s; data %.0f%%, backlog %.2f s, queue %s pkts, drops %s, missed %s",
+                     mode, hms, len(r.candidates), len(r.dropped_candidates),
+                     "full scan" if r.full_scan else "history filter",
+                     len(r.sections), r.compute_s,
                      100 * frac, timing["backlog_s"], timing["queue_pkts"],
                      timing["drops"], timing["missed"])
             log.info("[ft8] %s period %s: sections at %s kHz", mode, hms,
@@ -261,9 +455,11 @@ def maybe_dispatch_period(eng) -> None:
                     center_freq_mhz=center, jt9=jt9,
                     depth=ft8_decode.depth_for(len(r.sections)))
                 eng._ft8_result = replace(r, decodes=ds, decoded=True)
+                history.observe(mode, center, k, ds)
                 dts = sorted(d.dt_s for d in ds)
-                log.info("[ft8] %s period %s: %d decodes, jt9 %.2f s, DT median %s",
-                         mode, hms, len(ds), time.perf_counter() - t,
+                log.info("[ft8] %s period %s: %d decodes, jt9 depth %d %.2f s, DT median %s",
+                         mode, hms, len(ds), ft8_decode.depth_for(len(r.sections)),
+                         time.perf_counter() - t,
                          f"{dts[len(dts) // 2]:+.2f} s" if dts else "-")
                 publish_decodes(eng, ds)
         except Exception:

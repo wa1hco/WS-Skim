@@ -585,8 +585,10 @@ def update_status(win, res) -> None:
         dec = " · decoding…"
     else:
         dec = ""
+    aside = len(getattr(res, "dropped_candidates", []) or [])
+    aside_txt = f" (+{aside} set aside: no recent decodes nearby)" if aside else ""
     win._ft8_status.setText(
-        f"{res.mode} period {when} UTC · {len(res.candidates)} candidates in "
+        f"{res.mode} period {when} UTC · {len(res.candidates)} candidates{aside_txt} in "
         f"{len(res.sections)} sections · search {res.compute_s:.2f} s{dec}{partial}")
 
 

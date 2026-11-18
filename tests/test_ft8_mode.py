@@ -105,6 +105,11 @@ def test_engine_ft8_mode_finds_signal_in_utc_period(tmp_path, monkeypatch):
         return "000000 -10  0.3 1500 ~  CQ K1ABC FN42\n"
 
     monkeypatch.setattr(ft8_decode, "run_jt9", fake_jt9)
+    # The fake jt9 "decodes" at 1500 Hz in every period, which would warm
+    # the decode history and set the real (6 kHz, sub-COLD_SCORE) signal
+    # aside depending on where the wall clock falls; this test covers the
+    # dispatch path, so keep the search on a full scan.
+    monkeypatch.setattr(ft8_engine.DecodeHistory, "is_warm", lambda *a: False)
     spec = cs.FT8
     e = Engine(center_freq_mhz=28.074, sample_rate=int(FS))
     e._ft8_jt9 = "jt9"
