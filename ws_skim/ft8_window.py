@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Mode menu (MSK144 / FT8 / FT4) and the FT8 Sync Map (Diagnostics) window.
+"""Mode menu (MSK144, or FT8 and/or FT4) and the FT8 Sync Map (Diagnostics) window.
 
 The operating view for FT8/FT4 is ``activity_window`` (View → FT8 Activity);
 this Sync Map is the sync detector's diagnostic view, under Diagnostics.
@@ -220,16 +220,21 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
         lambda checked: self._ft8_win.show() if checked else self._ft8_win.hide())
     self._sync_map_action = view_action
 
+    # Mode menu: MSK144 (VHF meteor scatter) on its own, or any of the
+    # period modes (FT8, FT4) together from the one receiver.
     mode_menu = QtWidgets.QMenu("&Mode", self)
     menu_bar.insertMenu(view_menu.menuAction(), mode_menu)
-    group = QtWidgets.QActionGroup(self)
-    group.setExclusive(True)
     self._mode_actions = {}
     for mode in ft8_engine.MODES:
         act = QtWidgets.QAction(mode, self, checkable=True)
-        act.triggered.connect(lambda _c, m=mode: apply_mode(self, m))
-        group.addAction(act)
+        if mode == "MSK144":
+            act.setToolTip("Meteor scatter (VHF); turns FT8 and FT4 off")
+        else:
+            act.setToolTip(f"Decode {mode}; FT8 and FT4 can both be on")
+        act.triggered.connect(lambda _c, m=mode: _on_mode_action(self, m))
         mode_menu.addAction(act)
+        if mode == "MSK144":
+            mode_menu.addSeparator()
         self._mode_actions[mode] = act
 
     # Diagnostics → Save FT8 period IQ (off by default, not remembered).
@@ -241,22 +246,113 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
         diag.addAction(save_act)
         self._ft8_save_iq_action = save_act
 
-    saved = str(_SETTINGS.value("mode", ft8_engine.DEFAULT_MODE))
-    if saved not in ft8_engine.MODES:
-        saved = ft8_engine.DEFAULT_MODE
-    apply_mode(self, saved, startup=True)
+    _setup_rate_label(self)
+    saved = saved_modes(_SETTINGS)
+    if saved == ("MSK144",):
+        apply_mode(self, "MSK144", startup=True)
+    else:
+        apply_modes(self, saved, startup=True)
+
+
+#: Settings key for the decoded period modes ("FT8,FT4").  Older versions
+#: saved one ``mode``; that key is still written (the primary mode).
+MODES_KEY = "period_modes"
+
+
+def saved_modes(settings) -> tuple[str, ...]:
+    """The remembered mode selection: ``("MSK144",)`` or period modes.
+
+    Settings from before FT8 and FT4 could run together have only
+    ``mode=FT8`` or ``mode=FT4``; a background skimmer should hear both,
+    so either one turns into FT8 + FT4.
+    """
+    mode = str(settings.value("mode", ft8_engine.DEFAULT_MODE))
+    if mode not in ft8_engine.MODES:
+        mode = ft8_engine.DEFAULT_MODE
+    if mode == "MSK144":
+        return ("MSK144",)
+    raw = settings.value(MODES_KEY, None)
+    if raw is None:
+        return ft8_engine.PERIOD_MODES                    # migrate: FT8 or FT4 -> both
+    if isinstance(raw, (list, tuple)):
+        raw = ",".join(str(x) for x in raw)
+    return ft8_engine.normalize_period_modes(str(raw)) or (mode,)
+
+
+def _on_mode_action(self, mode: str) -> None:
+    """A Mode menu click: MSK144 is exclusive; FT8 / FT4 toggle together."""
+    acts = getattr(self, "_mode_actions", {})
+    if mode == "MSK144":
+        apply_mode(self, "MSK144")
+        return
+    on = tuple(m for m in ft8_engine.PERIOD_MODES
+               if acts.get(m) is not None and acts[m].isChecked())
+    if not on:                                   # never leave nothing decoding
+        acts[mode].setChecked(True)
+        on = (mode,)
+    apply_modes(self, on)
+
+
+def _sync_mode_checks(self, modes) -> None:
+    for m, act in getattr(self, "_mode_actions", {}).items():
+        want = m in modes
+        if act.isChecked() != want:
+            act.setChecked(want)
 
 
 def apply_mode(self, mode: str, startup: bool = False) -> None:
-    """Switch the engine, the blanker and the visible panels to ``mode``."""
+    """Switch the engine, the blanker and the visible panels to ``mode``
+    (FT8 or FT4 alone, or MSK144)."""
+    if ft8_engine.is_period_mode(mode):
+        apply_modes(self, (mode,), startup=startup)
+        return
     from .visualizer import _SETTINGS
-
     self.set_mode(mode)
     _SETTINGS.setValue("mode", mode)
-    act = getattr(self, "_mode_actions", {}).get(mode)
-    if act is not None and not act.isChecked():
-        act.setChecked(True)
+    _sync_mode_checks(self, (mode,))
+    _apply_band_and_blanker(self, mode)
+    if not startup:
+        for w in (getattr(self, "_ft8_win", None), getattr(self, "_activity_win", None)):
+            if w is not None:
+                w.hide()
+    _update_rate_label(self)
 
+
+def apply_modes(self, modes, startup: bool = False) -> None:
+    """Decode the period modes ``modes`` (FT8 and/or FT4) side by side."""
+    from .visualizer import _SETTINGS
+    modes = ft8_engine.normalize_period_modes(modes) or ("FT8",)
+    primary = modes[0]
+    if hasattr(self, "set_period_modes"):
+        self.set_period_modes(modes)
+    else:
+        self.set_mode(primary)
+    _SETTINGS.setValue("mode", primary)
+    _SETTINGS.setValue(MODES_KEY, ",".join(modes))
+    _sync_mode_checks(self, modes)
+    _apply_band_and_blanker(self, primary)
+
+    win = getattr(self, "_ft8_win", None)
+    act = getattr(self, "_activity_win", None)
+    for name in _MSK144_WINDOWS:
+        w = getattr(self, name, None)
+        if w is not None and w.isVisible():
+            w.hide()
+    view = getattr(self, "_ft8_view_mode", None)
+    if view not in modes:
+        view = self._ft8_view_mode = primary
+    if win is not None:
+        win.setWindowTitle(f"WS Skim — {view} Sync Map")
+    if act is not None:
+        act.setWindowTitle(f"WS Skim — {view} Activity")
+        act.show()
+    elif win is not None:
+        win.show()
+    _update_rate_label(self)
+
+
+def _apply_band_and_blanker(self, mode: str) -> None:
+    from .visualizer import _SETTINGS
     if hasattr(self, "_band_combo"):
         from .ui import set_band_list
         set_band_list(self, mode)
@@ -271,24 +367,38 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
     elif combo is None:
         self.set_blanker(want)
 
-    win = getattr(self, "_ft8_win", None)
-    act = getattr(self, "_activity_win", None)
-    if ft8_engine.is_period_mode(mode):
-        for name in _MSK144_WINDOWS:
-            w = getattr(self, name, None)
-            if w is not None and w.isVisible():
-                w.hide()
-        if win is not None:
-            win.setWindowTitle(f"WS Skim — {mode} Sync Map")
-        if act is not None:
-            act.setWindowTitle(f"WS Skim — {mode} Activity")
-            act.show()
-        elif win is not None:
-            win.show()
-    elif not startup:
-        for w in (win, act):
-            if w is not None:
-                w.hide()
+
+# ── Status bar: decode rate per mode ───────────────────────────────────────
+
+def _setup_rate_label(self) -> None:
+    """A permanent status-bar label: ``FT8 312/min · FT4 48/min``."""
+    bar_fn = getattr(self, "statusBar", None)
+    if bar_fn is None:
+        return
+    try:
+        label = QtWidgets.QLabel("")
+        label.setToolTip("Decodes per minute for each mode over the last minute")
+        bar_fn().addPermanentWidget(label)
+    except Exception:
+        return
+    self._ft8_rate_label = label
+    timer = QtCore.QTimer(label)
+    timer.setInterval(2000)
+    timer.timeout.connect(lambda: _update_rate_label(self))
+    timer.start()
+    self._ft8_rate_timer = timer
+
+
+def _update_rate_label(self) -> None:
+    label = getattr(self, "_ft8_rate_label", None)
+    if label is None:
+        return
+    try:
+        text = ft8_engine.rate_text(self)
+        label.setText(text)
+        label.setVisible(bool(text))
+    except Exception:
+        pass
 
 
 # ── Window ─────────────────────────────────────────────────────────────────
@@ -408,8 +518,8 @@ def _build_window(self, view_action) -> None:
 
 def _tick(eng, win) -> None:
     try:
-        res = getattr(eng, "_ft8_result", None)
-        if not ft8_engine.is_period_mode(getattr(eng, "mode", "MSK144")):
+        res = shown_result(eng)
+        if not ft8_engine.enabled_period_modes(eng):
             win._ft8_status.setText("Mode is MSK144. Choose Mode → FT8 to search for FT8.")
             return
         if res is None:
@@ -420,6 +530,19 @@ def _tick(eng, win) -> None:
         apply_result(win, res)
     except Exception as e:                       # never let a bad frame kill the panel
         win._ft8_status.setText(f"redraw error: {e}")
+
+
+def shown_result(eng):
+    """The newest result of the mode the windows show (``_ft8_view_mode``,
+    picked in the Activity window), else the newest of any mode."""
+    view = getattr(eng, "_ft8_view_mode", None)
+    results = getattr(eng, "_ft8_results", None) or {}
+    if view in results:
+        return results[view]
+    res = getattr(eng, "_ft8_result", None)
+    if view is not None and res is not None and getattr(res, "mode", view) != view:
+        return None
+    return res
 
 
 def rf_mhz(res, offset_hz) -> np.ndarray:

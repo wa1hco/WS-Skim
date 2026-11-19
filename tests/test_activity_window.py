@@ -155,6 +155,9 @@ def _stop_panel_timers():
     yield
     while _ENGINES:
         eng = _ENGINES.pop()
+        rate = getattr(eng, "_ft8_rate_timer", None)      # status-bar decode rates
+        if rate is not None:
+            rate.stop()
         for name in ("_activity_win", "_ft8_win"):
             win = getattr(eng, name, None)
             if win is None:

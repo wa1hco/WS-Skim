@@ -28,8 +28,11 @@ DT and frequency, or tick *Show calls*.  ``set_highlighted_calls`` names
 calls that are always labelled and outlined; that is the hook for a future
 WS Hub "needed" feed.
 
+With FT8 and FT4 both decoded, each mode keeps its own history and the
+*Show* box picks which one is drawn (the Sync Map follows it).
+
 The history is a pure data model (:class:`ActivityHistory`) fed once a
-second from ``engine._ft8_result``.  Recording a period is a few list
+second from ``engine._ft8_results`` (one result per mode).  Recording a period is a few list
 appends; the plot is only redrawn while the window is visible, and only
 when a new period arrives or that period's decodes come in.
 """
@@ -405,6 +408,12 @@ def build_window(self, view_action):
     status = QtWidgets.QLabel("Waiting for the first full period…")
     layout.addWidget(status)
     top = QtWidgets.QHBoxLayout()
+    mode_label = QtWidgets.QLabel("Show:")
+    top.addWidget(mode_label)
+    mode_combo = QtWidgets.QComboBox()
+    mode_combo.setToolTip("Which mode this window and the Sync Map show "
+                          "(both are decoded and sent to WS Hub)")
+    top.addWidget(mode_combo)
     top.addWidget(QtWidgets.QLabel("History:"))
     spin = QtWidgets.QSpinBox()
     spin.setRange(MIN_PERIODS, MAX_PERIODS)
@@ -477,17 +486,26 @@ def build_window(self, view_action):
     win._act_regions = []
     win._act_section_labels = []
     win._act_labels = []
-    win._act_history = ActivityHistory(spin.value())
+    from .ft8_engine import PERIOD_MODES
+    win._act_histories = {m: ActivityHistory(spin.value()) for m in PERIOD_MODES}
+    win._act_view = str(_settings().value("activity_view_mode", PERIOD_MODES[0]))
+    if win._act_view not in PERIOD_MODES:
+        win._act_view = PERIOD_MODES[0]
+    win._act_history = win._act_histories[win._act_view]
+    win._act_mode_combo = mode_combo
+    win._act_mode_label = mode_label
+    win._act_combo_modes = ()
     win._act_highlight = set()
     win._act_drawn_version = None
     win._act_y_key = None
     win._act_x_range = None
     win._act_newest = None
-    win._act_last_res = None
+    win._act_last_res = {}
 
     def on_periods(n):
         _settings().setValue("activity_periods", int(n))
-        win._act_history.set_periods(n)
+        for h in win._act_histories.values():
+            h.set_periods(n)
         win._act_newest = None               # reset the time axis to the new width
         redraw(win)
 
@@ -499,7 +517,13 @@ def build_window(self, view_action):
         _settings().setValue("activity_show_candidates", bool(on))
         redraw(win, force=True)
 
+    def on_mode(text):
+        if text and text != win._act_view and text in win._act_histories:
+            _settings().setValue("activity_view_mode", text)
+            show_mode(self, win, text)
+
     spin.valueChanged.connect(on_periods)
+    mode_combo.currentTextChanged.connect(on_mode)
     calls_cb.toggled.connect(on_calls)
     cand_cb.toggled.connect(on_cands)
     plot.scene().sigMouseMoved.connect(lambda pos: _hover(win, pos))
@@ -520,20 +544,75 @@ def set_highlighted_calls(win, calls) -> None:
     redraw(win, force=True)
 
 
+def show_mode(eng, win, mode: str) -> None:
+    """Show ``mode``'s history here (and its Sync Map in Diagnostics)."""
+    win._act_view = mode
+    win._act_history = win._act_histories[mode]
+    try:
+        eng._ft8_view_mode = mode
+    except Exception:
+        pass
+    win._act_drawn_version = None
+    win._act_y_key = None
+    win._act_newest = None
+    win.setWindowTitle(f"WS Skim — {mode} Activity")
+    sync = getattr(eng, "_ft8_win", None)
+    if sync is not None:
+        sync.setWindowTitle(f"WS Skim — {mode} Sync Map")
+        sync._ft8_drawn = None
+    if win._act_mode_combo.currentText() != mode:
+        win._act_mode_combo.blockSignals(True)
+        win._act_mode_combo.setCurrentText(mode)
+        win._act_mode_combo.blockSignals(False)
+    redraw(win, force=True)
+
+
+def _sync_mode_combo(eng, win, modes: tuple) -> None:
+    """List the decoded modes in the Show box; follow the engine if the
+    shown mode was turned off."""
+    if modes != win._act_combo_modes:
+        combo = win._act_mode_combo
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(list(modes))
+        combo.blockSignals(False)
+        win._act_combo_modes = modes
+        many = len(modes) > 1
+        combo.setVisible(many)
+        win._act_mode_label.setVisible(many)
+    want = win._act_view if win._act_view in modes else modes[0]
+    if want != win._act_view or getattr(eng, "_ft8_view_mode", None) != want \
+            or win._act_mode_combo.currentText() != want:
+        show_mode(eng, win, want)
+
+
+def _latest_results(eng) -> dict:
+    """mode -> newest PeriodResult (``_ft8_results``, plus ``_ft8_result``)."""
+    out = dict(getattr(eng, "_ft8_results", None) or {})
+    res = getattr(eng, "_ft8_result", None)
+    if res is not None and res.mode not in out:
+        out[res.mode] = res
+    return out
+
+
 def tick(eng, win) -> None:
-    """Record the engine's latest period; redraw only when visible and changed."""
+    """Record each mode's latest period; redraw only when visible and changed."""
     from . import ft8_engine
     try:
-        if not ft8_engine.is_period_mode(getattr(eng, "mode", "MSK144")):
+        modes = ft8_engine.enabled_period_modes(eng)
+        if not modes:
             win._act_status.setText("Mode is MSK144. Choose Mode → FT8 to see FT8 activity.")
             return
+        _sync_mode_combo(eng, win, modes)
         win._act_sample_rate = getattr(eng, "sample_rate", None)
-        res = getattr(eng, "_ft8_result", None)
-        if res is not None and res is not win._act_last_res:
-            win._act_last_res = res
-            win._act_history.add(res)
+        for mode, res in _latest_results(eng).items():
+            hist = win._act_histories.get(mode)
+            if hist is None or res is win._act_last_res.get(mode):
+                continue
+            win._act_last_res[mode] = res
+            hist.add(res)
         if win._act_history.newest_start() is None:
-            win._act_status.setText("Waiting for the first full period…")
+            win._act_status.setText(f"{win._act_view}: waiting for the first full period…")
             return
         if win.isVisible():
             redraw(win)

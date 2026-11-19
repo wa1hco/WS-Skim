@@ -8,6 +8,20 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Added
+
+- **FT8 and FT4 at the same time.**  The **Mode** menu now has FT8 and FT4
+  as separate check marks, and both can be on; MSK144 is still on its own
+  (checking it turns FT8 and FT4 off).  Each mode keeps its own period
+  clock (15 s / 7.5 s), its own jt9 run and its own WS Hub regions, so on
+  20 m both 14.074 (`SKIM-FLEX-20m-FT8-74`) and 14.080
+  (`SKIM-FLEX-20m-FT4-80`) are heard from the one receiver.  FT4 regions
+  use the band's FT4 dial; an idle FT4 region closes after 1 minute.  The
+  choice is remembered; an install that was on FT8 or FT4 comes up with
+  both checked.  The status bar shows decodes per minute for each mode,
+  and the Activity window has a **Show** box to pick which mode it (and the
+  Sync Map) draws.
+
 ### Fixed
 
 - **FT8 Activity time axis no longer zooms.**  A mouse-wheel zoom over the

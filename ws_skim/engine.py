@@ -256,10 +256,17 @@ class Engine:
         # Operating mode (ft8_engine.MODES).  MSK144 runs the burst
         # detect/decode path; FT8/FT4 skip it and search each UTC period
         # for Costas sync instead.  Switch with set_mode().
+        # ``mode`` is the primary mode (it picks the Band list and blanker);
+        # ``period_modes`` are the FT8/FT4 modes decoded side by side from
+        # the one receiver, each on its own period clock and worker thread.
         self.mode = "MSK144"
-        self._ft8_result = None        # ft8_engine.PeriodResult of the last period
-        self._ft8_busy = False
-        self._ft8_last_period = -1
+        self.period_modes: tuple[str, ...] = ()
+        self._ft8_result = None        # newest ft8_engine.PeriodResult, any mode
+        self._ft8_results: dict = {}   # mode -> newest PeriodResult of that mode
+        self._ft8_busy_by: dict = {}   # mode -> worker running
+        self._ft8_last_by: dict = {}   # mode -> last dispatched period index
+        self._ft8_threads: dict = {}   # mode -> newest worker thread
+        self._ft8_histories: dict = {}  # mode -> ft8_engine.DecodeHistory
         self._ft8_thread: threading.Thread | None = None
 
         # Time-domain magnitude display buffer (200 ms circular) — H and V
@@ -491,16 +498,61 @@ class Engine:
         self.display_center_freq_mhz = -1.0  # force report_freq() on first display update
 
     def set_mode(self, mode: str) -> None:
-        """Switch between MSK144 and the FT8/FT4 period modes at runtime."""
-        from .ft8_engine import MODES
+        """Switch between MSK144 and one FT8/FT4 period mode at runtime."""
+        from .ft8_engine import MODES, is_period_mode
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}; expected one of {MODES}")
+        if is_period_mode(mode):
+            self.set_period_modes((mode,))
+            return
         if mode == self.mode:
             return
         log.info("Engine: mode %s -> %s", self.mode, mode)
         self.mode = mode
+        self.period_modes = ()
+        self._reset_period_state()
+
+    def set_period_modes(self, modes) -> None:
+        """Decode these FT8/FT4 modes together (e.g. ``("FT8", "FT4")``).
+
+        The primary :attr:`mode` becomes the first of them in FT8, FT4
+        order.  Modes newly turned on start with a fresh period clock and
+        decode history; modes turned off drop their last result.
+        """
+        from .ft8_engine import PERIOD_MODES, normalize_period_modes
+        want = normalize_period_modes(modes)
+        if not want:
+            raise ValueError(f"no period mode in {modes!r}; expected some of {PERIOD_MODES}")
+        if want == self.period_modes and self.mode == want[0]:
+            return
+        log.info("Engine: mode %s -> %s", "+".join(self.period_modes) or self.mode,
+                 "+".join(want))
+        was_period = bool(self.period_modes)
+        old = set(self.period_modes)
+        self.mode = want[0]
+        self.period_modes = want
+        if not was_period:
+            self._reset_period_state()
+        else:
+            for m in old - set(want):
+                self._ft8_results.pop(m, None)
+                self._ft8_last_by.pop(m, None)
+                self._ft8_histories.pop(m, None)
+            for m in set(want) - old:
+                self._ft8_last_by.pop(m, None)
+                self._ft8_histories.pop(m, None)
+            r = self._ft8_result
+            if r is not None and getattr(r, "mode", None) not in want:
+                self._ft8_result = None
+        self._ch_buf_end = 0
+        if hasattr(self, "_ch_buf_v_end"):
+            self._ch_buf_v_end = 0
+
+    def _reset_period_state(self) -> None:
         self._ft8_result = None
-        self._ft8_last_period = -1
+        self._ft8_results = {}
+        self._ft8_last_by = {}
+        self._ft8_histories = {}
         self._ch_buf_end = 0
         if hasattr(self, "_ch_buf_v_end"):
             self._ch_buf_v_end = 0
@@ -954,7 +1006,8 @@ class Engine:
         self._background_stopping = True
         self._stop_block_runtime(timeout_s=min(5.0, timeout_s))
         threads: list[threading.Thread] = []
-        for t in (self._tfmf_thread, getattr(self, "_ft8_thread", None)):
+        for t in (self._tfmf_thread, getattr(self, "_ft8_thread", None),
+                  *getattr(self, "_ft8_threads", {}).values()):
             if t is not None and t.is_alive():
                 threads.append(t)
         threads.extend(

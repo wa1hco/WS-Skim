@@ -32,6 +32,10 @@ section (:mod:`ft8_decode`) and publishes a second ``PeriodResult`` with the
 decodes.  Each decode also goes to ``engine._decode_queue`` (the main decode
 panel, WSJT-X UDP and PSKReporter, as for MSK144) and to ``decodes.jsonl``.
 
+FT8 and FT4 can run together (``engine.period_modes``): each has its own
+period clock, decode history and worker thread, and its results go to
+``engine._ft8_results[mode]`` (``_ft8_result`` is the newest of any mode).
+
 No change to timing, phase or scaling of the MSK144 path: in FT8/FT4 mode
 that path is skipped entirely (see ``processing.process_iq_data``).
 """
@@ -103,8 +107,32 @@ class PeriodResult:
     full_scan: bool = True
 
 
+#: Period modes, in the order they are listed and dispatched.  Any of them
+#: can run together from the one receiver.
+PERIOD_MODES = ("FT8", "FT4")
+
+
 def is_period_mode(mode: str) -> bool:
-    return mode in ("FT8", "FT4")
+    return mode in PERIOD_MODES
+
+
+def normalize_period_modes(modes) -> tuple[str, ...]:
+    """The period modes in ``modes`` (any order, duplicates, junk ignored),
+    as a tuple in :data:`PERIOD_MODES` order."""
+    if isinstance(modes, str):
+        modes = [m for m in modes.replace("+", ",").split(",")]
+    want = {str(m).strip().upper() for m in (modes or ())}
+    return tuple(m for m in PERIOD_MODES if m in want)
+
+
+def enabled_period_modes(eng) -> tuple[str, ...]:
+    """Period modes ``eng`` is decoding (``eng.period_modes``, else its
+    single ``mode`` when that is FT8/FT4; empty in MSK144)."""
+    modes = getattr(eng, "period_modes", None)
+    if modes:
+        return normalize_period_modes(modes)
+    mode = getattr(eng, "mode", DEFAULT_MODE)
+    return (mode,) if is_period_mode(mode) else ()
 
 
 def downsample_map(sync: np.ndarray, freqs: np.ndarray, baseline: float,
@@ -382,23 +410,55 @@ def gap_samples(gaps, a: int, b: int) -> int:
 
 def maybe_dispatch_period(eng) -> None:
     """Called once per ``process_iq_data`` chunk (radio thread).  Cheap no-op
-    unless the engine is in FT8/FT4 mode and a new period is ready."""
-    mode = getattr(eng, "mode", DEFAULT_MODE)
-    if not is_period_mode(mode):
+    unless the engine decodes FT8/FT4 and a new period of one is ready.
+
+    Each enabled mode has its own period clock, decode history and worker
+    thread, so a slow FT8 period never holds up FT4 (or the reverse)."""
+    modes = enabled_period_modes(eng)
+    if not modes:
         return
     tb = getattr(eng, "timebase", None)
     if tb is None or not tb.is_anchored():
         return
-    if getattr(eng, "_ft8_busy", False) or getattr(eng, "_background_stopping", False):
+    if getattr(eng, "_background_stopping", False):
         return
+    for mode in modes:
+        _maybe_dispatch_mode(eng, tb, mode)
+
+
+def _state(eng, name: str) -> dict:
+    d = getattr(eng, name, None)
+    if d is None:
+        d = {}
+        setattr(eng, name, d)
+    return d
+
+
+def _dial_setting_for(eng, mode: str) -> float | None:
+    """The operator's Band setting applies to the primary mode's dial only;
+    another mode decoded alongside uses its own standard dial (FT4 14.080
+    next to FT8 14.074)."""
+    if mode != getattr(eng, "mode", mode):
+        return None
+    return getattr(eng, "calling_freq_mhz", None)
+
+
+def _maybe_dispatch_mode(eng, tb, mode: str) -> None:
+    busy = _state(eng, "_ft8_busy_by")
+    if busy.get(mode, False):
+        return
+    last = _state(eng, "_ft8_last_by")
     spec = cs.MODES[mode]
     period = spec.period_s
     fs = float(eng.sample_rate)
     now = tb.utc_at(eng._iq_abs_sample)
     k = math.floor((now - TAIL_S) / period) - 1
-    if k <= getattr(eng, "_ft8_last_period", -1):
+    prev = last.get(mode, -1)
+    if k <= prev:
         return
-    eng._ft8_last_period = k
+    if prev >= 0 and k > prev + 1:
+        log.info("[ft8] %s: %d period(s) not decoded (decoder behind)", mode, k - prev - 1)
+    last[mode] = k
 
     p0 = k * period
     want0 = tb.sample_at(p0 - HEAD_S)
@@ -416,7 +476,7 @@ def maybe_dispatch_period(eng) -> None:
     t0_s = (have0 - tb.sample_at(p0)) / fs
     frac = n / max(1, want1 - want0)
     center = float(eng.center_freq_mhz)
-    dial = pick_dial_mhz(mode, center, fs, getattr(eng, "calling_freq_mhz", None))
+    dial = pick_dial_mhz(mode, center, fs, _dial_setting_for(eng, mode))
     dial_off = (dial - center) * 1e6 if dial else None
     timing = timing_snapshot(eng, tb)
     if getattr(eng, "_ft8_save_iq", False):
@@ -425,6 +485,8 @@ def maybe_dispatch_period(eng) -> None:
 
     jt9 = _jt9_path(eng)
     hms = time.strftime("%H:%M:%S", time.gmtime(p0))
+    if mode == "FT4":
+        hms += f".{int(round((p0 % 1) * 10))}"   # FT4 periods start on x.0 / x.5 s
 
     # IQ that never arrived (the radio transmitting, a network outage) is
     # zero-filled in the ring by process_iq_data; a period that is mostly
@@ -437,16 +499,22 @@ def maybe_dispatch_period(eng) -> None:
                  mode, hms, 100 * (1.0 - real_frac))
         return
     frac = min(frac, real_frac)
-    history = getattr(eng, "_ft8_history", None)
+    histories = _state(eng, "_ft8_histories")
+    history = histories.get(mode)
     if history is None:
-        history = eng._ft8_history = DecodeHistory()
+        history = histories[mode] = DecodeHistory()
+    results = _state(eng, "_ft8_results")
+
+    def publish(r):
+        results[mode] = r
+        eng._ft8_result = r
 
     def work():
         try:
             r = search_period(iq, fs, mode, t0_s=t0_s, period_start_utc=p0,
                               center_freq_mhz=center, data_fraction=frac,
                               dial_offset_hz=dial_off, history=history)
-            eng._ft8_result = r
+            publish(r)
             log.info("[ft8] %s period %s: %d candidates (%d set aside, %s), %d sections, "
                      "%.2f s; data %.0f%%, backlog %.2f s, queue %s pkts, drops %s, missed %s",
                      mode, hms, len(r.candidates), len(r.dropped_candidates),
@@ -457,31 +525,65 @@ def maybe_dispatch_period(eng) -> None:
             log.info("[ft8] %s period %s: sections at %s kHz", mode, hms,
                      " ".join(f"{(center * 1e6 + s.base_hz) / 1e3:.0f}" for s in r.sections))
             if not jt9 and r.sections:
-                eng._ft8_result = replace(
-                    r, decode_note="jt9 not found: install WSJT-X to decode")
+                publish(replace(r, decode_note="jt9 not found: install WSJT-X to decode"))
             elif jt9 and r.sections:
                 t = time.perf_counter()
+                depth = ft8_decode.depth_for(len(r.sections))
                 ds = ft8_decode.decode_period(
                     iq, fs, mode, r.sections, t0_s=t0_s, period_start_utc=p0,
-                    center_freq_mhz=center, jt9=jt9,
-                    depth=ft8_decode.depth_for(len(r.sections)))
-                eng._ft8_result = replace(r, decodes=ds, decoded=True)
+                    center_freq_mhz=center, jt9=jt9, depth=depth)
+                publish(replace(r, decodes=ds, decoded=True))
                 history.observe(mode, center, k, ds)
                 dts = sorted(d.dt_s for d in ds)
                 log.info("[ft8] %s period %s: %d decodes, jt9 depth %d %.2f s, DT median %s",
-                         mode, hms, len(ds), ft8_decode.depth_for(len(r.sections)),
-                         time.perf_counter() - t,
+                         mode, hms, len(ds), depth, time.perf_counter() - t,
                          f"{dts[len(dts) // 2]:+.2f} s" if dts else "-")
+                _count_rate(eng, mode, p0, len(ds))
                 publish_decodes(eng, ds)
         except Exception:
-            log.exception("[ft8] search/decode failed")
+            log.exception("[ft8] %s search/decode failed", mode)
         finally:
-            eng._ft8_busy = False
+            busy[mode] = False
 
-    eng._ft8_busy = True
-    th = threading.Thread(target=work, daemon=True, name="ft8-search")
+    busy[mode] = True
+    th = threading.Thread(target=work, daemon=True, name=f"{mode.lower()}-search")
+    _state(eng, "_ft8_threads")[mode] = th
     eng._ft8_thread = th
     th.start()
+
+
+#: Decode rate window: the per-mode rate covers decodes in the last minute.
+RATE_WINDOW_S = 60.0
+
+
+def _count_rate(eng, mode: str, p0: float, n: int) -> None:
+    log_ = _state(eng, "_ft8_rate_log").setdefault(mode, [])
+    log_.append((float(p0), int(n)))
+    cut = float(p0) - RATE_WINDOW_S - 1e-6
+    while log_ and log_[0][0] <= cut:
+        log_.pop(0)
+
+
+def decode_rates(eng) -> dict[str, float]:
+    """Decodes per minute for each enabled period mode, over the last
+    :data:`RATE_WINDOW_S` of decoded periods (0 until a period decodes)."""
+    out = {}
+    logs = getattr(eng, "_ft8_rate_log", {}) or {}
+    for mode in enabled_period_modes(eng):
+        entries = list(logs.get(mode, ()))
+        if not entries:
+            out[mode] = 0.0
+            continue
+        span = max(cs.MODES[mode].period_s,
+                   min(RATE_WINDOW_S, len(entries) * cs.MODES[mode].period_s))
+        out[mode] = sum(n for _p, n in entries) * 60.0 / span
+    return out
+
+
+def rate_text(eng) -> str:
+    """Status-bar line: ``FT8 312/min · FT4 48/min`` (empty in MSK144)."""
+    rates = decode_rates(eng)
+    return " · ".join(f"{m} {rates[m]:.0f}/min" for m in rates)
 
 
 #: Diagnostics → Save FT8 period IQ keeps at most this many files (~7 MB each

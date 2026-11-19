@@ -53,7 +53,11 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   (±20 kHz) on 48 kHz IQ, with a 48-channel polyphase channelizer,
   paired-tone detection, a coincidence gate, an optional noise
   blanker, and a GUI (live spectrogram, detection heatmap, decode
-  panel). In FT8/FT4, **View → FT8 Activity** opens with the mode: frequency up
+  panel). The **Mode** menu picks what is decoded: MSK144 on its own, or
+  FT8 and FT4 (check either or both; each is decoded and sent to WS Hub
+  separately, and the status bar shows decodes per minute for each).
+  In FT8/FT4, **View → FT8 Activity** opens with the mode (its **Show** box
+  picks FT8 or FT4 when both are on): frequency up
   the side with the jt9 sections, each labelled by its kHz in the band
   ("74" is 7074 kHz), the last few minutes of periods
   across the bottom, and one tick per decoded station coloured by SNR

@@ -31,6 +31,11 @@ group `224.0.0.73:2237` by default:
   kHz. A region is announced with its first decode and closed (Clear +
   Close) after 8 periods with no decodes (2 min FT8, 1 min FT4, 2 min
   MSK144) or when it leaves the passband.
+- FT8 and FT4 can be decoded together from one receiver. Each mode has
+  its own period clock, decode history and jt9 run, so its regions are
+  separate instances (`SKIM-FLEX-20m-FT8-74` and `SKIM-FLEX-20m-FT4-80`
+  on 20 m). The operator's Band pick sets the primary mode's dial; the
+  other mode uses its standard dial for the band (FT4 14.080).
 - Heartbeat (type 0) every 15 s, Status (type 1) on change and with
   each heartbeat, Decode (type 2) with the WSJT-X mode character
   (`~` FT8, `+` FT4, `&` MSK144, …) and `delta_frequency = RF − dial`.

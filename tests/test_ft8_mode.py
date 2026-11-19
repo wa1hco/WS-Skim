@@ -83,9 +83,10 @@ def test_search_period_noise_only_is_quiet():
 # ── engine ──────────────────────────────────────────────────────────────
 
 def _drain(e):
+    threads = list(getattr(e, "_ft8_threads", {}).values())
     t = getattr(e, "_ft8_thread", None)
-    if t is not None:
-        t.join(timeout=30)
+    for th in threads + ([t] if t is not None else []):
+        th.join(timeout=30)
 
 
 def _feed(e, x, chunk=8192, upto=None):
@@ -195,10 +196,16 @@ def test_set_mode_validates_and_resets():
     with pytest.raises(ValueError):
         e.set_mode("JT65")
     e.set_mode("FT8")
-    e._ft8_result = object()
-    e._ft8_last_period = 99
+    e._ft8_result = ft8_engine.PeriodResult(
+        mode="FT8", period_start_utc=0.0, center_freq_mhz=14.074, sample_rate=FS,
+        compute_s=0.0, candidates=[], sections=[], map_score=np.zeros((1, 0)),
+        map_freqs_hz=np.zeros(0), map_start_s=np.zeros(1))
+    e._ft8_last_by["FT8"] = 99
     e.set_mode("FT4")
-    assert e.mode == "FT4" and e._ft8_result is None and e._ft8_last_period == -1
+    assert e.mode == "FT4" and e.period_modes == ("FT4",)
+    assert e._ft8_result is None and "FT8" not in e._ft8_last_by
+    e.set_mode("MSK144")
+    assert e.mode == "MSK144" and e.period_modes == ()
 
 
 # ── UI ──────────────────────────────────────────────────────────────────
