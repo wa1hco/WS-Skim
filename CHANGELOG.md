@@ -10,6 +10,12 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Fixed
 
+- **FT8 Activity time axis no longer zooms.**  A mouse-wheel zoom over the
+  plot used to stretch time too, so the ticks bunched up on the left and the
+  newest periods fell off screen.  Time is now locked to the History setting
+  with the newest period at the right edge; the wheel and drag zoom
+  frequency only.
+
 - **FT8 periods around your own transmissions are timed right again.**
   While a Flex radio transmits, WS Skim throws away its IQ.  The sample
   clock used to stop with it, so after each transmission the IQ was glued

@@ -421,6 +421,8 @@ def build_window(self, view_action):
         plot.getAxis(_name).setTextPen("k")
     plot.showGrid(x=True, y=False, alpha=0.25)
     plot.getViewBox().disableAutoRange()
+    # Mouse zoom and drag act on frequency only; time follows the History setting.
+    plot.getViewBox().setMouseEnabled(x=False, y=True)
     plot.setMenuEnabled(True)
 
     cands = TicksItem()
@@ -521,6 +523,7 @@ def tick(eng, win) -> None:
             return
         if win.isVisible():
             redraw(win)
+            _pin_time(win, win._act_history.x_range())
     except Exception as e:                        # never let a bad frame kill the panel
         win._act_status.setText(f"redraw error: {e}")
 
@@ -550,20 +553,15 @@ def redraw(win, force: bool = False) -> None:
 
 
 def _lock_axes(win, hist: ActivityHistory) -> None:
-    """Scroll time with the newest period; keep the operator's frequency zoom."""
+    """Pin time to the newest periods; keep the operator's frequency zoom."""
     plot = win._act_plot
     vb = plot.getViewBox()
     vb.disableAutoRange()
     newest = hist.newest_start()
     xr = hist.x_range()
-    if win._act_newest is None or win._act_x_range is None:
-        plot.setXRange(*xr, padding=0)
-    elif newest != win._act_newest:
-        # Shift whatever is on screen by the time that has passed, so a
-        # time zoom is kept too.
-        (cx0, cx1), _ = vb.viewRange()
-        shift = newest - win._act_newest
-        plot.setXRange(cx0 + shift, cx1 + shift, padding=0)
+    # Time is locked to the History setting: newest period at the right edge.
+    # (A mouse-wheel zoom used to stretch it, leaving the ticks bunched left.)
+    _pin_time(win, xr)
     win._act_newest = newest
     win._act_x_range = xr
 
@@ -586,6 +584,15 @@ def _lock_axes(win, hist: ActivityHistory) -> None:
     if win._act_y_key != key:
         plot.setYRange(y0, y1, padding=0.01)
         win._act_y_key = key
+
+
+def _pin_time(win, xr) -> None:
+    """Put the time axis back on ``xr`` if anything (e.g. View All) moved it."""
+    if xr is None:
+        return
+    (cx0, cx1), _ = win._act_plot.getViewBox().viewRange()
+    if abs(cx0 - xr[0]) > 1e-3 or abs(cx1 - xr[1]) > 1e-3:
+        win._act_plot.setXRange(*xr, padding=0)
 
 
 def _sync_sections(win, hist: ActivityHistory) -> None:

@@ -268,3 +268,34 @@ def test_setup_puts_activity_in_view_and_sync_map_in_diagnostics(qapp, monkeypat
     assert eng._ft8_win.isVisible()
     ft8_window.apply_mode(eng, "MSK144")
     assert not eng._activity_win.isVisible() and not eng._ft8_win.isVisible()
+
+
+def test_time_axis_stays_locked_to_history(qapp, monkeypatch):
+    """A wheel zoom or View All must not stretch time (ticks bunched left)."""
+    from PyQt5 import QtWidgets
+    import ws_skim.visualizer as vis
+    monkeypatch.setattr(vis, "_SETTINGS", _Settings(activity_periods=4))
+
+    class Eng(QtWidgets.QMainWindow):
+        mode = "FT8"
+        sample_rate = 48000.0
+        _ft8_result = None
+
+    eng = Eng()
+    _ENGINES.append(eng)
+    win = aw.build_window(eng, QtWidgets.QAction("FT8 Activity", eng, checkable=True))
+    win.show()
+    vb = win._act_plot.getViewBox()
+    assert vb.state["mouseEnabled"] == [False, True]        # wheel/drag: frequency only
+    eng._ft8_result = _res(T0, [_dec(T0, 14_075_000.0, -3)])
+    aw.tick(eng, win)
+    win._act_plot.setXRange(T0 - 600, T0 + 600, padding=0)  # e.g. View All
+    aw.tick(eng, win)                                        # same period: re-pinned
+    (x0, x1), _ = vb.viewRange()
+    assert x0 == pytest.approx(T0 - 45) and x1 == pytest.approx(T0 + 15)
+    win._act_plot.setXRange(T0 - 600, T0 + 600, padding=0)
+    eng._ft8_result = _res(T0 + 15, [_dec(T0 + 15, 14_075_000.0, -3)])
+    aw.tick(eng, win)                                        # new period: newest at right
+    (x0, x1), _ = vb.viewRange()
+    assert x0 == pytest.approx(T0 - 30) and x1 == pytest.approx(T0 + 30)
+    win.hide()
