@@ -24,10 +24,13 @@ Related: local UDP export in `ws_skim/reporting.py` and
 WS Skim already emits WSJT-X-faithful UDP to the WS Hub multicast
 group `224.0.0.73:2237` by default:
 
-- One receive-only instance per (source, band, mode, dial), with id
-  `SKIM-{SOURCE}-{BAND}-{MODE}` when the dial is the standard one for
-  that band and mode, otherwise the dial in kHz is appended
-  (`SKIM-FLEX-6m-FT8-50323`).
+- One receive-only instance per active region (source, band, mode,
+  dial), with id `SKIM-{SOURCE}-{BAND}-{MODE}-{kHz in band}`: the
+  whole-kHz dial modulo 1000 (`SKIM-FLEX-40m-FT8-74` for 7074 kHz,
+  `SKIM-FLEX-6m-FT8-313` for 50313 kHz). FT8/FT4 region dials are whole
+  kHz. A region is announced with its first decode and closed (Clear +
+  Close) after 8 periods with no decodes (2 min FT8, 1 min FT4, 2 min
+  MSK144) or when it leaves the passband.
 - Heartbeat (type 0) every 15 s, Status (type 1) on change and with
   each heartbeat, Decode (type 2) with the WSJT-X mode character
   (`~` FT8, `+` FT4, `&` MSK144, …) and `delta_frequency = RF − dial`.
@@ -379,14 +382,14 @@ The HTTPS history API accepts the same filters.
 
 ### Remote instance naming, loops, and duplicates
 
-Local ids are unchanged: `SKIM-{SOURCE}-{BAND}-{MODE}[-{dial_kHz}]`.
+Local ids are unchanged: `SKIM-{SOURCE}-{BAND}-{MODE}-{kHz in band}`.
 
 Remote ids include the originating call so they can never collide
 with a local instance:
 
-`SKIM-{CALL}-{SOURCE}-{BAND}-{MODE}[-{dial_kHz}]`
+`SKIM-{CALL}-{SOURCE}-{BAND}-{MODE}-{kHz in band}`
 
-for example `SKIM-WA1HCO-FLEX-2m-FT8` or `SKIM-WA1HCO-KIWI-20m-FT8`.
+for example `SKIM-WA1HCO-FLEX-2m-FT8-174` or `SKIM-WA1HCO-KIWI-20m-FT8-74`.
 Optional PSK Reporter spots use a distinct prefix, for example
 `SKIM-PSKR-{REPORTER}-{BAND}-{MODE}`.
 
@@ -476,8 +479,8 @@ rate jt9 already takes. In IQ mode each packet can carry a GPS
 timestamp, which is a better period clock than the PC clock alone.
 
 WS Skim should grow a first-party Kiwi client and a `KIWI` source
-tag, so instances look like `SKIM-KIWI-20m-FT8` locally and
-`SKIM-{CALL}-KIWI-20m-FT8` on the stream. Settings belong in the
+tag, so instances look like `SKIM-KIWI-20m-FT8-74` locally and
+`SKIM-{CALL}-KIWI-20m-FT8-74` on the stream. Settings belong in the
 GUI, like every other source.
 
 We cannot borrow [DigiSkimmer](https://github.com/lazywalker/DigiSkimmer)

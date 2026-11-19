@@ -17,12 +17,15 @@
 Two output protocols mirror what WSJT-X produces:
 
 WSJT-X UDP (224.0.0.73:2237 by default, the WS Hub multicast group)
-    One emulated WSJT-X instance per (source, band, mode, dial), each with
-    its own id (``SKIM-FLEX-2m-FT8``), Heartbeat (type 0, every 15 s),
-    Status (type 1, on change and with each heartbeat), and Decode
+    One emulated WSJT-X instance per active region (source, band, mode,
+    dial), each with its own id named by the dial's kHz within the band
+    (``SKIM-FLEX-40m-FT8-74`` for 7074 kHz), Heartbeat (type 0, every
+    15 s), Status (type 1, on change and with each heartbeat), and Decode
     (type 2) whose mode field is the WSJT-X character and whose
-    delta_frequency is the audio offset from that instance's dial.
-    Close (type 6) and Clear (type 3) are sent on shutdown.  The wire
+    delta_frequency is the audio offset from that instance's dial.  A
+    region is announced only when it decodes something, and closed
+    (Clear + Close) after ``IDLE_PERIODS`` periods with no decodes, on a
+    band change, and on shutdown.  The wire
     format follows NetworkMessage.hpp from the WSJT-X source.  WS Hub
     ingests these datagrams the same way it ingests a real WSJT-X
     instance.
@@ -74,6 +77,19 @@ from .wsjtx_udp import (  # noqa: E402
     instance_id, choose_dial, rf_dial_audio, mode_name, mode_spec,
     standard_dials, in_passband, is_multicast_ip, band_label, source_tag,
 )
+
+#: An emulated instance with no decode for this many T/R periods of its
+#: mode is closed: 2 min of FT8, 1 min of FT4.  MSK144 has no periods;
+#: it gets the FT8 2 min.
+IDLE_PERIODS            = 8
+IDLE_PERIOD_S           = {"FT8": 15.0, "FT4": 7.5}
+IDLE_DEFAULT_PERIOD_S   = 15.0
+
+
+def idle_limit_s(mode: str | None) -> float:
+    """Seconds without a decode before ``mode``'s instance is closed."""
+    return IDLE_PERIODS * IDLE_PERIOD_S.get(mode_name(mode), IDLE_DEFAULT_PERIOD_S)
+
 
 PSKREPORTER_INTERVAL_S  = 300   # 5 minutes — pskreporter asks for ≥5 min
 DX_DUPE_INTERVAL_S      = 1200  # 20 minutes — informal DX cluster etiquette
@@ -284,8 +300,9 @@ class Reporter:
         self._dx_log_path = (Path(__file__).parent.parent
                              / 'MSK144' / 'detections' / 'dx_spots.log')
 
-        # Emulated WSJT-X instances: id -> {dial_hz, mode, rx_df}
-        # One instance per (source, band, mode, dial).  Guarded by _udp_lock.
+        # Emulated WSJT-X instances: id -> {dial_hz, mode, rx_df, last_decode}
+        # One per active region (source, band, mode, dial): added on its
+        # first decode, closed when idle.  Guarded by _udp_lock.
         self._udp_lock   = threading.Lock()
         self._instances: dict[str, dict] = {}
         self.source      = ''
@@ -355,8 +372,8 @@ class Reporter:
         self._hb_thread = threading.Thread(target=self._heartbeat_loop,
                                            daemon=True, name='reporter-hb')
         self._hb_thread.start()
-        # Send heartbeat immediately so WS Hub / GridTracker registers
-        # each instance before the first decode arrives.
+        # Instances appear only with their first decode; this re-announces
+        # any kept from before a restart of the reporter.
         self._send_all_heartbeats()
         self._send_all_status()
 
@@ -389,8 +406,8 @@ class Reporter:
 
     def report_freq(self, freq_hz: int):
         """Record the IQ centre.  Does not emit Status for that frequency:
-        Status dials are the per-mode standard / section dials, not the
-        panadaptor centre.
+        Status dials are the region (section / calling) dials, not the
+        panadaptor centre.  Closes instances that left the passband.
         """
         self.center_hz = int(freq_hz)
         self.dial_freq_hz = int(freq_hz)
@@ -401,9 +418,10 @@ class Reporter:
                     bandwidth_hz: int | None = None):
         """Tell the reporter which radio and passband are live.
 
-        Called from the display loop.  Standard dials that fall inside
-        the passband are announced as receive-only WSJT-X instances so
-        WS Hub can show them before the first decode arrives.
+        Called from the display loop.  Nothing is announced here: a
+        region becomes a WSJT-X instance with its first decode.  Instances
+        whose dial left the passband (a band change) or that belong to an
+        earlier source are closed.
         """
         changed = False
         if source is not None and source != self.source:
@@ -564,30 +582,52 @@ class Reporter:
             self.stat_last_error = f"UDP send: {e}"
 
     def _register_instance(self, mid: str, dial_hz: int, mode: str,
-                           rx_df: int = 1500) -> bool:
-        """Add or update an instance.  Returns True if Status should be sent."""
+                           rx_df: int = 1500,
+                           now: float | None = None) -> tuple[bool, bool]:
+        """Add or update an instance that just decoded.
+
+        Returns ``(new, changed)``: ``new`` when the id was not live (send
+        a Heartbeat first), ``changed`` when its Status fields changed.
+        """
         mode_n = mode_name(mode)
+        t = time.time() if now is None else float(now)
         with self._udp_lock:
             prev = self._instances.get(mid)
-            rec = {"dial_hz": int(dial_hz), "mode": mode_n, "rx_df": int(rx_df)}
+            rec = {"dial_hz": int(dial_hz), "mode": mode_n, "rx_df": int(rx_df),
+                   "last_decode": t}
             self._instances[mid] = rec
-            return prev != rec
+        if prev is None:
+            return True, True
+        changed = any(prev.get(k) != rec[k] for k in ("dial_hz", "mode", "rx_df"))
+        return False, changed
 
     def _retire_instances(self, ids: list[str]):
-        """Send Clear+Close and drop instances that are no longer in the passband
-        or belonged to a previous source."""
+        """Send Clear+Close and drop instances that went idle, left the
+        passband, or belonged to a previous source."""
         for mid in ids:
             self._udp_send(build_clear(id=mid))
             self._udp_send(build_close(id=mid))
             with self._udp_lock:
                 self._instances.pop(mid, None)
 
+    def _retire_idle(self, now: float | None = None) -> list[str]:
+        """Close instances with no decode for ``idle_limit_s`` of their mode."""
+        t = time.time() if now is None else float(now)
+        with self._udp_lock:
+            idle = [mid for mid, rec in self._instances.items()
+                    if t - rec.get("last_decode", t) >= idle_limit_s(rec.get("mode"))]
+        if idle:
+            self._retire_instances(idle)
+        return idle
+
     def _refresh_passband_instances(self):
-        """Announce every standard dial that sits in the current passband.
+        """Close instances that no longer belong to the live radio.
 
         Instances whose dial has left the passband (a band change) or
         whose id does not match the current source are closed so WS Hub
-        does not keep a stale 2m instance after a QSY to 6m.
+        does not keep a stale 2m instance after a QSY to 6m.  Dials with
+        no decodes are not announced: a region appears with its first
+        decode (:meth:`_handle_decode`).
         """
         if not (self.center_hz and self.bandwidth_hz):
             return
@@ -601,15 +641,6 @@ class Reporter:
             ]
         if stale:
             self._retire_instances(stale)
-        from .wsjtx_udp import MODES as _MODES
-        for mode in _MODES:
-            for dial in standard_dials(mode):
-                if not in_passband(dial, self.center_hz, self.bandwidth_hz):
-                    continue
-                mid = instance_id(self.source, dial, mode)
-                if self._register_instance(mid, dial, mode):
-                    self._send_heartbeat(mid)
-                    self._send_status(mid, decoding=False)
 
     def _send_heartbeat(self, mid: str):
         self._udp_send(build_heartbeat(id=mid))
@@ -647,6 +678,7 @@ class Reporter:
 
     def _heartbeat_loop(self):
         while self._running:
+            self._retire_idle()
             self._send_all_heartbeats()
             self._send_all_status(decoding=False)
             for _ in range(HEARTBEAT_INTERVAL_S * 10):
@@ -662,6 +694,7 @@ class Reporter:
                     and now - self._last_psk_upload >= PSKREPORTER_INTERVAL_S):
                 self._upload_pskreporter()
 
+            self._retire_idle()
             try:
                 decode = self._decode_q.get(timeout=5.0)
             except queue.Empty:
@@ -681,13 +714,17 @@ class Reporter:
         mode = mode_name(decode.get("mode") or "MSK144")
 
         # ── WSJT-X UDP ────────────────────────────────────────────────────────
-        # One instance per (source, band, mode, dial).  Status dial is the
-        # section / calling frequency; Decode delta_frequency is RF − dial.
+        # One instance per active region (source, band, mode, dial).  Status
+        # dial is the section / calling frequency; Decode delta_frequency is
+        # RF − dial.  A region's first decode announces it (Heartbeat first,
+        # as WSJT-X does on start-up).
         if self.wsjtx_enabled and self.my_call and self._sock:
             rf_hz, dial_hz, audio_hz = rf_dial_audio(decode, freq_hz or self.center_hz)
             mid = instance_id(self.source, dial_hz, mode)
             rx_df = int(round(audio_hz or 1500))
-            self._register_instance(mid, dial_hz, mode, rx_df=rx_df)
+            new, _changed = self._register_instance(mid, dial_hz, mode, rx_df=rx_df)
+            if new:
+                self._send_heartbeat(mid)
             self._send_status(mid, decoding=True)
             payload = dict(decode)
             payload.setdefault("mode", mode)

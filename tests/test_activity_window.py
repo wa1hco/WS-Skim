@@ -192,6 +192,9 @@ def test_window_draws_scrolls_and_remembers_settings(qapp, monkeypatch):
     (x0, x1), (y0, y1) = win._act_plot.getViewBox().viewRange()
     assert x0 == pytest.approx(T0 + 30) and x1 == pytest.approx(T0 + 75)
     assert y0 < 14.075 < y1
+    # Regions are labelled by their dial's kHz within the band (14062, 14065).
+    assert [lab.toPlainText() for lab in win._act_section_labels
+            if lab.isVisible()] == ["62", "65"]
     assert sum(lab.isVisible() for lab in win._act_labels) == 0     # calls off
     # Frequency zoom survives the next period; time scrolls by one period.
     win._act_plot.setYRange(14.0745, 14.0755, padding=0)

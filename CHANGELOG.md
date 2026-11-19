@@ -29,6 +29,20 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Changed
 
+- **FT8/FT4 regions are named by their kHz in the band, and WS Hub only
+  hears regions that are decoding.**  Each jt9 region now starts on a whole
+  kHz (7059, 7074, …) instead of a floating 7059.8 or 7062.6, so the dial
+  WS Hub gets matches what operators announce.  Regions are labelled by
+  that kHz within the band, "74" for 7074 kHz (also 14074; "313" for
+  50313), in the FT8 Activity view and the Sync Map, instead of 1, 2, 3.
+  **WS Hub sees new instance names:** every instance now ends in its kHz,
+  the standard dial included, e.g. `SKIM-FLEX-40m-FT8-74` (was
+  `SKIM-FLEX-40m-FT8`) and `SKIM-FLEX-40m-FT8-59` (was
+  `SKIM-FLEX-40m-FT8-7060`).  WS Skim no longer announces every standard
+  dial in the passband: a region shows up in WS Hub with its first decode
+  and is closed after 8 periods with nothing decoded (2 minutes of FT8,
+  1 minute of FT4, 2 minutes for MSK144), as well as on a band change.
+
 - **FT8 jt9 sections follow where FT8 is actually being decoded.**  On a
   busy band the Costas search also scores RTTY, SSB and other digital
   traffic, which opened 10–14 jt9 sections on 40 m (7056–7099 kHz) and

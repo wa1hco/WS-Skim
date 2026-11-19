@@ -235,23 +235,29 @@ def primary_dial(mode: str, band: str) -> int | None:
     return exact if exact is not None else first
 
 
-def instance_id(source: str | None, dial_hz: int, mode: str | None) -> str:
-    """Stable WSJT-X UDP id for one emulated instance.
+def region_name(dial_hz: int | float) -> str:
+    """A region's short name: its dial's kHz within the band.
 
-    Format: ``SKIM-{SOURCE}-{BAND}-{MODE}`` when the dial is the primary
-    standard frequency for that band and mode; otherwise the dial in kHz
-    is appended (``SKIM-FLEX-6m-FT8-50323``) so two dials never share an
-    id.  The mapping depends only on (source, band, mode, dial).
+    The whole-kHz dial modulo 1000: 7074 kHz -> ``"74"``, 14074 kHz ->
+    ``"74"``, 50313 kHz -> ``"313"``, 144174 kHz -> ``"174"``.  The band
+    label (``40m``, ``20m``) says which band it is in.
+    """
+    return str(int(round(float(dial_hz) / 1000.0)) % 1000)
+
+
+def instance_id(source: str | None, dial_hz: int, mode: str | None) -> str:
+    """Stable WSJT-X UDP id for one emulated instance (one region).
+
+    Format: ``SKIM-{SOURCE}-{BAND}-{MODE}-{kHz in band}``, for example
+    ``SKIM-FLEX-40m-FT8-74`` for 7074 kHz or ``SKIM-FLEX-6m-FT8-313`` for
+    50313 kHz (see :func:`region_name`).  Every dial, the standard one
+    included, carries its kHz, so two regions never share an id.  The
+    mapping depends only on (source, band, mode, dial).
     """
     spec = mode_spec(mode)
     band = band_label(dial_hz)
     tag = source_tag(source)
-    base = f"SKIM-{tag}-{band}-{spec.name}"
-    primary = primary_dial(spec.name, band)
-    if primary is not None and abs(int(dial_hz) - primary) <= 1:
-        return base
-    khz = int(round(int(dial_hz) / 1000.0))
-    return f"{base}-{khz}"
+    return f"SKIM-{tag}-{band}-{spec.name}-{region_name(dial_hz)}"
 
 
 def choose_dial(rf_hz: int, mode: str | None, explicit_dial_hz: int | None = None) -> int:

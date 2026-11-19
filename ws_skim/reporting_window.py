@@ -90,7 +90,9 @@ def setup_reporting_window(self, view_action):
         "QLabel { color: #333; font-family: monospace; }")
     self._rpt_instance_ids.setToolTip(
         "Each id is one emulated WSJT-X instance that WS Hub will show, "
-        "named automatically from the radio, band, mode and dial."
+        "named from the radio, band, mode and the dial's kHz within the band "
+        "(SKIM-FLEX-40m-FT8-74 is 7074 kHz). A region is listed once it "
+        "decodes something and drops off after 8 quiet periods."
     )
     udp_form.addRow("Instances:", self._rpt_instance_ids)
 

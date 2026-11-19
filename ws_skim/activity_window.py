@@ -15,8 +15,9 @@
 """FT8 / FT4 Activity window: who was heard where, over the last few minutes.
 
 A rotated, waterfall-style history.  Frequency runs up the side, with the
-numbered ~3 kHz jt9 audio sections shaded across the plot; UTC time runs
-along the bottom, one column per T/R period, scrolling left as periods end
+~3 kHz jt9 audio sections ("regions") shaded across the plot, each
+labelled by its dial's kHz within the band ("74" for 7074 kHz); UTC time
+runs along the bottom, one column per T/R period, scrolling left as periods end
 (8 periods by default, set in the window and remembered).  Each decoded
 station is a short tick in its period column, as tall as the signal, and
 coloured by SNR.  Undecoded sync candidates can be shown as faint grey
@@ -154,6 +155,7 @@ class PeriodEntry:
     decodes: list = field(default_factory=list)       # Mark
     candidates: list = field(default_factory=list)    # Mark
     sections: list = field(default_factory=list)      # (lo_mhz, hi_mhz)
+    section_names: list = field(default_factory=list)  # "74" = 7074 kHz dial
     n_decodes_raw: int = 0
     decoded: bool = False
 
@@ -181,15 +183,18 @@ def entry_from_result(res) -> PeriodEntry:
         lo = float(rf_mhz(res, c.freq_hz))
         hi = float(rf_mhz(res, c.freq_hz + bw))
         cands.append(Mark(t0, t1, lo, hi, float(c.dt_s), score=float(c.score)))
-    sections = []
+    from .wsjtx_udp import region_name
+    sections, names = [], []
     for sec in list(getattr(res, "sections", []) or []):
         try:
             sections.append(section_rf_mhz(res, sec))
+            names.append(region_name(float(rf_mhz(res, sec.base_hz)) * 1e6))
         except Exception:
-            pass
+            continue
     return PeriodEntry(mode=res.mode, start=start, period_s=p,
                        center_freq_mhz=float(res.center_freq_mhz),
                        decodes=decodes, candidates=cands, sections=sections,
+                       section_names=names,
                        n_decodes_raw=len(decodes),
                        decoded=bool(getattr(res, "decoded", False)))
 
@@ -270,6 +275,15 @@ class ActivityHistory:
         """Sections of the newest period (they move a little period to period)."""
         newest = self.newest_start()
         return list(self.entries[newest].sections) if newest is not None else []
+
+    def section_names(self) -> list[str]:
+        """Region names (dial kHz within the band) of :meth:`sections`."""
+        newest = self.newest_start()
+        if newest is None:
+            return []
+        e = self.entries[newest]
+        names = list(e.section_names)
+        return names + [str(n) for n in range(len(names) + 1, len(e.sections) + 1)]
 
     def x_range(self) -> tuple[float, float] | None:
         newest = self.newest_start()
@@ -597,6 +611,7 @@ def _pin_time(win, xr) -> None:
 
 def _sync_sections(win, hist: ActivityHistory) -> None:
     secs = hist.sections()
+    names = hist.section_names()
     regions = list(win._act_regions)
     labels = list(win._act_section_labels)
     # Alternate sections shaded / clear so neighbours read as stripes.
@@ -617,9 +632,9 @@ def _sync_sections(win, hist: ActivityHistory) -> None:
         reg.setBrush(brushes[(n - 1) % 2])
         if n <= len(labels):
             lab = labels[n - 1]
-            lab.setText(str(n))
+            lab.setText(names[n - 1])
         else:
-            lab = pg.TextItem(str(n), color=(20, 20, 20),
+            lab = pg.TextItem(names[n - 1], color=(20, 20, 20),
                               fill=pg.mkBrush(255, 255, 255, 210), anchor=(0, 0.5))
             lab.setZValue(15)
             win._act_plot.addItem(lab)

@@ -54,7 +54,8 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   paired-tone detection, a coincidence gate, an optional noise
   blanker, and a GUI (live spectrogram, detection heatmap, decode
   panel). In FT8/FT4, **View → FT8 Activity** opens with the mode: frequency up
-  the side with the numbered jt9 sections, the last few minutes of periods
+  the side with the jt9 sections, each labelled by its kHz in the band
+  ("74" is 7074 kHz), the last few minutes of periods
   across the bottom, and one tick per decoded station coloured by SNR
   (hover for call, SNR, DT and frequency; *Show calls* prints them all).
   The sync detector's own view, **Diagnostics → FT8 Sync Map**, shows the

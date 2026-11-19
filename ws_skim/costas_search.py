@@ -59,6 +59,7 @@ for FT4, and wiring into the live engine.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -458,25 +459,45 @@ def group_into_sections(
     width_hz: float = 2800.0,
     audio_floor_hz: float = 300.0,
     margin_hz: float = 20.0,
+    center_hz: float = 0.0,
+    snap_hz: float | None = None,
 ) -> list[Section]:
-    """Greedily pack candidates (by frequency) into sections ≤ ``width_hz``.
+    """Greedily pack candidates (by frequency) into sections.
 
-    Each section places its lowest candidate at ``audio_floor_hz`` audio and
-    holds every candidate whose whole signal fits below
-    ``audio_floor_hz + width_hz``.  ``low/high_audio_hz`` bracket the
-    candidates' tone-0 frequencies by ``margin_hz`` (jt9 ``-L``/``-H``).
+    Each section's audio window runs from ``audio_floor_hz`` to
+    ``audio_floor_hz + width_hz`` and holds every candidate whose whole
+    signal fits inside it.  ``low/high_audio_hz`` bracket the candidates'
+    tone-0 frequencies by ``margin_hz`` (jt9 ``-L``/``-H``).
+
+    ``snap_hz=None``: the lowest candidate sits at ``audio_floor_hz``.
+    ``snap_hz`` given (e.g. 1000): the section's dial, ``center_hz +
+    base_hz`` (RF, Hz), is the multiple of ``snap_hz`` at or below the
+    lowest candidate's RF minus ``audio_floor_hz``, so dials are whole kHz
+    and the lowest candidate's audio is in ``[floor, floor + snap)``.
     """
     if width_hz <= spec.bandwidth_hz:
         raise ValueError("section narrower than one signal")
+    if snap_hz is not None and snap_hz <= 0:
+        raise ValueError("snap_hz must be positive")
+    top = audio_floor_hz + width_hz
+    if snap_hz is not None and audio_floor_hz + snap_hz + spec.bandwidth_hz > top:
+        raise ValueError("section too narrow for the snap step")
+
+    def base_for(f: float) -> float:
+        if snap_hz is None:
+            return f - audio_floor_hz
+        rf = center_hz + f - audio_floor_hz
+        return math.floor(rf / snap_hz + 1e-9) * snap_hz - center_hz
+
     sections: list[Section] = []
     cur: list[Candidate] = []
     base = 0.0
     for c in sorted(candidates, key=lambda c: c.freq_hz):
-        if cur and c.freq_hz + spec.bandwidth_hz - base > audio_floor_hz + width_hz:
+        if cur and c.freq_hz + spec.bandwidth_hz - base > top:
             sections.append(_close(base, cur, margin_hz))
             cur = []
         if not cur:
-            base = c.freq_hz - audio_floor_hz
+            base = base_for(c.freq_hz)
         cur.append(c)
     if cur:
         sections.append(_close(base, cur, margin_hz))

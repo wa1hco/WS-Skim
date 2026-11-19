@@ -429,7 +429,10 @@ def test_candidate_bars_count_and_colors(qapp, ft8_period):
     hi = max(range(len(r.candidates)), key=lambda i: r.candidates[i].score)
     assert colors[hi] != (255, 255, 255) or r.candidates[hi].score <= 1.05
     visible = [lab for lab in win._ft8_section_labels if lab.isVisible()]
-    assert [lab.toPlainText() for lab in visible] == [str(i) for i in range(1, len(r.sections) + 1)]
+    # Each section is labelled by its dial's kHz within the band.
+    from ws_skim.wsjtx_udp import region_name
+    want = [region_name(r.center_freq_mhz * 1e6 + s.base_hz) for s in r.sections]
+    assert [lab.toPlainText() for lab in visible] == want
     from ws_skim import ft8_decode
     lo, hi = ft8_window.section_rf_mhz(r, r.sections[0])
     assert (hi - lo) * 1e6 >= (ft8_decode.JT9_HIGH_HZ - ft8_decode.JT9_LOW_HZ) - 1

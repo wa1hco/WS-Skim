@@ -40,6 +40,7 @@ from ws_skim.wsjtx_udp import (
     build_status,
     choose_dial,
     instance_id,
+    region_name,
     is_low_confidence,
     is_multicast_ip,
     mode_char,
@@ -232,14 +233,26 @@ def test_source_and_band_tags():
     assert band_label(432_000_000) == "70cm"
 
 
-def test_instance_id_primary_vs_alternate_dial():
-    assert instance_id("radio", 144_174_000, "FT8") == "SKIM-FLEX-2m-FT8"
-    assert instance_id("usrp", 50_260_000, "MSK144") == "SKIM-B210-6m-MSK144"
-    # 50.323 is the 6m FT8 DX dial, not the primary 50.313.
-    assert instance_id("radio", 50_323_000, "FT8") == "SKIM-FLEX-6m-FT8-50323"
-    # Same inputs always produce the same id (stable even if another
-    # dial later appears on the same band).
-    assert instance_id("radio", 50_313_000, "FT8") == "SKIM-FLEX-6m-FT8"
+def test_instance_id_names_region_by_khz_in_band():
+    # Every dial, the standard one included, carries its kHz within the band.
+    assert instance_id("radio", 144_174_000, "FT8") == "SKIM-FLEX-2m-FT8-174"
+    assert instance_id("usrp", 50_260_000, "MSK144") == "SKIM-B210-6m-MSK144-260"
+    assert instance_id("radio", 50_313_000, "FT8") == "SKIM-FLEX-6m-FT8-313"
+    assert instance_id("radio", 50_323_000, "FT8") == "SKIM-FLEX-6m-FT8-323"
+    assert instance_id("radio", 7_074_000, "FT8") == "SKIM-FLEX-40m-FT8-74"
+    assert instance_id("radio", 7_059_000, "FT8") == "SKIM-FLEX-40m-FT8-59"
+    assert instance_id("radio", 14_080_000, "FT4") == "SKIM-FLEX-20m-FT4-80"
+    # Two regions on one band never share an id.
+    assert instance_id("radio", 7_074_000, "FT8") != instance_id("radio", 7_075_000, "FT8")
+
+
+def test_region_name_is_khz_within_band():
+    assert region_name(7_074_000) == "74"
+    assert region_name(14_074_000) == "74"
+    assert region_name(50_313_000) == "313"
+    assert region_name(144_174_000) == "174"
+    assert region_name(7_000_000) == "0"
+    assert region_name(7_059_999.9999) == "60"       # float dial from IQ maths
 
 
 def test_choose_dial_prefers_standard_in_audio_range():
@@ -298,10 +311,11 @@ def test_reporter_emits_one_instance_per_mode_and_sends_close(tmp_path):
             if {m["mode"] for m in decodes} >= {"~", "&"}:
                 break
         ids = {m["id"] for m in got if m}
-        assert "SKIM-FLEX-2m-FT8" in ids
-        assert "SKIM-FLEX-2m-MSK144" in ids or any(
-            (m.get("id") or "").startswith("SKIM-FLEX-2m-MSK144") for m in got
-        )
+        assert "SKIM-FLEX-2m-FT8-174" in ids
+        assert any((m.get("id") or "").startswith("SKIM-FLEX-2m-MSK144-") for m in got)
+        # Only regions that decoded are announced: no idle standard dials.
+        assert all(i in ("SKIM-FLEX-2m-FT8-174",) or i.startswith("SKIM-FLEX-2m-MSK144-")
+                   for i in ids), ids
         decodes = [m for m in got if m and m["type"] == MSG_DECODE]
         modes = {m["mode"] for m in decodes}
         assert "~" in modes and "&" in modes

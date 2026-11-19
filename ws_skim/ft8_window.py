@@ -20,13 +20,13 @@ this Sync Map is the sync detector's diagnostic view, under Diagnostics.
 The window draws ``engine._ft8_result`` (``ft8_engine.PeriodResult``) once
 per period, when the Costas search finishes: the sync score over RF
 frequency (x) and signal start time (y), each jt9 section outlined and
-numbered, and each candidate as a short bar as wide as the signal,
-coloured by sync strength.  A later decode result for the same period
-updates only the Decodes table, the status line, and callsign/SNR labels
-next to the bars; the map, sections and axes stay put.  The axes are
-locked to the mode's fixed DT window and the map's frequency range, so a
-manual zoom is kept across periods until the frequency, mode, or extent
-changes.
+labelled by its dial's kHz within the band ("74" = 7074 kHz), and each
+candidate as a short bar as wide as the signal, coloured by sync strength.
+A later decode result for the same period updates only the Decodes table,
+the status line, and callsign/SNR labels next to the bars; the map,
+sections and axes stay put. The axes are locked to the mode's fixed DT
+window and the map's frequency range, so a manual zoom is kept across
+periods until the frequency, mode, or extent changes.
 """
 from __future__ import annotations
 
@@ -515,7 +515,9 @@ def sync_regions(win, res) -> dict:
     # light so the sync score still reads through the band.
     brush = pg.mkBrush(255, 240, 120, 35)
     pen = pg.mkPen((255, 230, 80, 255), width=2)
-    for n, sec in enumerate(res.sections, 1):
+    from .wsjtx_udp import region_name
+    for sec in res.sections:
+        n = region_name(float(rf_mhz(res, sec.base_hz)) * 1e6)
         lo, hi = section_rf_mhz(res, sec)
         mid = 0.5 * (lo + hi)
         if used < len(existing):
@@ -534,11 +536,11 @@ def sync_regions(win, res) -> dict:
             existing.append(reg)
         if used < len(labels):
             lab = labels[used]
-            lab.setText(str(n))
+            lab.setText(n)
             lab.setPos(mid, y1)
             lab.show()
         else:
-            lab = pg.TextItem(str(n), color=(20, 20, 20),
+            lab = pg.TextItem(n, color=(20, 20, 20),
                               fill=pg.mkBrush(255, 255, 255, 200),
                               anchor=(0.5, 0))
             lab.setZValue(15)

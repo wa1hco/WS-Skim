@@ -65,6 +65,14 @@ TAIL_S = 1.0
 DISPLAY_COLUMNS = 2400
 #: Keep this far inside the IQ band edges (fraction of the sample rate).
 EDGE_FRACTION = 0.45
+#: jt9 sections ("regions"): the dial (audio 0 Hz) is a whole kHz, so a
+#: region is named by its kHz within the band (7074 -> "74") and the WSJT-X
+#: UDP dial matches what operators announce.  Every Costas candidate's whole
+#: signal sits in SECTION_AUDIO_LOW_HZ..SECTION_AUDIO_HIGH_HZ audio, inside
+#: jt9's 200..3200 Hz search (ft8_decode.JT9_LOW_HZ / JT9_HIGH_HZ).
+SECTION_SNAP_HZ = 1000.0
+SECTION_AUDIO_LOW_HZ = 200.0
+SECTION_AUDIO_HIGH_HZ = 3100.0
 
 
 @dataclass
@@ -337,7 +345,10 @@ def search_period(iq: np.ndarray, fs: float, mode: str, *, t0_s: float,
         active = history.active_rf_hz(mode, center_freq_mhz)
     used, dropped = filter_candidates(res.candidates, spec, center_freq_mhz, active,
                                       full_scan=full)
-    sections = cs.group_into_sections(used, spec)
+    sections = cs.group_into_sections(
+        used, spec, center_hz=center_freq_mhz * 1e6, snap_hz=SECTION_SNAP_HZ,
+        audio_floor_hz=SECTION_AUDIO_LOW_HZ,
+        width_hz=SECTION_AUDIO_HIGH_HZ - SECTION_AUDIO_LOW_HZ)
     sections, lone = drop_weak_single_sections(sections, spec, center_freq_mhz, active)
     if lone:
         ids = {id(c) for c in lone}
@@ -444,7 +455,7 @@ def maybe_dispatch_period(eng) -> None:
                      100 * frac, timing["backlog_s"], timing["queue_pkts"],
                      timing["drops"], timing["missed"])
             log.info("[ft8] %s period %s: sections at %s kHz", mode, hms,
-                     " ".join(f"{(center * 1e6 + s.base_hz) / 1e3:.1f}" for s in r.sections))
+                     " ".join(f"{(center * 1e6 + s.base_hz) / 1e3:.0f}" for s in r.sections))
             if not jt9 and r.sections:
                 eng._ft8_result = replace(
                     r, decode_note="jt9 not found: install WSJT-X to decode")
