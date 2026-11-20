@@ -1679,7 +1679,9 @@ def closeEvent(self, event):
         (getattr(self, '_screenshot_win', None), 'screenshot_geometry', None),
     ]:
         if win is not None:
-            _SETTINGS.setValue(geo_key, win.saveGeometry())
+            # The browser Roster has no Qt geometry; it saves its own.
+            if hasattr(win, 'saveGeometry'):
+                _SETTINGS.setValue(geo_key, win.saveGeometry())
             if vis_key is not None:
                 _SETTINGS.setValue(vis_key, win.isVisible())
 

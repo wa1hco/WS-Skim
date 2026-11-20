@@ -134,3 +134,12 @@ def test_sse_sends_json_frame(server, session):
     payload = buf.split(b"\n\n", 1)[0][6:]
     data = json.loads(payload.decode())
     assert "roster" in data and "log" in data
+
+
+def test_stop_without_start_does_not_block():
+    """Closing the app before the Roster was ever opened must not hang."""
+    import threading
+    s = RosterServer(RosterSession(my_call="N1ABC", my_grid="FN42", ttl=300), port=0)
+    done = threading.Event()
+    threading.Thread(target=lambda: (s.stop(), done.set()), daemon=True).start()
+    assert done.wait(5), "stop() blocked on a server that was never started"

@@ -91,11 +91,15 @@ class RosterServer:
 
     def stop(self) -> None:
         httpd = self._httpd
+        thread = self._thread
         if httpd is not None:
-            try:
-                httpd.shutdown()
-            except Exception:
-                pass
+            # shutdown() waits for serve_forever() to finish, so it would block
+            # forever if the server was bound but never started.
+            if thread is not None and thread.is_alive():
+                try:
+                    httpd.shutdown()
+                except Exception:
+                    pass
             try:
                 httpd.server_close()
             except Exception:
