@@ -179,6 +179,20 @@ note. One sentence mentions a "FlexQMAP bridge". It was left as history.
 `docs/figures/burst_freq_afc_corpus/ws-skim.code-workspace` points at an
 external `FlexQMAP` directory, not at `FlexQMAP2.py`.
 
+## Country file cty.dat (Jim Reisert, AD1C)
+
+**Verified against upstream.** `ws_skim/data/cty.dat` is the unmodified
+`cty.dat` from Contest Country Files #3637 (CTY-3637, released
+14 November 2026) by Jim Reisert AD1C, <https://www.country-files.com/>,
+downloaded from
+<https://www.country-files.com/cty/download/3637/cty-3637.zip>
+(SHA-256 `5e9dad3e4a04d868dda22bf42cfbebc196c6df655f3f10b641d851ff22a1784b`).
+The zip's `copyright.txt` is an MIT-style permission notice; it is kept
+verbatim, with the source and release, in `ws_skim/data/cty-COPYRIGHT.txt`.
+`ws_skim/decode_filter.py` reads it to check FT8/FT4 callsign prefixes and
+grid plausibility. It is bundled for offline use and not refreshed
+automatically.
+
 ## Headers on map144's own Python files
 
 **Verified in this repository.** Python files whose first 30 lines contain

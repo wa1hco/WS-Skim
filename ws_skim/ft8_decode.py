@@ -100,6 +100,7 @@ class Decode:
     dial_hz: float           # RF of the section's 0 Hz audio (base_hz)
     message: str
     low_confidence: bool = False  # WSJT-X '?': AP quality is poor
+    ap_type: int = 0              # jt9 a priori type (``a1``..``a8``), 0 = none
 
 
 def section_audio(iq: np.ndarray, fs: float, base_hz: float, t0_s: float,
@@ -150,13 +151,12 @@ def parse_jt9(stdout: str) -> list[tuple[int, float, float, str]]:
     return [(s, d, a, m) for s, d, a, m, _low in parse_jt9_ex(stdout)]
 
 
-def parse_jt9_ex(stdout: str) -> list[tuple[int, float, float, str, bool]]:
-    """Like :func:`parse_jt9`, plus ``low_confidence`` (the WSJT-X ``?`` flag).
+_AP_RE = re.compile(r"\s(a[0-9])\s*$")
 
-    a1..a7 AP annotations are stripped from the message and do not by
-    themselves set low_confidence — that matches WSJT-X, which only
-    flags a decode when the 37-character message field ends in ``?``.
-    """
+
+def parse_jt9_full(stdout: str) -> list[tuple[int, float, float, str, bool, int]]:
+    """Like :func:`parse_jt9_ex`, plus the a priori type (``a2`` -> 2, 0
+    for none).  jt9 prints it after the 37-character message field."""
     out = []
     for line in stdout.splitlines():
         if line.startswith("<") or "EOF" in line:
@@ -164,14 +164,31 @@ def parse_jt9_ex(stdout: str) -> list[tuple[int, float, float, str, bool]]:
         m = _LINE_RE.match(line)
         if not m:
             continue
-        raw = m["msg"].strip()
-        parts = re.split(r"\s{2,}", raw)
-        msg = " ".join(parts[0].split())
-        flags = " ".join(parts[1:]) if len(parts) > 1 else ""
-        # '?' at the end of the 37-char field, or a standalone '?' token.
-        low = flags.strip() == "?" or msg.endswith("?") or raw.rstrip().endswith("?")
-        out.append((int(m["snr"]), float(m["dt"]), float(m["af"]), msg, low))
+        ap = _AP_RE.search(" " + m["msg"])
+        body = m["msg"][:ap.start() - 1].rstrip() if ap else m["msg"]
+        for snr, dt, af, msg, low in _parse_rest(m, body):
+            out.append((snr, dt, af, msg, low, int(ap.group(1)[1]) if ap else 0))
     return out
+
+
+def _parse_rest(m, raw: str):
+    raw = raw.strip()
+    parts = re.split(r"\s{2,}", raw)
+    msg = " ".join(parts[0].split())
+    flags = " ".join(parts[1:]) if len(parts) > 1 else ""
+    # '?' at the end of the 37-char field, or a standalone '?' token.
+    low = flags.strip() == "?" or msg.endswith("?") or raw.rstrip().endswith("?")
+    yield int(m["snr"]), float(m["dt"]), float(m["af"]), msg, low
+
+
+def parse_jt9_ex(stdout: str) -> list[tuple[int, float, float, str, bool]]:
+    """Like :func:`parse_jt9`, plus ``low_confidence`` (the WSJT-X ``?`` flag).
+
+    a1..a7 AP annotations are stripped from the message and do not by
+    themselves set low_confidence — that matches WSJT-X, which only
+    flags a decode when the 37-character message field ends in ``?``.
+    """
+    return [x[:5] for x in parse_jt9_full(stdout)]
 
 
 def jt9_command(jt9: str, mode: str, section: cs.Section, wav: Path,
@@ -179,7 +196,11 @@ def jt9_command(jt9: str, mode: str, section: cs.Section, wav: Path,
     spec = cs.MODES[mode]
     lo = min(JT9_LOW_HZ, int(np.floor(section.low_audio_hz)))
     hi = max(JT9_HIGH_HZ, int(np.ceil(section.high_audio_hz)))
+    # "-c b -x b": no MyCall / DxCall.  Without them jt9 assumes K1ABC /
+    # W9XYZ and its a priori decoding (a2..a8) forces noise into messages
+    # to those calls; CQ a priori (a1) still runs.
     return [jt9, JT9_MODE_FLAG[mode], "-p", f"{spec.period_s:g}", "-d", str(depth),
+            "-c", "b", "-x", "b",
             "-L", str(lo), "-H", str(hi), "-f", str((lo + hi) // 2),
             "-a", str(wav.parent), "-t", str(wav.parent), str(wav)]
 
@@ -214,8 +235,8 @@ def decode_period(iq: np.ndarray, fs: float, mode: str, sections, *, t0_s: float
         dial = center_hz + sec.base_hz
         return [Decode(mode=mode, period_start_utc=period_start_utc, snr_db=snr, dt_s=dt,
                        audio_hz=af, rf_hz=dial + af, dial_hz=dial, message=msg,
-                       low_confidence=low)
-                for snr, dt, af, msg, low in parse_jt9_ex(out)]
+                       low_confidence=low, ap_type=ap)
+                for snr, dt, af, msg, low, ap in parse_jt9_full(out)]
 
     sections = list(sections)
     if not sections:

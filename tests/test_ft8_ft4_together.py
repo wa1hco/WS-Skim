@@ -121,7 +121,7 @@ def test_engine_decodes_ft8_and_ft4_together(tmp_path, monkeypatch):
         calls.append(cmd)
         if cmd[1] == ft8_decode.JT9_MODE_FLAG["FT4"]:
             return "000000 -12  0.1 1200 +  CQ W1AW FN31\n"
-        return "000000 -10  0.3 1500 ~  CQ K1ABC FN42\n"
+        return "000000 -10  0.3 1500 ~  CQ K1JT FN20\n"
 
     monkeypatch.setattr(ft8_decode, "run_jt9", fake_jt9)
     e = Engine(center_freq_mhz=14.077, sample_rate=int(FS), calling_freq_mhz=14.074)

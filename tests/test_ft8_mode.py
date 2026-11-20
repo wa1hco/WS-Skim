@@ -103,7 +103,7 @@ def test_engine_ft8_mode_finds_signal_in_utc_period(tmp_path, monkeypatch):
 
     def fake_jt9(cmd, cwd, timeout_s=0):
         jt9_calls.append(cmd)
-        return "000000 -10  0.3 1500 ~  CQ K1ABC FN42\n"
+        return "000000 -10  0.3 1500 ~  CQ K1JT FN20\n"
 
     monkeypatch.setattr(ft8_decode, "run_jt9", fake_jt9)
     # The fake jt9 "decodes" at 1500 Hz in every period, which would warm
@@ -143,14 +143,17 @@ def test_engine_ft8_mode_finds_signal_in_utc_period(tmp_path, monkeypatch):
            if abs(c.freq_hz - f) <= spec.tone_spacing_hz and abs(c.dt_s - 0.3) <= spec.symbol_s / 2]
     assert hit, r.candidates[:3]
     assert e._ch_buf_end == 0                      # MSK144 hop loop never ran
-    # The fake jt9 "decodes" one line per section (each period it runs).
-    assert r.decoded and jt9_calls and len(r.decodes) == len(r.sections)
-    assert {d.message for d in r.decodes} == {"CQ K1ABC FN42"}
+    # The fake jt9 "decodes" the same line in every section; the decode
+    # filter merges those into one and counts the rest as duplicates.
+    assert r.decoded and jt9_calls and len(r.decodes) == 1
+    assert {d.message for d in r.decodes} == {"CQ K1JT FN20"}
+    assert len(r.rejected) == len(r.sections) - 1
+    assert {x.reason for x in r.rejected} <= {"dup"}
     recs = []
     while not e._decode_queue.empty():
         recs.append(e._decode_queue.get_nowait())
     ft8 = [x for x in recs if x.get("mode") == "FT8"]
-    assert ft8 and ft8[0]["message"] == "CQ K1ABC FN42"
+    assert ft8 and ft8[0]["message"] == "CQ K1JT FN20"
     assert (tmp_path / "decodes.jsonl").is_file()
 
 

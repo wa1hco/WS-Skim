@@ -105,6 +105,9 @@ class PeriodResult:
     #: True when this period searched everything (start-up, or a periodic
     #: probe for new activity), False when the decode-history filter applied.
     full_scan: bool = True
+    #: Decodes the false-decode filter set aside (``decode_filter.Rejection``);
+    #: not in ``decodes``, not shown, not sent.
+    rejected: list = field(default_factory=list)
 
 
 #: Period modes, in the order they are listed and dispatched.  Any of them
@@ -529,17 +532,24 @@ def _maybe_dispatch_mode(eng, tb, mode: str) -> None:
             elif jt9 and r.sections:
                 t = time.perf_counter()
                 depth = ft8_decode.depth_for(len(r.sections))
-                ds = ft8_decode.decode_period(
+                raw = ft8_decode.decode_period(
                     iq, fs, mode, r.sections, t0_s=t0_s, period_start_utc=p0,
                     center_freq_mhz=center, jt9=jt9, depth=depth)
-                publish(replace(r, decodes=ds, decoded=True))
+                ds, rejected = filter_decodes(raw)
+                publish(replace(r, decodes=ds, decoded=True, rejected=rejected))
                 history.observe(mode, center, k, ds)
                 dts = sorted(d.dt_s for d in ds)
                 log.info("[ft8] %s period %s: %d decodes, jt9 depth %d %.2f s, DT median %s",
                          mode, hms, len(ds), depth, time.perf_counter() - t,
                          f"{dts[len(dts) // 2]:+.2f} s" if dts else "-")
+                if rejected:
+                    from . import decode_filter
+                    log.info("[ft8] %s period %s: %s", mode, hms,
+                             decode_filter.summary(rejected))
                 _count_rate(eng, mode, p0, len(ds))
+                _count_filtered(eng, rejected)
                 publish_decodes(eng, ds)
+                write_rejected(rejected)
         except Exception:
             log.exception("[ft8] %s search/decode failed", mode)
         finally:
@@ -564,6 +574,36 @@ def _count_rate(eng, mode: str, p0: float, n: int) -> None:
         log_.pop(0)
 
 
+def filter_decodes(raw) -> tuple[list, list]:
+    """``(kept, rejected)`` from the false-decode filter; on any filter
+    error everything is kept (a filter bug must not stop decoding)."""
+    from . import decode_filter
+    try:
+        return decode_filter.filter_period(raw)
+    except Exception:
+        log.exception("[ft8] decode filter failed; keeping every decode")
+        return list(raw), []
+
+
+def _count_filtered(eng, rejected) -> None:
+    c = _state(eng, "_ft8_filtered")
+    for x in rejected:
+        c[x.reason] = c.get(x.reason, 0) + 1
+
+
+def filter_text(eng) -> str:
+    """``12 filtered`` since start (empty before the first one)."""
+    n = sum((getattr(eng, "_ft8_filtered", None) or {}).values())
+    return f"{n} filtered" if n else ""
+
+
+def filter_detail(eng) -> str:
+    """``ap 5, call 3, grid 2, dup 2`` since start, for the tooltip."""
+    from .decode_filter import REASONS
+    c = getattr(eng, "_ft8_filtered", None) or {}
+    return ", ".join(f"{r} {c.get(r, 0)}" for r in REASONS)
+
+
 def decode_rates(eng) -> dict[str, float]:
     """Decodes per minute for each enabled period mode, over the last
     :data:`RATE_WINDOW_S` of decoded periods (0 until a period decodes)."""
@@ -583,7 +623,10 @@ def decode_rates(eng) -> dict[str, float]:
 def rate_text(eng) -> str:
     """Status-bar line: ``FT8 312/min · FT4 48/min`` (empty in MSK144)."""
     rates = decode_rates(eng)
-    return " · ".join(f"{m} {rates[m]:.0f}/min" for m in rates)
+    parts = [f"{m} {rates[m]:.0f}/min" for m in rates]
+    if parts and filter_text(eng):
+        parts.append(filter_text(eng))
+    return " · ".join(parts)
 
 
 #: Diagnostics → Save FT8 period IQ keeps at most this many files (~7 MB each
@@ -661,6 +704,51 @@ def decode_record(d) -> dict:
     }
 
 
+#: decodes.jsonl is rotated to decodes.jsonl.1 at this size (one old file
+#: kept), so it can no longer grow without bound.
+DECODES_MAX_BYTES = 64 * 1024 * 1024
+#: rejected.jsonl (filtered decodes, for review): rotated the same way.
+REJECTED_MAX_BYTES = 4 * 1024 * 1024
+
+
+def append_bounded(path, lines, max_bytes: int) -> None:
+    """Append ``lines`` to ``path``; first move a file over ``max_bytes``
+    to ``<path>.1`` (replacing the older one)."""
+    from pathlib import Path
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.stat().st_size >= max_bytes:
+            path.replace(path.with_name(path.name + ".1"))
+    except FileNotFoundError:
+        pass
+    with open(path, "a") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def rejected_record(x) -> dict:
+    d = x.decode
+    when = datetime.fromtimestamp(d.period_start_utc, tz=timezone.utc)
+    return {"timestamp": when.strftime("%Y-%m-%d_%H:%M:%S"), "mode": d.mode,
+            "radio_khz": round(d.rf_hz / 1000.0, 3), "audio_hz": d.audio_hz,
+            "dt_s": d.dt_s, "message": d.message, "jt9_snr_db": d.snr_db,
+            "ap": f"a{d.ap_type}" if getattr(d, "ap_type", 0) else "",
+            "reason": x.reason, "detail": x.detail}
+
+
+def write_rejected(rejected) -> None:
+    """Filtered decodes to ``<output>/rejected.jsonl`` (next to decodes.jsonl)."""
+    if not rejected:
+        return
+    try:
+        from .detection import production_output_dir
+        append_bounded(production_output_dir() / "rejected.jsonl",
+                       [json.dumps(rejected_record(x)) for x in rejected],
+                       REJECTED_MAX_BYTES)
+    except Exception as e:
+        log.warning("[ft8] could not write rejected.jsonl: %s", e)
+
+
 def publish_decodes(eng, decodes) -> None:
     """Send decodes to the main decode panel / reporter and ``decodes.jsonl``."""
     q = getattr(eng, "_decode_queue", None)
@@ -679,9 +767,6 @@ def publish_decodes(eng, decodes) -> None:
         return
     try:
         from .detection import production_output_dir
-        out = production_output_dir()
-        out.mkdir(parents=True, exist_ok=True)
-        with open(out / "decodes.jsonl", "a") as f:
-            f.write("\n".join(lines) + "\n")
+        append_bounded(production_output_dir() / "decodes.jsonl", lines, DECODES_MAX_BYTES)
     except OSError as e:
         log.warning("[ft8] could not write decodes.jsonl: %s", e)

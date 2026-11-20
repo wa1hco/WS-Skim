@@ -22,6 +22,28 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   and the Activity window has a **Show** box to pick which mode it (and the
   Sync Map) draws.
 
+- **False FT8/FT4 decodes are filtered out.**  jt9 still decodes at Deep
+  (depth 3), but each period's decodes are checked before they are shown in
+  the Activity window or sent to WS Hub, and the ones that cannot be real
+  are dropped:
+  - *ap* - a priori decodes that assume a QSO partner (jt9 now runs with no
+    MyCall/DxCall, so it no longer forces noise into messages to its
+    default K1ABC / W9XYZ; anything naming those calls is dropped too).
+    CQ a priori decodes are kept.
+  - *call* - a callsign not shaped like one, or a sender whose prefix is not
+    allocated (checked against a bundled `cty.dat` country file by AD1C,
+    see NOTICE; works offline).
+  - *grid* - a grid far from the sender's country (larger allowance for big
+    countries; /MM, Antarctica and US calls in KH6/KL7 etc. are handled).
+  - *dup* - the same message twice in one period from overlapping jt9
+    sections; the best SNR is kept.
+
+  On 1 day of 40 m / 20 m decodes this drops 0.1% (126 of 126,666), all
+  junk on inspection.  The status bar shows how many were filtered (hover
+  for the breakdown), the log has one `filtered N: ap a, call c, grid g,
+  dup d` line per period that had any, and the dropped decodes go to
+  `rejected.jsonl` next to `decodes.jsonl` for review.
+
 ### Fixed
 
 - **FT8 Activity time axis no longer zooms.**  A mouse-wheel zoom over the
@@ -42,6 +64,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   and a period that is mostly transmit is skipped.
 
 ### Changed
+
+- **`decodes.jsonl` no longer grows without limit.**  At 64 MB it is renamed
+  `decodes.jsonl.1` (replacing the older one) and a new file starts;
+  `rejected.jsonl` does the same at 4 MB.
 
 - **FT8/FT4 regions are named by their kHz in the band, and WS Hub only
   hears regions that are decoding.**  Each jt9 region now starts on a whole

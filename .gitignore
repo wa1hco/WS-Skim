@@ -123,8 +123,12 @@ fortran_bp_test/mf_test
 # should be relied on by other tools.  See scratch/README.md.
 scratch/
 
-# Band Map basemap data (drop GridTracker shapes.json here; not redistributed)
-ws_skim/data/
+# Band Map basemap data (drop GridTracker shapes.json here; not redistributed).
+# The files WS Skim ships from this folder are listed with "!".
+ws_skim/data/*
+!ws_skim/data/wsjtx_frequencies.json
+!ws_skim/data/cty.dat
+!ws_skim/data/cty-COPYRIGHT.txt
 
 # Runtime-generated launch/decode logs (canonical corpora live elsewhere)
 launches.jsonl

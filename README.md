@@ -56,6 +56,10 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   panel). The **Mode** menu picks what is decoded: MSK144 on its own, or
   FT8 and FT4 (check either or both; each is decoded and sent to WS Hub
   separately, and the status bar shows decodes per minute for each).
+  False FT8/FT4 decodes (a priori guesses, impossible callsigns, grids on
+  the wrong continent, duplicates) are filtered out before they are shown
+  or sent; the status bar counts them and they are kept in
+  `rejected.jsonl` in the output folder.
   In FT8/FT4, **View → FT8 Activity** opens with the mode (its **Show** box
   picks FT8 or FT4 when both are on): frequency up
   the side with the jt9 sections, each labelled by its kHz in the band

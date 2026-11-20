@@ -397,6 +397,12 @@ def _update_rate_label(self) -> None:
         text = ft8_engine.rate_text(self)
         label.setText(text)
         label.setVisible(bool(text))
+        tip = "Decodes per minute for each mode over the last minute"
+        if ft8_engine.filter_text(self):
+            tip += ("\nFiltered as false decodes since start: "
+                    + ft8_engine.filter_detail(self)
+                    + "\n(written to rejected.jsonl in the output folder)")
+        label.setToolTip(tip)
     except Exception:
         pass
 

@@ -11,7 +11,9 @@ Replays saved periods (Diagnostics -> Save FT8 period IQ writes them to
   with the "after" decodes of the earlier periods, as the app runs it.
 
 With jt9 available both section lists are decoded (at the depth the app
-would pick for that many sections) and decodes are compared by message.
+would pick for that many sections) and decodes are compared by message;
+the "after" decodes also go through the false-decode filter
+(``decode_filter``), and what it sets aside is listed and counted.
 Without jt9 only candidates and sections are reported.
 
     python tools/dev/ft8_section_replay.py DIR [--jt9 PATH] [--limit N] [--dial MHZ]
@@ -28,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from ws_skim import ft8_decode, ft8_engine  # noqa: E402
+from ws_skim import decode_filter, ft8_decode, ft8_engine  # noqa: E402
 
 
 def load(path: str) -> dict:
@@ -68,10 +70,16 @@ def run(paths, jt9: str | None, dial_mhz: float | None, out=print) -> dict:
             mb = {d.message for d in dec["b"]}
             ma = {d.message for d in dec["a"]}
             row.update(b_dec=len(mb), a_dec=len(ma), lost=len(mb - ma), gained=len(ma - mb))
+            row["a_raw"] = len(dec["a"])
+            kept, rej = decode_filter.filter_period(dec["a"])
+            row["a_kept"] = len(kept)
+            for reason, n in decode_filter.counts(rej).items():
+                row[f"f_{reason}"] = n
+            row["filtered_detail"] = [(x.reason, x.decode.message, x.detail) for x in rej]
             row["lost_detail"] = sorted((d.rf_hz / 1e3, d.snr_db, d.message)
                                         for d in dec["b"] if d.message in mb - ma)
             k = int(np.floor(r["p0"] / ft8_engine.cs.MODES[r["mode"]].period_s + 1e-9))
-            hist.observe(r["mode"], r["center"], k, dec["a"])
+            hist.observe(r["mode"], r["center"], k, kept)
         rows.append(row)
         secs = " ".join(f"{(r['center'] * 1e6 + s.base_hz) / 1e3:.1f}" for s in after.sections)
         hms = time.strftime("%H:%M:%S", time.gmtime(r["p0"]))
@@ -81,6 +89,8 @@ def run(paths, jt9: str | None, dial_mhz: float | None, out=print) -> dict:
             f" {row.get('lost', '-'):>4} {row.get('gained', '-'):>6}  {secs}")
         for khz, snr, msg in row.get("lost_detail", []):
             out(f"{'':>8}   lost: {khz:.3f} kHz {snr:+d} dB  {msg}")
+        for reason, msg, detail in row.get("filtered_detail", []):
+            out(f"{'':>8}   filtered ({reason}): {msg}  [{detail}]")
     return summarize(rows, out)
 
 
@@ -100,7 +110,11 @@ def summarize(rows, out=print) -> dict:
         s.update(before_decodes=sum(r["b_dec"] for r in rows),
                  after_decodes=sum(r["a_dec"] for r in rows),
                  lost=sum(r["lost"] for r in rows), gained=sum(r["gained"] for r in rows),
-                 before_jt9_s=mean("b_jt9_s"), after_jt9_s=mean("a_jt9_s"))
+                 before_jt9_s=mean("b_jt9_s"), after_jt9_s=mean("a_jt9_s"),
+                 after_raw=sum(r.get("a_raw", 0) for r in rows),
+                 after_kept=sum(r.get("a_kept", 0) for r in rows),
+                 **{f"filtered_{k}": sum(r.get(f"f_{k}", 0) for r in rows)
+                    for k in decode_filter.REASONS})
     out("summary: " + ", ".join(f"{k} {v:.2f}" if isinstance(v, float) else f"{k} {v}"
                                 for k, v in s.items()))
     return s
