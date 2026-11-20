@@ -149,11 +149,43 @@ class BandWaterfall:
 
     # Geometry ---------------------------------------------------------------
     def set_span(self, span_s: float) -> None:
+        """Change the history length, keeping the rows already recorded."""
         with self._lock:
+            old = self._rows_locked()
             self.span_s = float(span_s)
             self.row_s = max(MIN_ROW_S, self.span_s / self.max_rows)
             self.n_rows = max(2, int(math.ceil(self.span_s / self.row_s)))
             self._reset_locked(self._geom)
+            if old is not None and self.buf is not None:
+                self._regrid_locked(*old)
+
+    def _rows_locked(self):
+        """``(rows oldest first, row_s, t_last)`` or None."""
+        if getattr(self, "buf", None) is None or not getattr(self, "n", 0):
+            return None
+        idx = (self.head - self.n + np.arange(self.n)) % self.n_rows
+        return self.buf[idx].copy(), self.row_s, self.t_last
+
+    def _regrid_locked(self, rows, old_row_s: float, t_last: float) -> None:
+        """Put old rows onto the new row spacing (newest row stays newest)."""
+        if rows.shape[1] != self.n_cols:
+            return
+        n_old = rows.shape[0]
+        old_start = t_last - (n_old - 1) * old_row_s       # start time of rows[0]
+        n_new = min(self.n_rows,
+                    int((t_last - old_start) / self.row_s) + 1)
+        for j in range(n_new):
+            t = t_last - (n_new - 1 - j) * self.row_s
+            lo = int(math.floor((t - old_start) / old_row_s + 1e-9))
+            hi = int(math.floor((t + self.row_s - old_start) / old_row_s - 1e-9))
+            lo, hi = max(0, lo), min(n_old - 1, max(lo, hi))
+            seg = rows[lo:hi + 1]
+            real = seg[(seg > FILL_DB + 1.0).any(axis=1)] if seg.size else seg
+            self.buf[j] = real.max(axis=0) if real.shape[0] else FILL_DB
+        self.head = n_new % self.n_rows
+        self.n = n_new
+        self.t_last = float(t_last)
+        self.version += 1
 
     def _reset_locked(self, geom) -> None:
         self._geom = geom                     # (n_bins, center_mhz, fs)
@@ -707,6 +739,7 @@ def build_window(self, view_action):
 
     self._band_activity_win = win
     win.hide()
+    _update_wanted(win)               # record from the start, window open or not
     timer = QtCore.QTimer(win)
     timer.setInterval(TIMER_MS)
     timer.timeout.connect(lambda: tick(self, win))
@@ -716,14 +749,13 @@ def build_window(self, view_action):
 
 
 def _update_wanted(win) -> None:
-    """The engine computes waterfall rows only while they can be seen."""
+    """The engine records waterfall rows whenever Waterfall is ticked, even
+    while the window is hidden, minimised or being moved, so the picture is
+    still there when it comes back.  A gap while unticked shows as blank rows."""
     wf = getattr(win, "_ba_wf", None)
     if wf is None:
         return
-    want = bool(win.isVisible() and win._ba_wf_cb.isChecked())
-    if want and not wf.wanted:
-        wf.clear()                    # no stale rows from before a pause
-    wf.wanted = want
+    wf.wanted = bool(win._ba_wf_cb.isChecked())
 
 
 def set_highlighted_calls(win, calls) -> None:

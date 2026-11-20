@@ -228,7 +228,7 @@ def test_window_checkboxes_toggle_layers_and_are_remembered(qapp, monkeypatch):
     eng, win, settings = _window(qapp, monkeypatch, settings)
     assert win._ba_spin.value() == 4                     # 16 FT8 periods = 4 min
     assert win._ba_wf_cb.isChecked() and win._ba_det_cb.isChecked()
-    assert not eng._band_wf.wanted                       # hidden: no FFT work
+    assert eng._band_wf.wanted                           # records even while hidden
     win.show()
     assert eng._band_wf.wanted
     _fill_waterfall(eng._band_wf, T0, 30.0)
@@ -255,7 +255,7 @@ def test_window_checkboxes_toggle_layers_and_are_remembered(qapp, monkeypatch):
     win._ba_spin.setValue(3)
     assert settings[ba.MINUTES_KEY] == 3
     win.hide()
-    assert not eng._band_wf.wanted
+    assert not eng._band_wf.wanted                       # unticked: no FFT work
     # Settings come back on the next start.
     eng2, win2, _ = _window(qapp, monkeypatch, settings)
     assert not win2._ba_wf_cb.isChecked() and win2._ba_det_cb.isChecked()
@@ -310,3 +310,28 @@ def test_engine_feed_skipped_when_not_wanted():
         ba.push_spectrum(eng, np.ones(2048, np.float32), T0 + 0.3 * k)
     rows, *_ = eng._band_wf.snapshot()
     assert rows.shape[1] == 1024
+
+
+def test_waterfall_survives_hide_show_and_history_change(qapp, monkeypatch):
+    eng, win, _ = _window(qapp, monkeypatch)
+    win.show()
+    _fill_waterfall(eng._band_wf, T0, 60.0)
+    before = eng._band_wf.snapshot()
+    assert before is not None
+    # A window manager hide/show (move, resize, minimise) keeps the rows.
+    win.hide()
+    assert eng._band_wf.wanted
+    win.show()
+    after = eng._band_wf.snapshot()
+    assert after is not None and after[0].shape == before[0].shape
+    assert np.array_equal(after[0], before[0]) and after[2] == before[2]
+    # Changing History keeps the recorded time range and newest row.
+    win._ba_spin.setValue(win._ba_spin.value() + 2)
+    snap = eng._band_wf.snapshot()
+    assert snap is not None and snap[2] == pytest.approx(before[2], abs=1.0)
+    assert snap[1] <= before[1] + eng._band_wf.row_s + 1.0
+    assert (snap[0] > ba.FILL_DB + 1.0).any()
+    win._ba_spin.setValue(1)                             # shorter: newest part kept
+    snap = eng._band_wf.snapshot()
+    assert snap is not None and snap[2] == pytest.approx(before[2], abs=1.0)
+    assert snap[2] - snap[1] <= 60.0 + 1.0
