@@ -193,6 +193,28 @@ verbatim, with the source and release, in `ws_skim/data/cty-COPYRIGHT.txt`.
 grid plausibility. It is bundled for offline use and not refreshed
 automatically.
 
+
+## WS Hub roster (needed-station logic and browser look)
+
+**Verified in this repository.** The browser roster in WS Skim copies
+look, filter wording, and "needed" badge reasons from WS Hub
+(<https://github.com/wa1hco/WS-Hub>, GPL-3.0-or-later, Jeff Millar, WA1HCO),
+so the two programs stay consistent until a shared library exists.
+
+- `ws_skim/needed/cty.py`, `callsign.py`, `zones.py`, `places.py`, and
+  `lotw.py` are copied from the corresponding WS Hub modules, with imports
+  rewritten for this package and a "Copied into WS Skim from WS Hub" line
+  at the top of each file.
+- `ws_skim/needed/adif.py` and `checklist.py` are adapted from WS Hub's
+  ADIF reader and `goal_rules` checklist (badge text and reason sentences
+  are kept).
+- `ws_skim/roster/static/wims.css` is WS Hub's light-theme stylesheet, and
+  `roster.js` follows the Operate roster in WS Hub's `wims.js` (filters,
+  badges, sort, Ctrl+/- column refit).
+
+These files are not a vendored git submodule. They will be replaced by a
+shared library when that work is agreed with WS Hub.
+
 ## Headers on map144's own Python files
 
 **Verified in this repository.** Python files whose first 30 lines contain

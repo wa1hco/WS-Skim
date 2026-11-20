@@ -12,237 +12,33 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Roster window (View → Roster): every decode, newest first, sortable.
+"""View → Roster: Hub-style browser roster (needed badges, filters, Ctrl+/-).
 
-This is the decode list that used to fill the main window.  It is the
-start of the needed-station roster in
-``docs/plan/ws-skim-standalone-and-modes.md``; the "needed" filters are not
-built yet.
-
-One row per decode: UTC, mode, frequency, DF, polarisation (MSK144 dual-pol
-only), SNR, call and message.  Click a column header to sort by it (click
-again to reverse); the newest decodes are on top by default.  Text fades
-with age (black under 2 min, then amber, orange and grey after 20 min).
-Right-click an MSK144 decode to open its saved recording in the Analysis
-window.
-
-The engine keeps a reference to the table as ``engine.decode_panel`` (the
-name the decode path and source-start clear have always used).
+The radio and decoding path is unchanged.  ``engine.decode_panel`` is an
+in-memory decode list so status-bar rates and source-start clear still work.
+View → Roster starts a loopback HTTP server and opens the page in a Chrome
+or Edge app window (Firefox or the system browser if those are missing).
 """
 from __future__ import annotations
 
-import time
+import json
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from .roster.browser import open_roster_url, should_open_browser
+from .roster.model import RosterSession
+from .roster.server import RosterServer
 
 #: Settings keys.
 GEOMETRY_KEY = "roster_geometry"
 VISIBLE_KEY = "roster_visible"
+LOG_PATH_KEY = "roster_log_path"
+CHECKLIST_KEY = "roster_checklist"
+WIN_X_KEY = "roster_win_x"
+WIN_Y_KEY = "roster_win_y"
+WIN_W_KEY = "roster_win_w"
+WIN_H_KEY = "roster_win_h"
 
-COLUMNS = ("UTC", "Mode", "Freq (kHz)", "DF (Hz)", "Pol", "SNR", "Call", "Message")
-COLUMN_TIPS = (
-    "UTC time of the decode (MSK144: the ping)",
-    "FT8, FT4 or MSK144",
-    "Radio frequency of the signal, kHz",
-    "FT8/FT4: audio frequency in its WSJT-X region (WSJT-X's Freq column).\n"
-    "MSK144: offset from the calling frequency.",
-    "Polarisation angle (dual-polarisation MSK144 receivers only)",
-    "Signal-to-noise ratio, dB (WSJT-X scale)",
-    "The sending station",
-    "The decoded message",
-)
-COL_UTC, COL_MODE, COL_FREQ, COL_DF, COL_POL, COL_SNR, COL_CALL, COL_MSG = range(8)
-
-#: At most this many rows; the oldest is dropped first.
-MAX_ROWS = 2000
-
-#: Age colours for a white background (WSJT-X/MAP65 fade, light mode).
-AGE_COLORS = (
-    (120, (0, 0, 0)),             # < 2 min  black
-    (480, (130, 95, 0)),          # < 8 min  amber
-    (1200, (190, 90, 0)),         # < 20 min orange
-    (None, (140, 140, 140)),      # older    grey
-)
-
-_SORT_ROLE = QtCore.Qt.UserRole + 10
-_EPOCH_ROLE = QtCore.Qt.UserRole
-_WAV_ROLE = QtCore.Qt.UserRole + 1
-
-
-def age_rgb(age_s: float) -> tuple[int, int, int]:
-    for limit, rgb in AGE_COLORS:
-        if limit is None or age_s < limit:
-            return rgb
-    return AGE_COLORS[-1][1]
-
-
-class _Item(QtWidgets.QTableWidgetItem):
-    """A cell that sorts by a stored key (numbers as numbers)."""
-
-    def __lt__(self, other):
-        a, b = self.data(_SORT_ROLE), other.data(_SORT_ROLE)
-        if a is None or b is None:
-            return super().__lt__(other)
-        try:
-            return a < b
-        except TypeError:
-            return str(a) < str(b)
-
-
-def _cell(text: str, key, align=None, tip: str | None = None) -> _Item:
-    it = _Item(text)
-    it.setData(_SORT_ROLE, key)
-    it.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-    if align is not None:
-        it.setTextAlignment(align)
-    if tip:
-        it.setToolTip(tip)
-    return it
-
-
-class RosterTable(QtWidgets.QTableWidget):
-    """The decode table.  ``clear()`` empties the rows (keeps the headers)."""
-
-    #: Emitted after rows are added or removed (for the window's count line).
-    changed = QtCore.pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(0, len(COLUMNS), parent)
-        self.setHorizontalHeaderLabels(list(COLUMNS))
-        for i, tip in enumerate(COLUMN_TIPS):
-            self.horizontalHeaderItem(i).setToolTip(tip + "\n\nClick to sort.")
-        hdr = self.horizontalHeader()
-        hdr.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-        hdr.setStretchLastSection(True)
-        hdr.setSortIndicatorShown(True)
-        self.verticalHeader().setVisible(False)
-        self.verticalHeader().setDefaultSectionSize(22)
-        self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.setAlternatingRowColors(True)
-        self.setWordWrap(False)
-        self.setFont(QtGui.QFont("Monospace", 10))
-        self.setStyleSheet(
-            "QTableWidget { background: #ffffff; alternate-background-color: #f4f6f9;"
-            " color: #000000; gridline-color: #e0e0e0; }"
-            "QHeaderView::section { background: #eceff3; color: #202020;"
-            " padding: 3px 6px; border: 0; border-right: 1px solid #d0d4da;"
-            " border-bottom: 1px solid #c0c4ca; font-weight: bold; }")
-        self.setSortingEnabled(True)
-        self.sortItems(COL_UTC, QtCore.Qt.DescendingOrder)    # newest on top
-        self.setColumnHidden(COL_POL, True)       # shown once a dual-pol decode arrives
-
-    # Rows -------------------------------------------------------------------
-    def clear(self) -> None:          # QTableWidget.clear() would drop the headers
-        self.setRowCount(0)
-        self.changed.emit()
-
-    def count(self) -> int:
-        return self.rowCount()
-
-    def add_decode(self, *, epoch: float, utc_time: str, mode: str, radio_khz: float,
-                   df_hz: int | None, message: str, snr: int | None = None,
-                   theta_deg: float | None = None, wav_path: str | None = None,
-                   now: float | None = None) -> int:
-        """Add one decode; returns its row (after sorting)."""
-        from .ft8_window import call_from_message
-        now = time.time() if now is None else float(now)
-        right = int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        center = int(QtCore.Qt.AlignCenter)
-        cells = [
-            _cell(utc_time, float(epoch)),
-            _cell(mode, mode, center),
-            _cell(f"{float(radio_khz):.3f}", float(radio_khz), right),
-            _cell("" if df_hz is None else f"{int(df_hz):+d}" if mode == "MSK144"
-                  else f"{int(df_hz)}", -1e9 if df_hz is None else int(df_hz), right),
-            _cell("" if theta_deg is None else f"{int(round(theta_deg))}°",
-                  -1.0 if theta_deg is None else float(theta_deg), right),
-            _cell("" if snr is None else f"{int(snr):+d}",
-                  -999 if snr is None else int(snr), right),
-            _cell(call_from_message(message), call_from_message(message)),
-            _cell(message, message, tip=message),
-        ]
-        cells[COL_UTC].setData(_EPOCH_ROLE, float(epoch))
-        if wav_path:
-            cells[COL_UTC].setData(_WAV_ROLE, str(wav_path))
-        if theta_deg is not None and self.isColumnHidden(COL_POL):
-            self.setColumnHidden(COL_POL, False)
-        rgb = QtGui.QColor(*age_rgb(max(0.0, now - float(epoch))))
-        sorting = self.isSortingEnabled()
-        self.setSortingEnabled(False)
-        self.insertRow(0)
-        for col, it in enumerate(cells):
-            it.setForeground(rgb)
-            self.setItem(0, col, it)
-        self._trim()
-        self.setSortingEnabled(sorting)      # re-sorts by the current column
-        self.changed.emit()
-        return cells[COL_UTC].row()
-
-    def _trim(self) -> None:
-        while self.rowCount() > MAX_ROWS:
-            oldest, oldest_t = 0, None
-            for r in range(self.rowCount()):
-                t = self.item(r, COL_UTC).data(_EPOCH_ROLE)
-                if oldest_t is None or (t is not None and t < oldest_t):
-                    oldest, oldest_t = r, t
-            self.removeRow(oldest)
-
-    def epoch_at(self, row: int):
-        it = self.item(row, COL_UTC)
-        return None if it is None else it.data(_EPOCH_ROLE)
-
-    def wav_at(self, row: int):
-        it = self.item(row, COL_UTC)
-        return None if it is None else it.data(_WAV_ROLE)
-
-    def recolor(self, now: float | None = None) -> None:
-        """Fade text by age (called every 15 s)."""
-        now = time.time() if now is None else float(now)
-        for r in range(self.rowCount()):
-            t = self.epoch_at(r)
-            if t is None:
-                continue
-            rgb = QtGui.QColor(*age_rgb(now - t))
-            for c in range(self.columnCount()):
-                it = self.item(r, c)
-                if it is not None:
-                    it.setForeground(rgb)
-
-    def recent_count(self, seconds: float, mode: str | None = None,
-                     now: float | None = None) -> int:
-        """Decodes newer than ``seconds`` (optionally of one mode)."""
-        now = time.time() if now is None else float(now)
-        n = 0
-        for r in range(self.rowCount()):
-            t = self.epoch_at(r)
-            if t is None or now - t > seconds:
-                continue
-            if mode is not None and self.item(r, COL_MODE).text() != mode:
-                continue
-            n += 1
-        return n
-
-
-def add_queue_record(table: RosterTable, result: dict, calling_freq_mhz: float) -> int:
-    """Add one decoded record from ``engine._decode_queue``."""
-    from .band_activity_window import record_time
-    mode = str(result.get("mode") or "MSK144")
-    radio_khz = float(result.get("radio_khz", 0.0) or 0.0)
-    if mode == "MSK144" or result.get("audio_hz") is None:
-        df = int(round((radio_khz - float(calling_freq_mhz) * 1000.0) * 1000.0))
-    else:
-        df = int(round(float(result["audio_hz"])))
-    epoch = record_time(result)
-    snr = result.get("jt9_snr")
-    return table.add_decode(
-        epoch=epoch, utc_time=str(result.get("utc_time") or
-                                  time.strftime("%H:%M:%S", time.gmtime(epoch))),
-        mode=mode, radio_khz=radio_khz, df_hz=df,
-        message=str(result.get("message") or "?"),
-        snr=int(snr) if snr is not None else None,
-        theta_deg=result.get("theta_deg"), wav_path=result.get("wav_path"))
+DEFAULT_WIDTH = 1000
+DEFAULT_HEIGHT = 700
 
 
 def _settings():
@@ -250,63 +46,161 @@ def _settings():
     return _SETTINGS
 
 
+def _station_from_settings():
+    s = _settings()
+    return (
+        str(s.value("reporting_mycall", "") or ""),
+        str(s.value("reporting_mygrid", "") or ""),
+    )
+
+
+def _load_checklist(s):
+    raw = s.value(CHECKLIST_KEY, "", type=str)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    return data if isinstance(data, (dict, list)) else None
+
+
+class _Chooser(object):
+    def __init__(self, parent, session, settings):
+        from PyQt5 import QtCore
+
+        class _Bridge(QtCore.QObject):
+            requested = QtCore.pyqtSignal()
+
+        self.session = session
+        self.settings = settings
+        self.parent = parent
+        self._bridge = _Bridge(parent)
+        self._bridge.requested.connect(self._open, QtCore.Qt.QueuedConnection)
+        # Keep a reference on the parent so it is not collected.
+        parent._roster_log_chooser = self
+
+    def request(self):
+        self._bridge.requested.emit()
+
+    def _open(self):
+        from PyQt5 import QtWidgets
+        start = self.session.log.path or ""
+        path, _ok = QtWidgets.QFileDialog.getOpenFileName(
+            self.parent,
+            "Choose a log (ADIF)",
+            start,
+            "ADIF logs (*.adi *.adif);;All files (*)",
+        )
+        if not path:
+            return
+        self.session.set_log(path)
+        self.settings.setValue(LOG_PATH_KEY, path)
+
+
+class _RosterHandle:
+    """Stand-in for the old Qt roster window (visibility only)."""
+
+    def __init__(self, action, server):
+        self._action = action
+        self._server = server
+
+    def isVisible(self):
+        return bool(self._action.isChecked())
+
+    def hide(self):
+        self._action.blockSignals(True)
+        self._action.setChecked(False)
+        self._action.blockSignals(False)
+
+    def show(self):
+        self._action.blockSignals(True)
+        self._action.setChecked(True)
+        self._action.blockSignals(False)
+
+    def windowTitle(self):
+        return "WS Skim — Roster"
+
+
+def _geom(s):
+    def _num(key, default):
+        try:
+            v = s.value(key, default)
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+    return {
+        "x": _num(WIN_X_KEY, 40),
+        "y": _num(WIN_Y_KEY, 80),
+        "width": _num(WIN_W_KEY, DEFAULT_WIDTH),
+        "height": _num(WIN_H_KEY, DEFAULT_HEIGHT),
+    }
+
+
+def _open_page(server, s) -> str:
+    g = _geom(s)
+    return open_roster_url(
+        server.url, width=g["width"], height=g["height"], x=g["x"], y=g["y"],
+    )
+
+
 def setup_roster_window(self, view_action) -> None:
-    """Build View → Roster; sets ``self._roster_win`` and ``self.decode_panel``."""
-    from .ui import _PanelWindow
+    """Build View → Roster: start the local server and open a browser window."""
+    s = _settings()
+    call, grid = _station_from_settings()
+    log_path = str(s.value(LOG_PATH_KEY, "") or "")
+    session = RosterSession(
+        my_call=call, my_grid=grid,
+        checklist=_load_checklist(s),
+        log_path=log_path,
+        station_getter=_station_from_settings,
+    )
+    chooser = _Chooser(self, session, s)
 
-    win = _PanelWindow("WS Skim — Roster", view_action, self, GEOMETRY_KEY)
-    win.setMinimumSize(520, 260)
-    geo = _settings().value(GEOMETRY_KEY)
-    if geo:
-        win.restoreGeometry(geo)
-    else:
-        win.setGeometry(QtCore.QRect(480, 760, 900, 420))
-    win.setStyleSheet("QWidget { background: #ffffff; color: #000000; }")
-    layout = QtWidgets.QVBoxLayout(win)
-    layout.setContentsMargins(6, 6, 6, 6)
-    info = QtWidgets.QLabel("")
-    info.setToolTip("Every decode from this radio, all modes.  Filters for needed "
-                    "stations come later (see the WS Skim plan).")
-    layout.addWidget(info)
-    table = RosterTable(win)
-    layout.addWidget(table, stretch=1)
+    def _persist_checklist():
+        try:
+            s.setValue(CHECKLIST_KEY, json.dumps(session.rules.items))
+        except Exception:
+            pass
 
-    def _count():
-        n = table.rowCount()
-        info.setText(f"{n:,} decode{'s' if n != 1 else ''} · click a column title to sort "
-                     "· right-click an MSK144 decode to open its recording")
+    _orig_set = session.set_checklist
 
-    table.changed.connect(_count)
-    _count()
-    table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-    table.customContextMenuRequested.connect(lambda pos: _context_menu(self, table, pos))
+    def _set_and_save(items):
+        _orig_set(items)
+        _persist_checklist()
 
-    win._roster_table = table
-    win._roster_info = info
-    self._roster_win = win
-    self.decode_panel = table
-    view_action.triggered.connect(lambda checked: win.show() if checked else win.hide())
-    # The list used to be the main window, so it starts shown.
-    if _settings().value(VISIBLE_KEY, True, type=bool):
-        view_action.setChecked(True)
-        win.show()
-    else:
-        view_action.setChecked(False)
-        win.hide()
+    session.set_checklist = _set_and_save  # type: ignore[method-assign]
 
+    _orig_log = session.set_log
 
-def _context_menu(eng, table: RosterTable, pos) -> None:
-    from pathlib import Path
-    from .ui import _open_analysis_window
-    idx = table.indexAt(pos)
-    if not idx.isValid():
-        return
-    wav_path = table.wav_at(idx.row())
-    menu = QtWidgets.QMenu(table)
-    if wav_path and Path(wav_path).exists():
-        act = menu.addAction(f"Open in Analysis Window  ({Path(wav_path).name})")
-        act.triggered.connect(lambda: _open_analysis_window(eng, wav_path))
-    else:
-        act = menu.addAction("(no saved recording for this decode)")
-        act.setEnabled(False)
-    menu.exec_(table.viewport().mapToGlobal(pos))
+    def _set_log(path, title=None):
+        ok = _orig_log(path, title=title)
+        if ok:
+            s.setValue(LOG_PATH_KEY, str(path))
+        return ok
+
+    session.set_log = _set_log  # type: ignore[method-assign]
+
+    server = RosterServer(session, choose_log=chooser.request)
+    server.start()
+
+    self._roster_session = session
+    self._roster_server = server
+    self.decode_panel = session.decodes
+    handle = _RosterHandle(view_action, server)
+    self._roster_win = handle
+
+    visible = s.value(VISIBLE_KEY, True, type=bool)
+    view_action.setChecked(bool(visible))
+    view_action.setToolTip(
+        "Needed-station roster in a browser window (filters, badges, Ctrl +/- zoom)"
+    )
+
+    def _on_toggle(checked):
+        s.setValue(VISIBLE_KEY, bool(checked))
+        if checked and should_open_browser():
+            _open_page(server, s)
+
+    view_action.triggered.connect(_on_toggle)
+    if visible and should_open_browser():
+        _open_page(server, s)

@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+  WS Skim roster page. Look and controls follow WS Hub's Operate roster
+  (https://github.com/wa1hco/WS-Hub).
+
+  Copyright (C) 2026 Jeff Millar, WA1HCO
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WS Skim — Roster</title>
+<link rel="stylesheet" href="/wims.css">
+</head>
+<body>
+<header>
+  <h1>WS Skim</h1>
+  <nav>
+    <a href="/" class="active">Roster</a>
+  </nav>
+  <span id="conn" class="down">connecting…</span>
+  <span class="meta" id="clock" style="margin-left:auto"></span>
+</header>
+<main>
+  <p id="log-line" class="hint">Log: looking…</p>
+  <div id="checklist-line" class="controls"></div>
+
+  <h2 id="ros-heading">Call roster</h2>
+  <div id="ros-controls" class="controls">
+    <span class="band-label">show</span>
+    <span class="ros-need" id="ros-needed-wrap">
+      <button type="button" class="ros-need-btn" id="ros-needed-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="ros-needed">Needed</button>
+      <span id="ros-needed" class="ros-need-list" role="listbox" data-value="needed" hidden>
+        <button type="button" role="option" data-value="all" title="No filter. Show every station heard.">All</button>
+        <button type="button" role="option" data-value="needed" title="Only stations marked needed, including unconfirmed places." aria-selected="true">Needed</button>
+        <button type="button" role="option" data-value="needed-cq" title="Needed stations calling CQ, including CQ NA and CQ DX. Unconfirmed too.">Needed and CQ</button>
+        <button type="button" role="option" data-value="needed-73" title="Needed stations calling CQ, or sending 73 or RR73. Free to call. Unconfirmed too.">Needed and CQ or 73</button>
+      </span>
+    </span>
+    <label title="Hide calls older than this (display filter; server still keeps about 5 minutes)">max age
+      <select id="ros-max-age">
+        <option value="15">15 sec</option>
+        <option value="30">30 sec</option>
+        <option value="60">1 min</option>
+        <option value="120" selected>2 min</option>
+        <option value="180">3 min</option>
+        <option value="300">5 min</option>
+        <option value="0">off</option>
+      </select>
+    </label>
+    <span class="band-label">bands</span>
+    <span id="ros-bands" class="band-checks"></span>
+    <span class="band-label">modes</span>
+    <span id="ros-modes" class="band-checks" title="Show stations heard in these modes.">
+      <label><input type="checkbox" data-mode="FT8" checked> FT8</label>
+      <label><input type="checkbox" data-mode="FT4" checked> FT4</label>
+      <label><input type="checkbox" data-mode="MSK144" checked> MSK144</label>
+    </span>
+    <details class="ros-cols-menu">
+      <summary title="Show or hide roster columns">columns</summary>
+      <div id="ros-cols" class="col-checks"></div>
+    </details>
+    <span class="meta" id="ros-meta"></span>
+  </div>
+  <table id="ros">
+    <thead><tr id="ros-head"></tr></thead>
+    <tbody id="ros-body"></tbody>
+  </table>
+  <div id="ros-empty" class="empty">no decodes yet…</div>
+</main>
+<script src="/roster.js"></script>
+</body>
+</html>

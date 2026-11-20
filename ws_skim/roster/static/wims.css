@@ -1,0 +1,420 @@
+/*
+ * WS Hub
+ * Copied into WS Skim from WS Hub for the roster page (light theme).
+ * Copyright (C) 2026 Jeff Millar, WA1HCO
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+:root { /* light theme (project default) */
+  --bg:#f6f8fa; --panel:#ffffff; --line:#d0d7de; --text:#1f2328; --dim:#656d76;
+  --alive:#1a7f37; --stale:#9a6700; --dead:#cf222e; --quiet:#bc4c00; --tx:#7d4e00;
+  --accent:#0969da;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+       font:13px/1.3 ui-monospace,"Cascadia Code",Consolas,monospace; }
+header { display:flex; align-items:center; gap:12px; padding:5px 12px;
+         background:var(--panel); border-bottom:1px solid var(--line); }
+header h1 { font-size:15px; margin:0; letter-spacing:1px; color:var(--accent); }
+header .meta { color:var(--dim); font-size:12px; }
+header nav { display:flex; gap:8px; }
+header nav a { color:var(--dim); text-decoration:none; font-size:13px; padding:3px 10px;
+               border-radius:6px; }
+header nav a.active { color:var(--accent); background:#ddf4ff; font-weight:bold; }
+header nav a:hover { color:var(--text); }
+#conn { font-weight:bold; }
+#conn.up { color:var(--alive); }
+#conn.down { color:var(--dead); }
+main { padding:8px 12px; }
+h2 { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--dim);
+     margin:12px 0 4px; }
+/* Call roster heading: the contest-rules line that used to sit under the
+   heading now lives in the title. The dotted underline is the hover cue. */
+#ros-heading[title]:not([title=""]) {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+table { width:100%; border-collapse:collapse; }
+th,td { text-align:left; padding:2px 8px; border-bottom:1px solid var(--line);
+        white-space:nowrap; }
+th { color:var(--dim); font-weight:normal; font-size:12px; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; }
+.policy-coordinated { color:#0550ae; background:#ddf4ff; border:1px solid #54aeff66; }
+.policy-interlock { color:#9a6700; background:#fff8c5; border:1px solid #d4a72c66; font-weight:600; }
+.ALIVE { color:var(--alive); } .STALE { color:var(--stale); }
+.DEAD  { color:var(--dead);  } .UNKNOWN{ color:var(--dim); }
+tr.tx { background:#fff8e6; }
+.state-TX  { color:var(--tx); font-weight:bold; }
+.state-DEC { color:var(--accent); }
+.state-RX  { color:var(--dim); }
+.quiet { color:var(--quiet); }
+.warn  { color:var(--dead); }
+.empty { color:var(--dim); padding:10px; }
+.bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; width:120px; display:inline-block; vertical-align:middle; }
+.bar > i { display:block; height:100%; background:var(--accent); }
+.banner { display:inline-block; padding:6px 14px; border-radius:6px; font-weight:bold;
+          font-size:15px; letter-spacing:.5px; }
+.banner.ok    { color:var(--alive); background:#dafbe1; border:1px solid #aceebb; }
+.banner.tx    { color:var(--tx);    background:#fff8e6; border:1px solid #f5d9a8; }
+.banner.alarm { color:#fff; background:var(--dead); border:1px solid var(--dead);
+                animation:flash .7s steps(1) infinite; }
+@keyframes flash { 50% { background:#a40e26; } }
+tr.overlap { background:#ffebe9; }
+tr.overlap td { font-weight:bold; }
+td.score { font-weight:bold; font-variant-numeric:tabular-nums; }
+tr.mult { background:#eaf6ee; }
+tr.mult td.score { color:var(--alive); }
+/* Calling us (WSJT-X-style red) — highest roster highlight priority */
+/* Same WSJT-X UDP id on two PCs (must rename --rig-name) */
+tr.id-collide { background:#fff8e0; }
+tr.id-collide td:first-child { font-weight:600; }
+/* N1MM present but no WSJT-X bound (SSB/CW-only or missing reader) */
+tr.n1mm-no-wsjt { background:#f6f8fa; }
+tr.n1mm-no-wsjt td { color:var(--dim); }
+tr.n1mm-no-wsjt td:first-child { color:var(--text); }
+.warn { color:#9a6700; font-weight:600; }
+tr.calling-us { background:#ffd6d6; }
+tr.calling-us td { font-weight:600; }
+tr.calling-us td.score { color:#a40e26; }
+/* Enable Tx armed for this DX (not necessarily keying yet) */
+tr.armed { background:#e3f5e8; box-shadow: inset 3px 0 0 #1a7f37; }
+tr.armed td.score { color:var(--alive); }
+/* H2 decode-only source: visible, not clickable for Work */
+tr.decode-only { opacity: 0.72; cursor: default; }
+tr.decode-only.workable { cursor: default; }
+.badge { display:inline-block; padding:0 6px; border-radius:8px; font-size:11px;
+         margin-left:5px; background:#ddf4ff; color:var(--accent); }
+.badge.rover { background:#fff1e5; color:var(--quiet); }
+.badge.callus { background:#ffcccc; color:#a40e26; font-weight:bold; }
+.badge.armed { background:#dafbe1; color:#1a7f37; font-weight:bold; }
+.badge.needed { background:#ddf4ff; color:var(--accent); }
+.badge.unconfirmed { background:#fff4d6; color:#7a4e00; }
+tr.unconfirmed { background:#fff8e6; }
+tr.dupe .badge.unconfirmed { color:#7a4e00; }
+.cq { font-weight:bold; color:var(--accent); }
+.qsy { font-weight:bold; color:#8250df; background:#fbefff; padding:0 4px;
+       border-radius:3px; }
+.controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:4px 0 6px; }
+.controls label { color:var(--dim); font-size:12px; display:flex; align-items:center; gap:4px; }
+.controls select { font:inherit; font-size:12px; padding:1px 4px; }
+.ros-need { position:relative; display:inline-flex; align-items:center; }
+.ros-need-btn {
+  font:inherit; font-size:12px; line-height:1.3; padding:1px 8px;
+  color:var(--text); background:var(--panel); border:1px solid var(--line);
+  border-radius:4px; cursor:pointer;
+}
+.ros-need-btn::after { content:" ▾"; color:var(--dim); }
+.ros-need-btn:hover { background:#eef4fb; }
+.ros-need-btn:focus-visible,
+.ros-need-list button:focus-visible {
+  outline:2px solid #54aeff66; outline-offset:1px;
+}
+.ros-need-list {
+  position:absolute; z-index:30; top:calc(100% + 2px); left:0;
+  display:flex; flex-direction:column; gap:1px; min-width:100%;
+  padding:4px; background:var(--panel); border:1px solid var(--line);
+  border-radius:6px; box-shadow:0 4px 14px rgba(31,35,40,.12);
+}
+.ros-need-list[hidden] { display:none; }
+.ros-need-list button {
+  font:inherit; font-size:12px; text-align:left; white-space:nowrap;
+  padding:3px 8px; border:0; border-radius:4px;
+  background:transparent; color:var(--text); cursor:pointer;
+}
+.ros-need-list button:hover,
+.ros-need-list button:focus { background:#eef4fb; color:var(--text); }
+.ros-need-list button[aria-selected="true"] { font-weight:600; }
+.band-label { color:var(--dim); font-size:12px; }
+.band-checks { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.band-check { color:var(--text); font-size:12px; display:inline-flex; align-items:center; gap:3px;
+              padding:1px 6px; border:1px solid var(--line); border-radius:4px; background:var(--panel); }
+.ros-cols-menu { position:relative; font-size:12px; color:var(--dim); }
+.ros-cols-menu > summary {
+  cursor:pointer; list-style:none; padding:1px 8px; border:1px solid var(--line);
+  border-radius:6px; background:var(--panel); user-select:none;
+}
+.ros-cols-menu > summary::-webkit-details-marker { display:none; }
+.ros-cols-menu > summary:hover { color:var(--text); background:#eef4fb; }
+.ros-cols-menu[open] > summary { color:var(--accent); border-color:#54aeff66; }
+.ros-cols-menu .col-checks {
+  position:absolute; z-index:20; top:calc(100% + 4px); left:0;
+  display:grid; grid-template-columns:1fr 1fr; gap:2px 12px;
+  min-width:220px; padding:8px 10px; background:var(--panel);
+  border:1px solid var(--line); border-radius:6px;
+  box-shadow:0 4px 14px rgba(31,35,40,.12);
+}
+.col-check { color:var(--text); font-size:12px; display:inline-flex; align-items:center; gap:4px;
+             white-space:nowrap; }
+.hint { font-size:12px; color:var(--dim); margin:0 0 8px 0; max-width:72rem; }
+/* Operate TX groups: one-line banner, then a closed disclosure for the table. */
+#il-section { margin-top:12px; }
+#il-section > #il-banner:not([hidden]) { display:block; margin:0 0 6px; }
+#il-details > summary {
+  cursor:pointer; width:max-content;
+  font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--dim);
+  margin:0 0 4px;
+}
+#il-details > summary:hover { color:var(--text); }
+/* Setup tips: native title plus a keyboard-focusable ? */
+.advline { display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin:3px 0; }
+.advtip { position:relative; display:inline-flex; align-items:center; }
+.tipbtn {
+  font: inherit; font-size: 11px; font-weight: 700; line-height: 1;
+  width: 16px; height: 16px; min-width: 16px; min-height: 16px; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: #eef4fb; color: var(--accent); cursor: help; vertical-align: middle;
+}
+.tipbtn:hover, .tipbtn:focus, .tipbtn:focus-visible {
+  outline: 2px solid #54aeff66; outline-offset: 1px; background: #ddf4ff;
+}
+.tiptxt {
+  display: none; position: absolute; z-index: 40; left: 0; top: calc(100% + 4px);
+  width: max-content; max-width: min(26rem, 70vw); padding: 6px 8px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 4px 14px rgba(31,35,40,.12);
+  font-size: 12px; font-weight: normal; line-height: 1.35; white-space: normal;
+  text-align: left; text-transform: none; letter-spacing: normal;
+}
+#skim-server-hint:empty { display: none; }
+h2 .advtip { margin-left: 6px; text-transform: none; letter-spacing: normal;
+             vertical-align: middle; }
+/* Keyboard focus shows the words. Field-label hover uses the native title.
+   Long section help (? on a heading or "Where to point WS Skim") also
+   shows the wrapped tip on hover, so the text stays readable. */
+.tipbtn:focus-visible + .tiptxt,
+h2 .advtip:hover .tiptxt,
+.hover-tip:hover .tiptxt { display: block; }
+.goal-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:3px 0; }
+.goal-row select { font: inherit; font-size: 12px; }
+.goal-soon { color: var(--dim); }
+.subnav { display:flex; gap:4px; margin:0 0 12px; border-bottom:1px solid var(--line); padding-bottom:0; }
+.subnav .tab {
+  font:inherit; font-size:13px; color:var(--dim); background:transparent;
+  border:1px solid transparent; border-bottom:none; border-radius:6px 6px 0 0;
+  padding:6px 14px; cursor:pointer; margin-bottom:-1px;
+}
+.subnav .tab:hover { color:var(--text); background:#eaeef2; }
+.subnav .tab.active {
+  color:var(--accent); font-weight:600; background:var(--panel);
+  border-color:var(--line); border-bottom-color:var(--panel);
+}
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+.swatch { padding:0 4px; border-radius:3px; }
+.swatch.calling-us { background:#ffd6d6; color:var(--text); }
+.swatch.armed { background:#e3f5e8; color:var(--text); }
+.logwrap { max-height:280px; overflow:auto; border:1px solid var(--line); background:var(--panel); }
+th[data-key] { cursor:pointer; user-select:none; }
+th[data-key]:hover { color:var(--text); }
+th.sort { color:var(--accent); font-weight:bold; }
+td .cq, .cq { color:var(--accent); font-weight:bold; }
+tr.dupe td { color:var(--dim); }
+tr.dupe td.score { color:var(--dim); font-weight:normal; }
+.why { color:var(--dim); font-size:12px; }
+.why b { color:var(--text); font-weight:600; }
+.amap-wrap { display:flex; flex-wrap:wrap; gap:20px; }
+.amap h3 { font-size:12px; margin:0 0 4px; font-weight:600; }
+.amap h3 .meta { font-weight:normal; }
+.amap .grid { display:inline-block; border:1px solid var(--line); background:#fbfcfd; padding:2px; }
+.amap .row { display:flex; align-items:center; }
+.amap .rlabel { width:54px; flex:none; font-size:10px; color:var(--dim);
+                text-align:right; padding-right:5px; }
+.amap .cells { display:inline-block; font-size:0; line-height:0; }
+.amap .cell { display:inline-block; width:5px; height:9px; }
+.amap .axis { font-size:10px; color:var(--dim); padding-left:54px; margin-top:2px; }
+.logwrap { max-height:260px; overflow-y:auto; border:1px solid var(--line); border-radius:6px; }
+.logwrap th { position:sticky; top:0; background:var(--panel); border-bottom:1px solid var(--line); }
+.logwrap td, .logwrap th { border-bottom:1px solid #eef1f4; }
+tr.cqrow { background:#f0f7ff; }
+tr.cqrow td:nth-child(5) { color:var(--accent); }
+.syncrow { display:flex; gap:22px; align-items:center; flex-wrap:wrap;
+           padding:9px 12px; border:1px solid var(--line); border-radius:6px;
+           background:var(--panel); }
+.syncrow .k { color:var(--dim); font-size:12px; margin-right:4px; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+       margin-right:6px; vertical-align:middle; }
+.dot.active { background:var(--alive); } .dot.idle { background:var(--stale); }
+.dot.none { background:var(--dim); }
+.dot.ALIVE { background:var(--alive); } .dot.STALE { background:var(--stale); }
+.dot.DEAD { background:var(--dead); } .dot.UNKNOWN { background:var(--dim); }
+
+/* -- compact Operate page (WSJT-X-like density) -------------------------- */
+body.dense main { padding:8px 12px; }
+body.dense h2 { margin:12px 0 4px; font-size:11px; }
+.safety { font-weight:bold; font-size:12px; padding:2px 9px; border-radius:5px;
+          letter-spacing:.3px; }
+.safety.ok    { color:var(--alive); background:#dafbe1; border:1px solid #aceebb; }
+.safety.tx    { color:var(--tx);    background:#fff8e6; border:1px solid #f5d9a8; }
+.safety.alarm { color:#fff; background:var(--dead); border:1px solid var(--dead);
+                animation:flash .7s steps(1) infinite; }
+
+.cols { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+.op-col { flex:0 0 auto; }
+.ros-col { flex:1 1 520px; min-width:0; }
+
+#spot tbody tr { cursor:pointer; }
+#spot tbody tr:hover { background:#eef4fb; }
+#spot tr.spot-sel, #spot tr.spot-sel:hover { background:#ddf4ff; }
+#spot .spot-qsy { color:var(--stale); font-weight:600; }
+#spot .spot-here { color:var(--alive); }
+#spot-status { cursor:help; }
+.spot-tag {
+  display:inline-block; font-size:10px; font-weight:700; letter-spacing:.4px;
+  padding:0 5px; border-radius:3px; margin-right:6px; line-height:1.6;
+}
+.spot-tag.clu { color:#424a53; background:#eaeef2; }
+.spot-tag.skim { color:var(--alive); background:#dafbe1; }
+.spot-tag.psk { color:#0550ae; background:#ddf4ff; }
+.spot-bands .spot-band { display:inline-block; margin-right:10px; cursor:help; white-space:nowrap; }
+.spot-bands .spot-band b { color:var(--text); }
+.spot-bands .spot-band-on { font-size:10px; font-weight:700; color:var(--alive); }
+#spot tr.spot-dim td { color:var(--dim); opacity:0.7; }
+#spot tr.spot-dim:hover td { opacity:0.9; }
+#spot td.spot-src { padding-right:0; width:1%; }
+.cluster-bands { display:flex; flex-wrap:wrap; gap:2px 12px; font-size:12px;
+  max-width:52rem; margin:4px 0 8px; }
+table.tight { font-size:11px; line-height:1.3; }
+table.tight th, table.tight td { padding:1px 8px; }
+table.tight th { font-size:10px; text-transform:uppercase; letter-spacing:.4px; }
+table.tight tbody tr:hover { background:#eef4fb; }
+.btag { font-weight:bold; }
+
+/* operator panel */
+#ops .call { font-weight:bold; }
+#ops .obs  { color:var(--dim); }
+#ops .need b { color:var(--alive); }
+#ops .z    { color:var(--line); }
+#ops .idle { color:var(--dim); }
+tr.stale-op td { color:var(--dim); }
+tr.stale-op .idle { color:var(--stale); font-weight:bold; }
+.sim { font-size:9px; color:var(--dim); border:1px solid var(--line); border-radius:6px;
+       padding:0 3px; margin-left:6px; vertical-align:middle; }
+
+/* coverage strip next to the Operators heading */
+.cover { font-weight:normal; }
+.chip { display:inline-block; font-size:10px; padding:0 6px; margin-left:5px;
+        border-radius:8px; border:1px solid var(--line); }
+.chip.cov-ok { color:var(--dim); }
+.chip.cov-no { color:#fff; background:var(--dead); border-color:var(--dead); font-weight:bold; }
+
+/* keep the scoring "why" from stretching the roster */
+.ros-col .why { max-width:360px; overflow:hidden; text-overflow:ellipsis; }
+
+/* --- TX control strip + click-to-work buttons (Operate) ------------------- */
+.txbar { display:flex; align-items:center; gap:10px; margin:4px 0 12px; flex-wrap:wrap; }
+/* Work/Halt note. Hover shows the method, address, port, and message.
+   The title is cleared while the pointer is over the line so this box
+   is the only tooltip. */
+#tx-meta { position: relative; display: inline-block; }
+#tx-meta[title]:not([title=""]) { cursor: help; }
+#tx-meta .tx-tip {
+  display: block;
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  max-width: min(40rem, 70vw);
+  white-space: normal;
+  background: #1f2328;
+  color: #fff;
+  font: 12px/1.35 ui-monospace, Consolas, monospace;
+  font-weight: normal;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(31, 35, 40, .28);
+  pointer-events: none;
+}
+#tx-meta .tx-tip[hidden] { display: none; }
+.txbtn { font-size:12px; padding:3px 10px; border:1px solid var(--line); border-radius:5px;
+         background:var(--panel); color:var(--text); cursor:pointer; }
+.txbtn:hover:not(:disabled) { background:#eef4fb; }
+.txbtn:disabled { opacity:.45; cursor:not-allowed; }
+/* Roster and Spotted: shrink-wrap columns to content (not full page width).
+   JS fitOperateColumns() pins each <col> after measure; zoom/resize remeasures.
+   A header that is on both tables uses the wider of the two. */
+#ros, #spot {
+  width: max-content;
+  max-width: none;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+#ros th, #ros td, #spot th, #spot td {
+  white-space: nowrap;
+  padding: 1px 4px;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+/* Message: short on the row. The title is the full decode.
+   rosFitColumns measures this clamped width so a long line stays narrow. */
+/* Remembered grid: hover names the band and time. The dotted line is the
+   cue that the hover is there. Italic and the words are only a rover
+   square from an earlier hearing. */
+#ros .grid-remembered {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+#ros .grid-assumed-cell { font-style: italic; }
+#ros .grid-assumed {
+  font-style: normal;
+  font-size: 0.85em;
+  margin-left: 0.25em;
+}
+#ros .grid-stale { cursor: help; }
+#ros .ros-msg {
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+/* Country: full short names (United States) stay visible. Longer entity
+   names ellipsize; the title is the full name plus continent and CQ zone. */
+#ros .ros-country, .ros-country {
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+#ros th.num, #ros td.num, #spot th.num, #spot td.num { padding-left: 6px; }
+#ros .badge, #spot .badge { margin-left: 3px; padding: 0 4px; font-size: 10px; }
+#ros button.azbtn { padding: 0 3px; font-size: 11px; }
+/* Roster line clickable for GT2-style Work (no Work button column). */
+#ros-body tr.workable { cursor: pointer; }
+#ros-body tr.workable:hover { filter: brightness(0.97); }
+#ros-body tr.calling-us.workable:hover { filter: brightness(0.96); }
+#ros-body tr.armed.workable:hover { filter: brightness(0.97); }
+.txbtn.halt { color:#fff; background:var(--dead); border-color:var(--dead); font-weight:bold; }
+.txbtn.halt:hover:not(:disabled) { background:#a40e26; }
+.rot-stale { color: #9a6700; }
+/* Rotator: Az ant italic while slewing; Az DX click-to-point button */
+.az-moving { font-style: italic; font-family: ui-monospace, Menlo, Consolas, monospace;
+             color: var(--quiet); }
+button.azbtn { font: inherit; font-size: 11px; padding: 0 4px; border: 1px solid var(--line);
+               border-radius: 4px; background: var(--panel); color: var(--accent); cursor: pointer; }
+button.azbtn:hover { background: #eef4fb; }
+.az-approx { font-style: italic; }
+
+/* WS Skim roster page extras */
+#log-line, #checklist-line { color: var(--dim); font-size: 12px; margin: 0 0 8px; }
+#log-line button, #checklist-line button { font: inherit; }
+#checklist-line label { margin-right: 10px; }
+#ros-modes { margin-left: 8px; }

@@ -315,7 +315,7 @@ def setup_ui(self):
     band_map_action    = QtWidgets.QAction("Band Map",            self)
     roster_action      = QtWidgets.QAction("Roster",              self)
     roster_action.setCheckable(True)
-    roster_action.setToolTip("Every decode, newest first; click a column title to sort")
+    roster_action.setToolTip("Needed-station roster in a browser window (filters, badges, Ctrl +/- zoom)")
     flex_action        = QtWidgets.QAction("Flex Radio",           self)
     usrp_action        = QtWidgets.QAction("USRP B210",            self)
     airspy_action      = QtWidgets.QAction("Airspy HF+",           self)

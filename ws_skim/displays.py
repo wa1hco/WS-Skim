@@ -396,7 +396,7 @@ def update_displays(self):
             if outcome == 'decoded' or result.get('decoded'):
                 # View → Roster (the WAV path, if any, is kept for its
                 # right-click "Open in Analysis Window").
-                from .roster_window import add_queue_record
+                from .roster.model import add_queue_record
                 add_queue_record(self.decode_panel, result, self.calling_freq_mhz)
                 # MSK144 pings → View → Band Activity (FT8/FT4 come from
                 # their period results there).

@@ -16,3 +16,11 @@ authors = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "tools/dev"]
+
+
+# Static roster files and the shipped country list must be in the tree
+# (installers stage ``git archive HEAD``).  This records them if the
+# project is ever packaged with setuptools.
+[tool.setuptools.package-data]
+"ws_skim" = ["data/*"]
+"ws_skim.roster" = ["static/*"]

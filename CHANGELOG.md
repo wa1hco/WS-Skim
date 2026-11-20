@@ -10,6 +10,23 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **View → Roster is a WS Hub-style browser window.**  The Qt decode table
+  is replaced by a local web page that opens in a Chrome or Edge app
+  window (Firefox or your usual browser if those are not installed), with
+  no URL or port to remember.  Ctrl +/- zoom works, the look is light
+  mode, and there is one row per station (call plus grid).  Filters match
+  WS Hub: Show (All, Needed, Needed and CQ, Needed and CQ or 73), max age,
+  band checkboxes, plus FT8 / FT4 / MSK144 mode checkboxes, and a columns
+  menu.  Badges explain why a station is needed (grid, state, DXCC, CQ
+  zone, ITU zone, continent, call, or unconfirmed) or "us" when they are
+  calling you; hover for the reason in words.  On All, stations you do
+  not need are dimmed.  Worked-before data comes from a discovered
+  WSJT-X ``wsjtx_log.adi`` (including wrig instance folders) or a log you
+  choose on the page; LoTW confirmations are read from GridTracker's file
+  when it is present.  The default checklist is new DXCC and new DXCC on
+  band.  Decode rates on the status page still come from an in-memory
+  list.  Click-to-work is not in this step.
+
 - **Main window shows program status only; decodes move to View → Roster.**
   The main window is now a status page in the style of WS Hub's: receiver,
   band and modes, centre frequency, IQ data rate (against the rate
@@ -17,13 +34,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   count, WSJT-X UDP, PSKReporter, DX cluster, last error, UTC and the
   version.  Each row has a dot (green working, amber check, red not
   working, grey off) and a tooltip.  The decode list that filled the main
-  window is now **View → Roster**: a light table with UTC, mode,
-  frequency, DF, SNR, call and message (polarisation appears for dual-pol
-  MSK144), newest first; click a column title to sort.  Right-click an
-  MSK144 decode to open its recording, as before.  The Roster opens on the
-  first start and remembers whether it is open and where; the main window
-  keeps its old position but starts at the new, smaller size.  This is the
-  start of the needed-station roster in the plan; its filters come later.
+  window moved to **View → Roster**.  The Roster opens on the first start
+  and remembers whether it is open; the main window keeps its old position
+  but starts at the new, smaller size.  The roster itself is now the
+  Hub-style browser page described above (filters and badges included).
 
 - **Band Activity replaces the FT8 Activity window.**  **View → Band
   Activity** shows the whole band for every mode: a waterfall of the

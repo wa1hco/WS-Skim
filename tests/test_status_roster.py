@@ -125,11 +125,11 @@ def test_status_panel_widgets(qapp, monkeypatch):
     eng.hide()
 
 
-# ── Roster ─────────────────────────────────────────────────────────────────
+# ── Roster (in-memory list + View → Roster server) ─────────────────────────
 
-def _table(qapp):
-    from ws_skim.roster_window import RosterTable
-    return RosterTable()
+def _list():
+    from ws_skim.roster.model import DecodeList
+    return DecodeList()
 
 
 def _add(t, epoch, snr, msg="CQ K1ABC FN42", mode="FT8", khz=14075.0, df=1000):
@@ -139,58 +139,37 @@ def _add(t, epoch, snr, msg="CQ K1ABC FN42", mode="FT8", khz=14075.0, df=1000):
                         now=T0 + 60)
 
 
-def test_roster_sorts_newest_first_and_by_header(qapp):
-    from PyQt5 import QtCore
-    from ws_skim import roster_window as rw
-    t = _table(qapp)
-    assert [t.horizontalHeaderItem(i).text() for i in range(t.columnCount())] == \
-        list(rw.COLUMNS)
-    assert t.isColumnHidden(rw.COL_POL)          # no dual-pol decodes yet
-    _add(t, T0, -12, "CQ W1AW FN31")
-    _add(t, T0 + 30, 3, "CQ K1ABC FN42")
-    _add(t, T0 + 15, -20, "W1AW K9XYZ EN52")
-    assert [t.item(r, rw.COL_CALL).text() for r in range(3)] == ["K1ABC", "K9XYZ", "W1AW"]
-    t.horizontalHeader().sectionClicked.emit(rw.COL_SNR)     # header click
-    t.sortItems(rw.COL_SNR, QtCore.Qt.AscendingOrder)
-    assert [t.item(r, rw.COL_SNR).text() for r in range(3)] == ["-20", "-12", "+3"]
-    t.sortItems(rw.COL_FREQ, QtCore.Qt.DescendingOrder)
-    t.clear()
-    assert t.rowCount() == 0 and t.horizontalHeaderItem(0).text() == "UTC"
-
-
-def test_roster_age_colours_trim_and_counts(qapp, monkeypatch):
-    from ws_skim import roster_window as rw
-    t = _table(qapp)
+def test_decode_list_counts_and_trim():
+    from ws_skim.roster.model import DecodeList
+    t = DecodeList(max_rows=3)
     _add(t, T0, 0)
-    assert t.item(0, 0).foreground().color().getRgb()[:3] == (0, 0, 0)   # 60 s old
-    t.recolor(now=T0 + 600)
-    assert t.item(0, 0).foreground().color().getRgb()[:3] == rw.age_rgb(600)
-    assert rw.age_rgb(5000) == (140, 140, 140)
-    monkeypatch.setattr(rw, "MAX_ROWS", 3)
+    assert t.recent_count(40, now=T0 + 10) == 1
+    assert t.recent_count(40, mode="MSK144", now=T0 + 10) == 0
     for k in range(1, 5):
         _add(t, T0 + 15 * k, 0)
-    assert t.rowCount() == 3
-    assert min(t.epoch_at(r) for r in range(3)) == T0 + 30     # oldest dropped
+    assert len(t) == 3
+    assert min(r.epoch for r in t.records()) == T0 + 30
     assert t.recent_count(40, now=T0 + 60) == 3
-    assert t.recent_count(40, mode="MSK144", now=T0 + 60) == 0
+    t.recolor(now=T0 + 600)   # no-op, must not raise
+    t.clear()
+    assert len(t) == 0 and t.recent_count(40, now=T0 + 60) == 0
 
 
-def test_roster_queue_records(qapp):
-    from ws_skim import roster_window as rw
-    t = _table(qapp)
-    rw.add_queue_record(t, {"mode": "FT8", "message": "CQ K1ABC FN42", "radio_khz": 14075.5,
+def test_roster_queue_records():
+    from ws_skim.roster.model import add_queue_record
+    t = _list()
+    add_queue_record(t, {"mode": "FT8", "message": "CQ K1ABC FN42", "radio_khz": 14075.5,
                             "audio_hz": 1500.0, "jt9_snr": -7, "utc_time": "22:13:30",
                             "timestamp": "2023-11-14_22:13:30"}, 14.074)
-    rw.add_queue_record(t, {"mode": "MSK144", "message": "W1AW K2AA R-03",
+    add_queue_record(t, {"mode": "MSK144", "message": "W1AW K2AA R-03",
                             "radio_khz": 50260.4, "jt9_snr": 2, "utc_time": "22:13:30",
                             "t_sec": 4.0, "theta_deg": 45.0, "wav_path": "/x/y.wav"}, 50.260)
-    rows = {t.item(r, rw.COL_MODE).text(): r for r in range(2)}
-    assert t.item(rows["FT8"], rw.COL_DF).text() == "1500"
-    assert t.item(rows["FT8"], rw.COL_SNR).text() == "-7"
-    assert t.item(rows["MSK144"], rw.COL_DF).text() == "+400"
-    assert t.item(rows["MSK144"], rw.COL_POL).text() == "45°"
-    assert not t.isColumnHidden(rw.COL_POL)
-    assert t.wav_at(rows["MSK144"]) == "/x/y.wav" and t.wav_at(rows["FT8"]) is None
+    by_mode = {r.mode: r for r in t.records()}
+    assert by_mode["FT8"].df_hz == 1500 and by_mode["FT8"].snr == -7
+    assert by_mode["MSK144"].df_hz == 400
+    assert by_mode["MSK144"].theta_deg == 45.0
+    assert by_mode["MSK144"].wav_path == "/x/y.wav" and by_mode["FT8"].wav_path is None
+    assert by_mode["FT8"].call == "K1ABC" and by_mode["MSK144"].call == "K2AA"
 
 
 def test_roster_window_visibility_setting(qapp, monkeypatch):
@@ -201,12 +180,17 @@ def test_roster_window_visibility_setting(qapp, monkeypatch):
         monkeypatch.setattr(vis, "_SETTINGS", _Settings(saved))
         eng = QtWidgets.QMainWindow()
         act = QtWidgets.QAction("Roster", eng, checkable=True)
-        rw.setup_roster_window(eng, act)
-        assert eng.decode_panel is eng._roster_win._roster_table
-        assert eng._roster_win.isVisible() is shown and act.isChecked() is shown
-        assert eng._roster_win.windowTitle() == "WS Skim — Roster"
-        eng._roster_win._parent_win = None
-        eng._roster_win.hide()
+        try:
+            rw.setup_roster_window(eng, act)
+            assert type(eng.decode_panel).__name__ == "DecodeList"
+            assert eng.decode_panel is eng._roster_session.decodes
+            assert eng._roster_win.isVisible() is shown and act.isChecked() is shown
+            assert eng._roster_win.windowTitle() == "WS Skim — Roster"
+            assert eng._roster_server.port not in (8787, 8790)
+            assert eng._roster_server.url.startswith("http://127.0.0.1:")
+        finally:
+            if getattr(eng, "_roster_server", None) is not None:
+                eng._roster_server.stop()
 
 
 # ── MSK144 bands ───────────────────────────────────────────────────────────
@@ -322,6 +306,7 @@ _SMOKE = textwrap.dedent('''
         "central": sorted(w._status_widgets),
         "view": menus["View"],
         "roster": type(w.decode_panel).__name__,
+        "roster_port": w._roster_server.port,
         "roster_visible": w._roster_win.isVisible(),
         "size": [w.width(), w.height()],
         "band": w._status_widgets["band"][2].text(),
@@ -345,6 +330,7 @@ def test_real_main_window_is_status_only(tmp_path):
     assert r["central"] == sorted(k for k, _t, _tip in sp.ROWS)
     assert r["view"][:2] == ["Band Activity", "Roster"]
     assert "Waterfall" not in r["view"]
-    assert r["roster"] == "RosterTable" and r["roster_visible"]
+    assert r["roster"] == "DecodeList" and r["roster_visible"]
+    assert r["roster_port"] not in (8787, 8790)
     assert r["size"][1] < 800                          # old tall geometry: position only
     assert "MSK144" in r["band"]
