@@ -2189,11 +2189,10 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     full_scale  = 1.0
     _fg_win     = getattr(self, '_fast_graph_win', None)
     _fg_visible = _fg_win is None or _fg_win.isVisible()
-    _wf_wanted  = bool(getattr(self, '_waterfall_wanted', False))
     # Band Activity waterfall: only while its window is shown with Waterfall on.
     _ba_wf      = getattr(self, '_band_wf', None)
     _ba_wanted  = _ba_wf is not None and bool(getattr(_ba_wf, 'wanted', False))
-    _compute_fft = _fg_visible or _wf_wanted or _ba_wanted
+    _compute_fft = _fg_visible or _ba_wanted
     _wf_hop     = self.fft_size // 2   # constant; moved out of the loop
 
     while self._sbuf_end >= self.fft_size:
@@ -2210,10 +2209,6 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                 # slides by exactly one hop after each block is processed below.
                 current_wall_time = self._sbuf_t0
                 time_in_window = current_wall_time % self.history_secs
-
-                if _wf_wanted:
-                    from .waterfall_window import push_row_from_engine
-                    push_row_from_engine(self, power_db, current_wall_time)
 
                 if _ba_wanted:
                     _ba_wf.push(magnitude, current_wall_time,

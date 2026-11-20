@@ -10,6 +10,21 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Main window shows program status only; decodes move to View → Roster.**
+  The main window is now a status page in the style of WS Hub's: receiver,
+  band and modes, centre frequency, IQ data rate (against the rate
+  expected), audio to WSJT-X, decodes per minute for each mode, filtered
+  count, WSJT-X UDP, PSKReporter, DX cluster, last error, UTC and the
+  version.  Each row has a dot (green working, amber check, red not
+  working, grey off) and a tooltip.  The decode list that filled the main
+  window is now **View → Roster**: a light table with UTC, mode,
+  frequency, DF, SNR, call and message (polarisation appears for dual-pol
+  MSK144), newest first; click a column title to sort.  Right-click an
+  MSK144 decode to open its recording, as before.  The Roster opens on the
+  first start and remembers whether it is open and where; the main window
+  keeps its old position but starts at the new, smaller size.  This is the
+  start of the needed-station roster in the plan; its filters come later.
+
 - **Band Activity replaces the FT8 Activity window.**  **View → Band
   Activity** shows the whole band for every mode: a waterfall of the
   radio's full span (frequency across the top, UTC time scrolling down,
@@ -79,6 +94,15 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   and a period that is mostly transmit is skipped.
 
 ### Changed
+
+- **MSK144 is offered on 6 m, 2 m and 1.25 m only.**  The Mode menu greys
+  out MSK144 (with a tooltip saying why) on other bands, and 70 cm
+  (432.360) is gone from the MSK144 band list.  Choosing MSK144 while on
+  6 m or 2 m FT8 stays on that band (50.260 / 144.150).  An install saved
+  in MSK144 on a band where it is no longer offered starts in FT8 + FT4.
+  10 m (28.145) is not offered: it is not in WSJT-X's frequency list.
+
+- **View → Waterfall is gone.**  Band Activity's waterfall replaces it.
 
 - **`decodes.jsonl` no longer grows without limit.**  At 64 MB it is renamed
   `decodes.jsonl.1` (replacing the older one) and a new file starts;

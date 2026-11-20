@@ -81,30 +81,6 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from . import __version__
 
-# ── Decode-panel age colours (matches MAP65 convention) ───────────────────────
-_AGE_COLORS = [
-    ( 120, QtGui.QColor('#ffffff')),   # < 2 min  — white
-    ( 480, QtGui.QColor('#ffff80')),   # < 8 min  — yellow
-    (1200, QtGui.QColor('#ff9040')),   # < 20 min — orange
-    (None, QtGui.QColor('#707070')),   # older    — gray
-]
-
-def _age_color(age_s: float) -> QtGui.QColor:
-    for threshold, color in _AGE_COLORS:
-        if threshold is None or age_s < threshold:
-            return color
-    return _AGE_COLORS[-1][1]
-
-def recolor_decode_panel(panel: QtWidgets.QListWidget) -> None:
-    """Update foreground colour of every item in the decode panel by age."""
-    now = time.time()
-    for i in range(panel.count()):
-        item = panel.item(i)
-        ts = item.data(QtCore.Qt.UserRole)
-        if ts is not None:
-            item.setForeground(_age_color(now - ts))
-
-
 _MSG_COL_WIDTH = 13   # matches WSJT-X displaytext.cpp WORD1_WIDTH / WORD2_WIDTH
                       # worst-case callsign: <...>/AB1CDE = 12 chars → fits with 1-space pad
 
@@ -227,7 +203,8 @@ def update_displays(self):
         _if_lo, _if_hi, _n_ch = monitored_if_span_khz()
         _mon_lbl = getattr(self, '_msk_monitor_label', None)
         if _mon_lbl is not None:
-            _mon_lbl.setText(format_monitor_status(_if_lo, _if_hi, _n_ch))
+            _mon_lbl.setText(format_monitor_status(_if_lo, _if_hi, _n_ch)
+                             .replace("Channels: ", ""))
             _lines = channel_summary_lines(center_freq_mhz)
             _tip = "Coarse IF channel centres (usable rows):\n\n" + "\n".join(_lines[:14])
             if len(_lines) > 14:
@@ -417,25 +394,10 @@ def update_displays(self):
             # Only add successful decodes to the panel — no_decode/timeout/error are noise.
             outcome = result.get('outcome', 'decoded')
             if outcome == 'decoded' or result.get('decoded'):
-                msg       = result.get('message', '?')
-                radio_khz = result.get('radio_khz', 0.0)
-                snr       = result.get('jt9_snr')
-                utc_time  = result.get('utc_time', '')
-                theta_deg = result.get('theta_deg')
-                df_hz     = int(round((radio_khz - self.calling_freq_mhz * 1000) * 1000))
-                pol_str   = f"{int(round(theta_deg)):3d}\u00b0" if theta_deg is not None else "  --"
-                snr_str   = f"{snr:+d} dB" if snr is not None else "     ?"
-                _item = QtWidgets.QListWidgetItem(
-                    f"{utc_time}  {radio_khz:9.3f}  {df_hz:+5d}  {pol_str}  {snr_str:>7}  {_align_msk144_message(msg)}"
-                )
-                _item.setForeground(_age_color(0))        # brand-new — white
-                _item.setData(QtCore.Qt.UserRole, time.time())
-                # Stash the saved-burst WAV path so the right-click context
-                # menu in the main window can open it in the AnalysisWindow.
-                _wav_path = result.get('wav_path')
-                if _wav_path:
-                    _item.setData(QtCore.Qt.UserRole + 1, str(_wav_path))
-                self.decode_panel.insertItem(0, _item)
+                # View → Roster (the WAV path, if any, is kept for its
+                # right-click "Open in Analysis Window").
+                from .roster_window import add_queue_record
+                add_queue_record(self.decode_panel, result, self.calling_freq_mhz)
                 # MSK144 pings → View → Band Activity (FT8/FT4 come from
                 # their period results there).
                 _ba = getattr(self, '_band_activity_win', None)
@@ -707,7 +669,13 @@ def update_displays(self):
                         curve.setData(*_circle_path(mlist), connect='finite') if mlist else curve.setData(x=[], y=[])
 
     utc_time = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
-    self.utc_clock_label.setText(f"UTC: {utc_time}")
+    self.utc_clock_label.setText(utc_time)
+    # Main-window status rows, about once a second.
+    _now_m = time.monotonic()
+    if _now_m - getattr(self, '_status_panel_t', 0.0) >= 1.0:
+        self._status_panel_t = _now_m
+        from .status_panel import update_status_panel
+        update_status_panel(self)
 
     if tuned_freq_mhz is not None:
         self.tuned_freq_label.setText(f"{tuned_freq_mhz:.3f} MHz")

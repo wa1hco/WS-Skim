@@ -1647,7 +1647,7 @@ def closeEvent(self, event):
 
     _SETTINGS.setValue('source_mode',          self.source_mode)
     _SETTINGS.setValue('selected_wav_path',    self.selected_wav_path or '')
-    _SETTINGS.setValue('window_geometry',      self.saveGeometry())
+    _SETTINGS.setValue('status_window_geometry', self.saveGeometry())
     _SETTINGS.setValue('min_level',            self.min_level)
     _SETTINGS.setValue('max_level',            self.max_level)
     _SETTINGS.setValue('detect_min_level_f',   self.detect_min_level)
@@ -1669,7 +1669,8 @@ def closeEvent(self, event):
         (getattr(self, '_reporting_win',  None), 'reporting_geometry',  'reporting_visible'),
         (getattr(self, '_map65_win',      None), 'map65_geometry',      'map65_visible'),
         (getattr(self, '_band_map_win',   None), 'band_map_geometry',   'band_map_visible'),
-        (getattr(self, '_waterfall_win',  None), 'waterfall_geometry',  'waterfall_visible'),
+        (getattr(self, '_roster_win',     None), 'roster_geometry',     'roster_visible'),
+        (getattr(self, '_band_activity_win', None), 'band_activity_geometry', None),
         (getattr(self, '_flex_win',       None), 'flex_geometry',       None),
         (getattr(self, '_usrp_win',       None), 'usrp_geometry',       None),
         (getattr(self, '_airspy_win',     None), 'airspy_geometry',     None),

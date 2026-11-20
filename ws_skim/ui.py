@@ -62,8 +62,32 @@ MSK144_BANDS = [
     ("6m   50.260 MHz",   50.260, {'usrp', 'rtlsdr', 'radio', 'sdrangel'}),
     ("2m  144.150 MHz",  144.150, {'usrp', 'rtlsdr', 'sdrangel'}),
     ("1¼m 222.090 MHz",  222.090, {'usrp', 'rtlsdr', 'sdrangel'}),
-    ("70cm 432.360 MHz", 432.360, {'usrp', 'rtlsdr', 'sdrangel'}),
 ]
+#: MSK144 (meteor scatter) is offered only on these bands, MHz (6 m, 2 m,
+#: 1.25 m).  WSJT-X's default list also has 432.360 and Region 1's 70.230,
+#: but no 10 m entry (28.145 is a HamSCI/Ping Jockey convention).
+MSK144_BAND_RANGES = ((50.0, 54.0), (144.0, 148.0), (222.0, 225.0))
+
+
+def msk144_allowed(freq_mhz) -> bool:
+    """True when ``freq_mhz`` is on a band where MSK144 is offered."""
+    try:
+        f = float(freq_mhz)
+    except (TypeError, ValueError):
+        return False
+    return any(lo <= f <= hi for lo, hi in MSK144_BAND_RANGES)
+
+
+def msk144_band_for(freq_mhz):
+    """The MSK144 calling frequency on the same band as ``freq_mhz``, or None."""
+    try:
+        f = float(freq_mhz)
+    except (TypeError, ValueError):
+        return None
+    for lo, hi in MSK144_BAND_RANGES:
+        if lo <= f <= hi:
+            return next((bf for _l, bf, _s in MSK144_BANDS if lo <= bf <= hi), None)
+    return None
 
 # FT8 / FT4 dial frequencies (WSJT-X defaults, USB).  HF is reachable with the
 # Flex (it follows the SmartSDR pan; the pick here sets the dial the decode
@@ -211,7 +235,7 @@ def setup_ui(self):
     from .band_map_window import setup_band_map_window
 
     self.setWindowTitle(f'WS Skim v{__version__}  —  {self.center_freq_mhz:.3f} MHz')
-    self.setGeometry(50, 50, 420, 800)
+    self.setGeometry(50, 50, 520, 560)
 
     # ── Menu bar ──────────────────────────────────────────────────────────────
     menu_bar = self.menuBar()
@@ -289,6 +313,9 @@ def setup_ui(self):
     reporting_action   = QtWidgets.QAction("Reporting",            self)
     map65_action       = QtWidgets.QAction("MAP65 Export",         self)
     band_map_action    = QtWidgets.QAction("Band Map",            self)
+    roster_action      = QtWidgets.QAction("Roster",              self)
+    roster_action.setCheckable(True)
+    roster_action.setToolTip("Every decode, newest first; click a column title to sort")
     flex_action        = QtWidgets.QAction("Flex Radio",           self)
     usrp_action        = QtWidgets.QAction("USRP B210",            self)
     airspy_action      = QtWidgets.QAction("Airspy HF+",           self)
@@ -634,38 +661,7 @@ def setup_ui(self):
         bar.setFixedHeight(54)
         return bar
 
-    # ── Central widget: callsign decode list ──────────────────────────────────
-    _mono9 = _QtGui.QFont("Monospace", 9)
-
-    _decode_header = QtWidgets.QLabel("UTC       Freq(kHz)      DF   Pol    SNR    Message")
-    _decode_header.setFont(_mono9)
-    _decode_header.setStyleSheet(
-        "QLabel { background: #2a2a2a; color: #aaaaaa; "
-        "border: 1px solid #555; border-bottom: none; padding: 2px 4px; }"
-    )
-    self.decode_panel = QtWidgets.QListWidget()
-    self.decode_panel.setFont(_mono9)
-    self.decode_panel.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-    self.decode_panel.setStyleSheet(
-        "QListWidget { background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; }"
-        "QListWidget::item { padding: 2px 4px; }"
-    )
-    # Right-click context menu — opens the AnalysisWindow on the WAV that
-    # was saved for the right-clicked decode.  WAV path is stashed in the
-    # item's data at Qt.UserRole + 1 by displays.py when the decode arrives;
-    # see detection.py for where the path is added to the decode_queue dict.
-    self.decode_panel.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-    self.decode_panel.customContextMenuRequested.connect(
-        lambda pos: _on_decode_panel_context_menu(self, pos)
-    )
-    central = QtWidgets.QWidget()
-    self.setCentralWidget(central)
-    central_vbox = QtWidgets.QVBoxLayout(central)
-    central_vbox.setContentsMargins(0, 0, 0, 0)
-    central_vbox.setSpacing(0)
-    central_vbox.addWidget(_decode_header)
-    central_vbox.addWidget(self.decode_panel, stretch=1)
-
+    # ── Central widget: program status (decodes are in View → Roster) ──────
     # ── Panel window: Fast Graph ──────────────────────────────────────────────
     iq_sliders = _make_slider_bar(
         "IQ Color Scale",
@@ -760,6 +756,8 @@ def setup_ui(self):
     setup_reporting_window(self,  reporting_action)
     setup_map65_window(self,      map65_action)
     setup_band_map_window(self,   band_map_action)
+    from .roster_window import setup_roster_window
+    setup_roster_window(self,     roster_action)
     setup_flex_window(self,       flex_action)
     setup_usrp_window(self,       usrp_action)
     setup_airspy_window(self,     airspy_action)
@@ -817,7 +815,6 @@ def setup_ui(self):
 
     # ── Restore saved geometry and visibility ─────────────────────────────────
     _win_settings = [
-        (self,                 'window_geometry',     None),
         (self._fast_graph_win, 'fast_graph_geometry', QtCore.QRect(480, 50,  850, 650)),
         (self._detect_win,     'detect_geometry',     QtCore.QRect(480, 710, 850, 350)),
         (self._sync_detect_win,'sync_detect_geometry',QtCore.QRect(480, 1075,850, 350)),
@@ -832,6 +829,14 @@ def setup_ui(self):
         (self._sdrangel_win,   'sdrangel_geometry',   QtCore.QRect(450, 100, 360, 400)),
         (self._screenshot_win, 'screenshot_geometry', QtCore.QRect(50,  50,  340, 440)),
     ]
+    # Main window: now a compact status page.  Its old geometry (the tall
+    # decode list) is used for the position only.
+    _main_geo = _SETTINGS.value('status_window_geometry')
+    if _main_geo:
+        self.restoreGeometry(_main_geo)
+    elif _SETTINGS.value('window_geometry'):
+        self.restoreGeometry(_SETTINGS.value('window_geometry'))
+        self.resize(520, 560)
     for win, key, default_rect in _win_settings:
         geo = _SETTINGS.value(key)
         if geo:
@@ -878,46 +883,18 @@ def setup_ui(self):
     # Mode menu (MSK144 / FT8 / FT4) and View → FT8 Sync Map; restores the
     # saved mode, which also picks that mode's blanker.
     from .ft8_window import setup_ft8
-    from .waterfall_window import setup_waterfall
     setup_ft8(self, menu_bar, view_menu)
-    setup_waterfall(self, view_menu)
+    # View → Roster sits right under Band Activity.
+    _acts = view_menu.actions()
+    view_menu.insertAction(_acts[1] if len(_acts) > 1 else None, roster_action)
 
-    # ── Info panel — vertical stack below decode list ─────────────────────────
-    # Four compact rows: receiver | centre freq | channel range | UTC
-    # Same font as the decode list so the bottom of the window is visually uniform.
-    _info_ss = (
-        "QLabel { background: #2a2a2a; color: #aaaaaa; padding: 1px 4px; }"
-    )
-    _info_ss_bold = (
-        "QLabel { background: #2a2a2a; color: #cccccc; padding: 1px 4px; }"
-    )
-
+    # ── Status rows (value labels written by displays.py) ─────────────────────
     self._receiver_label    = QtWidgets.QLabel("—")
     self.tuned_freq_label   = QtWidgets.QLabel("—")
-    self._msk_monitor_label = QtWidgets.QLabel("Channels: —")
-    self.utc_clock_label    = QtWidgets.QLabel("UTC: —")
-
-    for _lbl in (self._receiver_label, self.tuned_freq_label,
-                 self._msk_monitor_label, self.utc_clock_label):
-        _lbl.setFont(_mono9)
-
-    self._receiver_label.setStyleSheet(_info_ss_bold)
-    self.tuned_freq_label.setStyleSheet(_info_ss_bold)
-    self._msk_monitor_label.setStyleSheet(_info_ss)
-    self._msk_monitor_label.setToolTip(
-        "Coarse IF channel offsets (kHz) from pan centre; see channel_plan.py"
-    )
-    self.utc_clock_label.setStyleSheet(_info_ss_bold)
-
-    _info_sep = QtWidgets.QFrame()
-    _info_sep.setFrameShape(QtWidgets.QFrame.HLine)
-    _info_sep.setStyleSheet("QFrame { color: #555; }")
-
-    central_vbox.addWidget(_info_sep)
-    central_vbox.addWidget(self._receiver_label)
-    central_vbox.addWidget(self.tuned_freq_label)
-    central_vbox.addWidget(self._msk_monitor_label)
-    central_vbox.addWidget(self.utc_clock_label)
+    self._msk_monitor_label = QtWidgets.QLabel("—")
+    self.utc_clock_label    = QtWidgets.QLabel("—")
+    from .status_panel import build_status_panel
+    self.setCentralWidget(build_status_panel(self))
 
     # Keep status bar for transient messages only (capture saves, errors, etc.)
     self.statusBar().showMessage('Initializing...')
@@ -951,9 +928,8 @@ def setup_ui(self):
     self.update_timer.timeout.connect(self.update_displays)
     self.update_timer.start(100)
 
-    from .displays import recolor_decode_panel
     self._age_timer = QtCore.QTimer()
-    self._age_timer.timeout.connect(lambda: recolor_decode_panel(self.decode_panel))
+    self._age_timer.timeout.connect(lambda: self.decode_panel.recolor())
     self._age_timer.start(15_000)   # recolor every 15 s
 
     # Populate decode_panel with recent history from decodes.jsonl so a
@@ -1250,6 +1226,10 @@ def on_band_changed(self, idx: int):
     # Persist (per mode: the MSK144 calling frequency keeps its old key)
     _VS.setValue(band_setting_key(getattr(self, 'mode', 'MSK144')), freq)
 
+    # Mode → MSK144 is offered only on 6 m, 2 m and 1.25 m.
+    from .ft8_window import update_msk144_action
+    update_msk144_action(self)
+
 
 def _on_about(self):
     from .buildinfo import version_string
@@ -1345,7 +1325,7 @@ def _restore_decode_history(self, n: int = 200) -> None:
     too.
 
     The age timestamp is the decode's own launch time so the existing
-    ``recolor_decode_panel`` ages restored items correctly.
+    Roster's age colouring treats restored items correctly.
     """
     import json
     import re
@@ -1353,7 +1333,6 @@ def _restore_decode_history(self, n: int = 200) -> None:
     from datetime import datetime, timezone
     from pathlib import Path
     from .detection import production_output_dir
-    from .displays import _align_msk144_message, _age_color
 
     log_path = production_output_dir() / 'decodes.jsonl'
     if not log_path.exists():
@@ -1399,53 +1378,30 @@ def _restore_decode_history(self, n: int = 200) -> None:
                 continue
 
         utc_time = ts_dt.strftime('%H:%M:%S')
-        df_hz    = int(round((float(radio_khz) - calling_khz) * 1000))
-        pol_str  = (f"{int(round(theta_deg)):3d}°"
-                    if theta_deg is not None else "  --")
-        snr_str  = f"{int(snr):+d} dB" if snr is not None else "     ?"
-
-        item = QtWidgets.QListWidgetItem(
-            f"{utc_time}  {float(radio_khz):9.3f}  {df_hz:+5d}  "
-            f"{pol_str}  {snr_str:>7}  {_align_msk144_message(msg)}"
-        )
+        mode     = str(r.get('mode') or 'MSK144')
+        if mode != 'MSK144' and r.get('audio_hz') is not None:
+            df_hz = int(round(float(r['audio_hz'])))
+        else:
+            df_hz = int(round((float(radio_khz) - calling_khz) * 1000))
         epoch = ts_dt.timestamp()
-        item.setData(QtCore.Qt.UserRole, epoch)
-        item.setForeground(_age_color(max(0.0, _time.time() - epoch)))
 
         # Reconstruct the saved-burst WAV path so the right-click menu
         # works on restored entries.  Path template matches detection.py:
         #   YYYYMMDD_HHMMSSZ_<rf_int>kHz_<msg_safe>.wav
-        ts_file = ts_dt.strftime('%Y%m%d_%H%M%SZ')
-        msg_safe = re.sub(r'[^A-Za-z0-9]+', '_', msg).strip('_')
-        rf_int = int(round(float(radio_khz)))
-        wav_path = (production_output_dir() /
-                    f"{ts_file}_{rf_int}kHz_{msg_safe}.wav")
-        if wav_path.exists():
-            item.setData(QtCore.Qt.UserRole + 1, str(wav_path))
+        wav = None
+        if mode == 'MSK144':
+            ts_file = ts_dt.strftime('%Y%m%d_%H%M%SZ')
+            msg_safe = re.sub(r'[^A-Za-z0-9]+', '_', msg).strip('_')
+            rf_int = int(round(float(radio_khz)))
+            wav_path = (production_output_dir() /
+                        f"{ts_file}_{rf_int}kHz_{msg_safe}.wav")
+            if wav_path.exists():
+                wav = str(wav_path)
 
-        self.decode_panel.insertItem(0, item)
-
-
-def _on_decode_panel_context_menu(self, pos):
-    """Right-click on the main-window decode list: offer to open the
-    just-decoded burst's saved WAV in the AnalysisWindow.  The WAV path is
-    stashed on each QListWidgetItem at ``Qt.UserRole + 1`` by displays.py.
-    Items with no path (e.g. a decode from a replay where the burst WAV
-    wasn't saved) get a greyed-out menu entry explaining why.
-    """
-    from pathlib import Path
-    item = self.decode_panel.itemAt(pos)
-    if item is None:
-        return
-    wav_path = item.data(QtCore.Qt.UserRole + 1)
-    menu = QtWidgets.QMenu(self.decode_panel)
-    if wav_path and Path(wav_path).exists():
-        act = menu.addAction(f"Open in Analysis Window  ({Path(wav_path).name})")
-        act.triggered.connect(lambda: _open_analysis_window(self, wav_path))
-    else:
-        act = menu.addAction("(no saved WAV for this decode)")
-        act.setEnabled(False)
-    menu.exec_(self.decode_panel.viewport().mapToGlobal(pos))
+        self.decode_panel.add_decode(
+            epoch=epoch, utc_time=utc_time, mode=mode, radio_khz=float(radio_khz),
+            df_hz=df_hz, message=msg, snr=int(snr) if snr is not None else None,
+            theta_deg=theta_deg, wav_path=wav, now=_time.time())
 
 
 def _open_analysis_window(self, wav_path):

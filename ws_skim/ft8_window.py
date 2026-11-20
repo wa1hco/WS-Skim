@@ -226,12 +226,13 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
     # Mode menu: MSK144 (VHF meteor scatter) on its own, or any of the
     # period modes (FT8, FT4) together from the one receiver.
     mode_menu = QtWidgets.QMenu("&Mode", self)
+    mode_menu.setToolTipsVisible(True)          # explains a greyed-out MSK144
     menu_bar.insertMenu(view_menu.menuAction(), mode_menu)
     self._mode_actions = {}
     for mode in ft8_engine.MODES:
         act = QtWidgets.QAction(mode, self, checkable=True)
         if mode == "MSK144":
-            act.setToolTip("Meteor scatter (VHF); turns FT8 and FT4 off")
+            act.setToolTip(MSK144_ON_TIP)
         else:
             act.setToolTip(f"Decode {mode}; FT8 and FT4 can both be on")
         act.triggered.connect(lambda _c, m=mode: _on_mode_action(self, m))
@@ -251,10 +252,38 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
 
     _setup_rate_label(self)
     saved = saved_modes(_SETTINGS)
+    if saved == ("MSK144",) and not msk144_saved_band_ok(_SETTINGS):
+        # MSK144 was saved on a band where it is no longer offered (70 cm).
+        saved = ft8_engine.PERIOD_MODES
     if saved == ("MSK144",):
         apply_mode(self, "MSK144", startup=True)
     else:
         apply_modes(self, saved, startup=True)
+    update_msk144_action(self)
+
+
+#: Tooltip of Mode → MSK144 when the band has no MSK144.
+MSK144_OFF_TIP = ("MSK144 (meteor scatter) is offered on 6 m, 2 m and 1.25 m only. "
+                  "Pick one of those bands in the toolbar first.")
+MSK144_ON_TIP = "Meteor scatter (6 m, 2 m, 1.25 m); turns FT8 and FT4 off"
+
+
+def msk144_saved_band_ok(settings) -> bool:
+    """The saved MSK144 calling frequency is on an MSK144 band."""
+    from .ui import msk144_allowed
+    return msk144_allowed(settings.value("calling_freq_mhz", 50.260))
+
+
+def update_msk144_action(self) -> None:
+    """Enable Mode → MSK144 only on 6 m, 2 m and 1.25 m (always while on)."""
+    from .ui import msk144_allowed
+    act = (getattr(self, "_mode_actions", None) or {}).get("MSK144")
+    if act is None:
+        return
+    on = getattr(self, "mode", "") == "MSK144" and not ft8_engine.enabled_period_modes(self)
+    ok = on or msk144_allowed(getattr(self, "calling_freq_mhz", None))
+    act.setEnabled(ok)
+    act.setToolTip(MSK144_ON_TIP if ok else MSK144_OFF_TIP)
 
 
 #: Settings key for the mode the Sync Map shows when FT8 and FT4 are both on
@@ -315,6 +344,12 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
         apply_modes(self, (mode,), startup=startup)
         return
     from .visualizer import _SETTINGS
+    if mode == "MSK144" and not startup:
+        # Stay on the band: FT8 on 6 m → MSK144 on 6 m (50.260).
+        from .ui import msk144_band_for
+        same = msk144_band_for(getattr(self, "calling_freq_mhz", None))
+        if same is not None:
+            _SETTINGS.setValue("calling_freq_mhz", same)
     self.set_mode(mode)
     _SETTINGS.setValue("mode", mode)
     _sync_mode_checks(self, (mode,))
@@ -325,6 +360,7 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
         if w is not None:
             w.hide()
     _update_rate_label(self)
+    update_msk144_action(self)
 
 
 def apply_modes(self, modes, startup: bool = False) -> None:
@@ -360,6 +396,7 @@ def apply_modes(self, modes, startup: bool = False) -> None:
     elif win is not None:
         win.show()
     _update_rate_label(self)
+    update_msk144_action(self)
 
 
 def _apply_band_and_blanker(self, mode: str) -> None:

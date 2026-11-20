@@ -52,10 +52,17 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
 - Real-time MSK144 detection and decoding around the calling frequency
   (±20 kHz) on 48 kHz IQ, with a 48-channel polyphase channelizer,
   paired-tone detection, a coincidence gate, an optional noise
-  blanker, and a GUI (live spectrogram, detection heatmap, decode
-  panel). The **Mode** menu picks what is decoded: MSK144 on its own, or
-  FT8 and FT4 (check either or both; each is decoded and sent to WS Hub
-  separately, and the status bar shows decodes per minute for each).
+  blanker, and a GUI (live spectrogram, detection heatmap). The **Mode**
+  menu picks what is decoded: MSK144 on its own (offered on 6 m, 2 m and
+  1.25 m only), or FT8 and FT4 (check either or both; each is decoded and
+  sent to WS Hub separately).
+  The main window shows program status only, like WS Hub's main page: the
+  receiver, band and modes, IQ data rate, audio to WSJT-X, decodes per
+  minute for each mode, filtered count, WSJT-X UDP / PSKReporter / DX
+  cluster output and the version, each with a coloured dot (green working,
+  amber check, red not working, grey off); hover any row for details.
+  Every decode is listed in **View → Roster**, newest first; click a column
+  title to sort, and right-click an MSK144 decode to open its recording.
   False FT8/FT4 decodes (a priori guesses, impossible callsigns, grids on
   the wrong continent, duplicates) are filtered out before they are shown
   or sent; the status bar counts them and they are kept in
@@ -69,8 +76,7 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   grid, SNR, mode, UTC time and frequency.  Filtered decodes are not shown.
   The sync detector's own view, **Diagnostics → FT8 Sync Map** (its
   **Show** box picks FT8 or FT4 when both are on), shows the
-  Costas sections, candidate bars and decode labels by DT; **View → Waterfall** is an optional scrolling
-  spectrogram, off by default. A 15-second IQ window is passed to the decoder when a
+  Costas sections, candidate bars and decode labels by DT. A 15-second IQ window is passed to the decoder when a
   channel exceeds the threshold. Saved IQ files can be replayed from
   the **Source** menu.
 - Reporting of decodes to PSKReporter, GridTracker, N1MM Logger+,
