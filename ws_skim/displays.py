@@ -58,7 +58,7 @@ Squared-signal spectrograms (``sq_accumulated_img``, ``sq_realtime_img``)
     because squaring doubles all spectral component frequencies.
 
 Status bar and labels
-    - UTC clock updated every frame (``datetime.UTC`` aware).
+    - UTC clock updated every frame (timezone-aware UTC).
     - Tuned frequency label distinguishes Slice, Pan (with bandwidth), and WAV
       sources; the window title tracks the tuned frequency.
     - Status bar shows sample rate, FFT size, min/max/mean power, and (when
@@ -668,7 +668,7 @@ def update_displays(self):
                             continue
                         curve.setData(*_circle_path(mlist), connect='finite') if mlist else curve.setData(x=[], y=[])
 
-    utc_time = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
+    utc_time = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")
     self.utc_clock_label.setText(utc_time)
     # Main-window status rows, about once a second.
     _now_m = time.monotonic()
