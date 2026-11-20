@@ -234,9 +234,9 @@ def test_mode_menu_ft8_ft4_independent_msk144_exclusive(qapp, monkeypatch):
         ft8_window._update_rate_label(eng)
         assert eng._ft8_rate_label.text() == "FT8 0/min · FT4 0/min"
     finally:
-        for name in ("_activity_win", "_ft8_win"):
+        for name in ("_band_activity_win", "_ft8_win"):
             win = getattr(eng, name, None)
-            for t in ("_act_timer", "_ft8_timer"):
+            for t in ("_ba_timer", "_ft8_timer"):
                 timer = getattr(win, t, None)
                 if timer is not None:
                     timer.stop()
@@ -246,13 +246,14 @@ def test_mode_menu_ft8_ft4_independent_msk144_exclusive(qapp, monkeypatch):
         eng._ft8_rate_timer.stop()
 
 
-def test_activity_window_shows_one_mode_at_a_time(qapp, monkeypatch):
+def test_sync_map_show_box_picks_mode(qapp, monkeypatch):
+    """With FT8 and FT4 both on, the Sync Map's Show box picks the mode
+    (it moved there from the old FT8 Activity window)."""
+    from types import SimpleNamespace
     from PyQt5 import QtWidgets
     import ws_skim.visualizer as vis
-    from ws_skim import activity_window as aw
     from ws_skim import ft8_window
-    from test_activity_window import T0, _dec, _res
-    settings = _Settings()
+    settings = _Settings(activity_view_mode="FT4")     # migrated once
     monkeypatch.setattr(vis, "_SETTINGS", settings)
 
     class Eng(QtWidgets.QMainWindow):
@@ -261,39 +262,50 @@ def test_activity_window_shows_one_mode_at_a_time(qapp, monkeypatch):
         sample_rate = 48000.0
         _ft8_result = None
 
+        def set_period_modes(self, ms):
+            self.period_modes = tuple(ms)
+            self.mode = ms[0]
+
+        def set_blanker(self, b):
+            pass
+
     eng = Eng()
-    win = aw.build_window(eng, QtWidgets.QAction("FT8 Activity", eng, checkable=True))
+    bar = eng.menuBar()
+    view = bar.addMenu("&View")
+    bar.addMenu("&Diagnostics")
     try:
-        win.show()
-        r8 = _res(T0, [_dec(T0, 14_075_000.0, -3)])
-        r4 = _res(T0 + 7.5, [_dec(T0 + 7.5, 14_081_000.0, -5, "CQ W1AW FN31", mode="FT4"),
-                             _dec(T0 + 7.5, 14_082_000.0, -9, "CQ K2AA FN20", mode="FT4")],
-                  mode="FT4")
+        monkeypatch.setattr(ft8_window, "saved_modes", lambda _s: ("FT8", "FT4"))
+        ft8_window.setup_ft8(eng, bar, view)
+        win = eng._ft8_win
+        assert eng._ft8_view_mode == "FT4"                    # from the old setting
+        r8 = SimpleNamespace(mode="FT8")
+        r4 = SimpleNamespace(mode="FT4")
         eng._ft8_results = {"FT8": r8, "FT4": r4}
-        eng._ft8_result = r4
-        aw.tick(eng, win)
-        combo = win._act_mode_combo
+        ft8_window._tick(eng, win)
+        combo = win._ft8_show_combo
         assert [combo.itemText(i) for i in range(combo.count())] == ["FT8", "FT4"]
-        assert not combo.isHidden()
-        assert win._act_view == "FT8" and eng._ft8_view_mode == "FT8"
-        assert win._act_ticks.mark_count() == 1
-        assert len(win._act_histories["FT4"].entries) == 1      # recorded while not shown
-        combo.setCurrentText("FT4")
-        assert win._act_view == "FT4" and eng._ft8_view_mode == "FT4"
-        assert settings["activity_view_mode"] == "FT4"
-        assert win.windowTitle() == "WS Skim — FT4 Activity"
-        assert win._act_ticks.mark_count() == 2
+        assert not combo.isHidden() and combo.currentText() == "FT4"
         assert ft8_window.shown_result(eng) is r4
-        assert "FT4" in win._act_status.text()
-        # FT4 turned off in the Mode menu: the window follows to FT8 and
-        # the Show box hides (one mode).
-        eng.period_modes = ("FT8",)
-        eng._ft8_results = {"FT8": r8}
-        eng._ft8_result = r8
-        aw.tick(eng, win)
-        assert win._act_view == "FT8" and combo.isHidden()
+        combo.setCurrentText("FT8")
+        assert eng._ft8_view_mode == "FT8" and settings["sync_map_mode"] == "FT8"
+        assert win.windowTitle() == "WS Skim — FT8 Sync Map"
         assert ft8_window.shown_result(eng) is r8
+        # FT8 turned off: the Sync Map follows to FT4 and the Show box hides.
+        eng.period_modes = ("FT4",)
+        eng._ft8_results = {"FT4": r4}
+        ft8_window._tick(eng, win)
+        assert eng._ft8_view_mode == "FT4" and combo.isHidden()
+        # Band Activity is the View menu's first item and opened with FT8/FT4.
+        assert view.actions()[0].text() == "Band Activity"
+        assert eng._band_activity_win.isVisible()
     finally:
-        win._act_timer.stop()
-        win._parent_win = None
-        win.hide()
+        for name in ("_band_activity_win", "_ft8_win"):
+            w = getattr(eng, name, None)
+            for t in ("_ba_timer", "_ft8_timer"):
+                timer = getattr(w, t, None)
+                if timer is not None:
+                    timer.stop()
+            if w is not None:
+                w._parent_win = None
+                w.hide()
+        eng._ft8_rate_timer.stop()

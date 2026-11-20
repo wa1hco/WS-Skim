@@ -10,6 +10,21 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Band Activity replaces the FT8 Activity window.**  **View → Band
+  Activity** shows the whole band for every mode: a waterfall of the
+  radio's full span (frequency across the top, UTC time scrolling down,
+  newest at the top) made from the real signal, so activity nothing
+  decodes shows too.  Each FT8, FT4 and MSK144 decode is marked at its
+  frequency and period in its mode's colour (legend at the top), and each
+  mode's WSJT-X sub-band is lightly shaded.  Callsigns are no longer
+  printed on the plot; hover over a mark for call, grid, SNR, mode, UTC
+  time and frequency.  Two check boxes, **Waterfall** and **Detections**,
+  show either layer or both, and are remembered, as is **History** (now in
+  minutes; the old period count carries over, as does the window's place
+  on screen).  Filtered decodes are never shown.  The waterfall costs no
+  CPU while the window is hidden or Waterfall is off.  The FT8/FT4
+  **Show** box moved to **Diagnostics → FT8 Sync Map**.
+
 - **FT8 and FT4 at the same time.**  The **Mode** menu now has FT8 and FT4
   as separate check marks, and both can be on; MSK144 is still on its own
   (checking it turns FT8 and FT4 off).  Each mode keeps its own period
@@ -19,8 +34,8 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   use the band's FT4 dial; an idle FT4 region closes after 1 minute.  The
   choice is remembered; an install that was on FT8 or FT4 comes up with
   both checked.  The status bar shows decodes per minute for each mode,
-  and the Activity window has a **Show** box to pick which mode it (and the
-  Sync Map) draws.
+  and the Activity window had a **Show** box to pick which mode it (and the
+  Sync Map) draws (now in the Sync Map; see Band Activity above).
 
 - **False FT8/FT4 decodes are filtered out.**  jt9 still decodes at Deep
   (depth 3), but each period's decodes are checked before they are shown in

@@ -60,13 +60,15 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
   the wrong continent, duplicates) are filtered out before they are shown
   or sent; the status bar counts them and they are kept in
   `rejected.jsonl` in the output folder.
-  In FT8/FT4, **View → FT8 Activity** opens with the mode (its **Show** box
-  picks FT8 or FT4 when both are on): frequency up
-  the side with the jt9 sections, each labelled by its kHz in the band
-  ("74" is 7074 kHz), the last few minutes of periods
-  across the bottom, and one tick per decoded station coloured by SNR
-  (hover for call, SNR, DT and frequency; *Show calls* prints them all).
-  The sync detector's own view, **Diagnostics → FT8 Sync Map**, shows the
+  **View → Band Activity** is the operating view for every mode (it opens
+  with FT8/FT4): a waterfall of the radio's whole span, frequency across
+  the top and time scrolling down, with each decode marked at its
+  frequency and period, coloured by mode (FT8, FT4, MSK144), and each
+  mode's WSJT-X sub-band lightly shaded.  Check boxes show the real-signal
+  **Waterfall**, the **Detections**, or both; hover over a mark for call,
+  grid, SNR, mode, UTC time and frequency.  Filtered decodes are not shown.
+  The sync detector's own view, **Diagnostics → FT8 Sync Map** (its
+  **Show** box picks FT8 or FT4 when both are on), shows the
   Costas sections, candidate bars and decode labels by DT; **View → Waterfall** is an optional scrolling
   spectrogram, off by default. A 15-second IQ window is passed to the decoder when a
   channel exceeds the threshold. Saved IQ files can be replayed from

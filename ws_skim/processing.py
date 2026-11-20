@@ -2190,7 +2190,10 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     _fg_win     = getattr(self, '_fast_graph_win', None)
     _fg_visible = _fg_win is None or _fg_win.isVisible()
     _wf_wanted  = bool(getattr(self, '_waterfall_wanted', False))
-    _compute_fft = _fg_visible or _wf_wanted
+    # Band Activity waterfall: only while its window is shown with Waterfall on.
+    _ba_wf      = getattr(self, '_band_wf', None)
+    _ba_wanted  = _ba_wf is not None and bool(getattr(_ba_wf, 'wanted', False))
+    _compute_fft = _fg_visible or _wf_wanted or _ba_wanted
     _wf_hop     = self.fft_size // 2   # constant; moved out of the loop
 
     while self._sbuf_end >= self.fft_size:
@@ -2211,6 +2214,11 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
                 if _wf_wanted:
                     from .waterfall_window import push_row_from_engine
                     push_row_from_engine(self, power_db, current_wall_time)
+
+                if _ba_wanted:
+                    _ba_wf.push(magnitude, current_wall_time,
+                                float(getattr(self, 'center_freq_mhz', 0.0)),
+                                float(self.sample_rate))
 
                 if _fg_visible:
                     # ── Accumulated spectrogram ───────────────────────────────────────

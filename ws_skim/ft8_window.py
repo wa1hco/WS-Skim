@@ -14,8 +14,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Mode menu (MSK144, or FT8 and/or FT4) and the FT8 Sync Map (Diagnostics) window.
 
-The operating view for FT8/FT4 is ``activity_window`` (View → FT8 Activity);
-this Sync Map is the sync detector's diagnostic view, under Diagnostics.
+The operating view is ``band_activity_window`` (View → Band Activity, all
+modes); this Sync Map is the sync detector's diagnostic view, under
+Diagnostics.  With FT8 and FT4 both on, its *Show* box picks the mode.
 
 The window draws ``engine._ft8_result`` (``ft8_engine.PeriodResult``) once
 per period, when the Costas search finishes: the sync score over RF
@@ -187,23 +188,25 @@ def blanker_key(mode: str) -> str:
 
 
 def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) -> None:
-    """Add the Mode menu, View → FT8 Activity and Diagnostics → FT8 Sync Map.
+    """Add the Mode menu, View → Band Activity and Diagnostics → FT8 Sync Map.
 
-    The Activity window is the operating view and opens with FT8/FT4.  The
-    Sync Map is the sync detector's diagnostic view; it lives under
+    Band Activity (all modes) is the operating view and opens with FT8/FT4.
+    The Sync Map is the sync detector's diagnostic view; it lives under
     Diagnostics and only opens when asked.  Restores the saved mode.
     """
     from .visualizer import _SETTINGS
-    from . import activity_window
+    from . import band_activity_window
 
-    act_action = QtWidgets.QAction("FT8 Activity", self)
+    act_action = QtWidgets.QAction("Band Activity", self)
     act_action.setCheckable(True)
+    act_action.setToolTip("Waterfall of the whole band with every decode marked by mode")
     first = view_menu.actions()[0] if view_menu.actions() else None
     view_menu.insertAction(first, act_action)         # top of View, easy to find
-    activity_window.build_window(self, act_action)
+    band_activity_window.build_window(self, act_action)
     act_action.triggered.connect(
-        lambda checked: self._activity_win.show() if checked else self._activity_win.hide())
-    self._activity_action = act_action
+        lambda checked: self._band_activity_win.show() if checked
+        else self._band_activity_win.hide())
+    self._band_activity_action = act_action
 
     diag = next((a.menu() for a in menu_bar.actions()
                  if a.menu() is not None and a.text().replace("&", "") == "Diagnostics"), None)
@@ -252,6 +255,11 @@ def setup_ft8(self, menu_bar: QtWidgets.QMenuBar, view_menu: QtWidgets.QMenu) ->
         apply_mode(self, "MSK144", startup=True)
     else:
         apply_modes(self, saved, startup=True)
+
+
+#: Settings key for the mode the Sync Map shows when FT8 and FT4 are both on
+#: (the FT8 Activity window's ``activity_view_mode`` is read once to migrate).
+SYNC_MAP_MODE_KEY = "sync_map_mode"
 
 
 #: Settings key for the decoded period modes ("FT8,FT4").  Older versions
@@ -312,9 +320,10 @@ def apply_mode(self, mode: str, startup: bool = False) -> None:
     _sync_mode_checks(self, (mode,))
     _apply_band_and_blanker(self, mode)
     if not startup:
-        for w in (getattr(self, "_ft8_win", None), getattr(self, "_activity_win", None)):
-            if w is not None:
-                w.hide()
+        # Band Activity covers MSK144 too and stays open; the Sync Map is FT8/FT4 only.
+        w = getattr(self, "_ft8_win", None)
+        if w is not None:
+            w.hide()
     _update_rate_label(self)
 
 
@@ -333,18 +342,20 @@ def apply_modes(self, modes, startup: bool = False) -> None:
     _apply_band_and_blanker(self, primary)
 
     win = getattr(self, "_ft8_win", None)
-    act = getattr(self, "_activity_win", None)
+    act = getattr(self, "_band_activity_win", None)
     for name in _MSK144_WINDOWS:
         w = getattr(self, name, None)
         if w is not None and w.isVisible():
             w.hide()
     view = getattr(self, "_ft8_view_mode", None)
     if view not in modes:
-        view = self._ft8_view_mode = primary
+        saved = str(_SETTINGS.value(SYNC_MAP_MODE_KEY, None)
+                    or _SETTINGS.value("activity_view_mode", "") or "")
+        view = self._ft8_view_mode = saved if saved in modes else primary
     if win is not None:
         win.setWindowTitle(f"WS Skim — {view} Sync Map")
+        _sync_show_combo(self, win, modes)
     if act is not None:
-        act.setWindowTitle(f"WS Skim — {view} Activity")
         act.show()
     elif win is not None:
         win.show()
@@ -424,7 +435,16 @@ def _build_window(self, view_action) -> None:
     layout.setContentsMargins(4, 4, 4, 4)
 
     status = QtWidgets.QLabel("Waiting for the first full period…")
-    layout.addWidget(status)
+    top = QtWidgets.QHBoxLayout()
+    top.addWidget(status, stretch=1)
+    show_label = QtWidgets.QLabel("Show:")
+    show_combo = QtWidgets.QComboBox()
+    show_combo.setToolTip("Which mode's sync search this window shows")
+    top.addWidget(show_label)
+    top.addWidget(show_combo)
+    show_label.hide()
+    show_combo.hide()
+    layout.addLayout(top)
 
     plot = pg.PlotWidget()
     plot.setBackground("w")
@@ -498,6 +518,15 @@ def _build_window(self, view_action) -> None:
     layout.addWidget(split, stretch=1)
 
     win._ft8_status = status
+    win._ft8_show_combo = show_combo
+    win._ft8_show_label = show_label
+    win._ft8_combo_modes = ()
+
+    def on_show(text):
+        if text and text != getattr(self, "_ft8_view_mode", None):
+            set_view_mode(self, win, text)
+
+    show_combo.currentTextChanged.connect(on_show)
     win._ft8_plot = plot
     win._ft8_img = img
     win._ft8_bars = bars
@@ -522,12 +551,55 @@ def _build_window(self, view_action) -> None:
     win._ft8_timer = timer
 
 
+def set_view_mode(eng, win, mode: str) -> None:
+    """Show ``mode``'s sync search in the Sync Map (remembered)."""
+    from .visualizer import _SETTINGS
+    eng._ft8_view_mode = mode
+    _SETTINGS.setValue(SYNC_MAP_MODE_KEY, mode)
+    win.setWindowTitle(f"WS Skim — {mode} Sync Map")
+    win._ft8_drawn = None
+    win._ft8_drawn_key = None
+    win._ft8_axis_key = None
+    combo = win._ft8_show_combo
+    if combo.currentText() != mode:
+        combo.blockSignals(True)
+        combo.setCurrentText(mode)
+        combo.blockSignals(False)
+
+
+def _sync_show_combo(eng, win, modes: tuple) -> None:
+    """List the decoded period modes in the Show box (shown for two or more);
+    follow the engine if the shown mode was turned off."""
+    combo = getattr(win, "_ft8_show_combo", None)
+    if combo is None or not modes:
+        return
+    if modes != win._ft8_combo_modes:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(list(modes))
+        combo.blockSignals(False)
+        win._ft8_combo_modes = modes
+        many = len(modes) > 1
+        combo.setVisible(many)
+        win._ft8_show_label.setVisible(many)
+    view = getattr(eng, "_ft8_view_mode", None)
+    want = view if view in modes else modes[0]
+    if want != view:
+        set_view_mode(eng, win, want)
+    elif combo.currentText() != want:
+        combo.blockSignals(True)
+        combo.setCurrentText(want)
+        combo.blockSignals(False)
+
+
 def _tick(eng, win) -> None:
     try:
-        res = shown_result(eng)
-        if not ft8_engine.enabled_period_modes(eng):
+        modes = ft8_engine.enabled_period_modes(eng)
+        if not modes:
             win._ft8_status.setText("Mode is MSK144. Choose Mode → FT8 to search for FT8.")
             return
+        _sync_show_combo(eng, win, modes)
+        res = shown_result(eng)
         if res is None:
             win._ft8_status.setText("Waiting for the first full period…")
             return
@@ -540,7 +612,7 @@ def _tick(eng, win) -> None:
 
 def shown_result(eng):
     """The newest result of the mode the windows show (``_ft8_view_mode``,
-    picked in the Activity window), else the newest of any mode."""
+    picked in the Sync Map's Show box), else the newest of any mode."""
     view = getattr(eng, "_ft8_view_mode", None)
     results = getattr(eng, "_ft8_results", None) or {}
     if view in results:

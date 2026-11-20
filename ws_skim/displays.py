@@ -436,6 +436,12 @@ def update_displays(self):
                 if _wav_path:
                     _item.setData(QtCore.Qt.UserRole + 1, str(_wav_path))
                 self.decode_panel.insertItem(0, _item)
+                # MSK144 pings → View → Band Activity (FT8/FT4 come from
+                # their period results there).
+                _ba = getattr(self, '_band_activity_win', None)
+                if _ba is not None:
+                    from .band_activity_window import note_decode_record
+                    note_decode_record(_ba, result)
                 # Forward to reporter (WSJT-X UDP + PSKReporter).
                 # Suppress reporting when replaying a WAV file — test signals
                 # and simulations must not appear on PSKReporter or DX cluster.

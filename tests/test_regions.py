@@ -9,7 +9,6 @@ active regions sent to WS Hub over WSJT-X UDP."""
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -95,24 +94,6 @@ def test_search_period_sections_are_whole_khz_and_dial_section_merges():
     for f in sigs:
         assert any(s.base_hz + 200 <= f and f + spec.bandwidth_hz <= s.base_hz + 3200
                    for s in r.sections)
-
-
-# ── Activity view labels ────────────────────────────────────────────────
-
-def test_activity_sections_named_by_khz_in_band():
-    from ws_skim import activity_window as aw
-    sec = cs.Section(base_hz=7_074_000.0 - 7_060_000.0, low_audio_hz=200.0,
-                     high_audio_hz=3000.0, candidates=[])
-    sec2 = cs.Section(base_hz=7_059_000.0 - 7_060_000.0, low_audio_hz=200.0,
-                      high_audio_hz=3000.0, candidates=[])
-    res = SimpleNamespace(mode="FT8", period_start_utc=1_700_000_010.0,
-                          center_freq_mhz=7.060, candidates=[], sections=[sec, sec2],
-                          decodes=[], decoded=False)
-    e = aw.entry_from_result(res)
-    assert e.section_names == ["74", "59"]
-    h = aw.ActivityHistory(n_periods=4)
-    assert h.add(res)
-    assert h.section_names() == ["74", "59"]
 
 
 # ── UDP: only active regions ────────────────────────────────────────────
