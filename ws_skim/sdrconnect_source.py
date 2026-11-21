@@ -22,7 +22,7 @@ Interface
 ---------
 Same ``sample_queue`` / ``start()`` / ``stop()`` / ``retune()`` shape as
 ``AirspyHFSource``, so ``run_radio_source`` drives it unchanged.  Packets
-carry complex64 IQ in ±1.0 scale at ``target_rate`` (48 kHz) **centred on
+carry complex64 IQ in ±1.0 scale at ``target_rate`` (48 kHz, 96 kHz for FT8/FT4 only) **centred on
 the calling frequency**, like the SDRangel source: the device is tuned below
 the calling frequency (keeps the DC spur away) and the offset is mixed out
 here, so ``center_freq_mhz`` == ``calling_freq_mhz`` for the pipeline.
@@ -317,12 +317,13 @@ def launch_sdrconnect(mode: str, port: int) -> Optional[subprocess.Popen]:
 # ---------------------------------------------------------------------------
 
 class _SDRconnectPacket:
-    __slots__ = ("samples", "timestamp_int", "timestamp_frac")
+    __slots__ = ("samples", "timestamp_int", "timestamp_frac", "rate")
 
-    def __init__(self, samples, timestamp_int, timestamp_frac):
+    def __init__(self, samples, timestamp_int, timestamp_frac, rate=None):
         self.samples = samples
         self.timestamp_int = timestamp_int
         self.timestamp_frac = timestamp_frac
+        self.rate = rate          # output sample rate of these samples (Hz)
 
 
 _WATCHED_PROPS = ("device_center_frequency", "device_sample_rate", "lna_state",
@@ -405,6 +406,7 @@ class SDRconnectSource:
         self._retune_pending = False
         self._mode_switch_pending = False
         self._decim: Optional[Decimator] = None
+        self._rate_pending: Optional[int] = None
         self._mixer: Optional[_Mixer] = None
         self._t_anchor: Optional[float] = None
         self._in_since_anchor = 0
@@ -605,7 +607,36 @@ class SDRconnectSource:
         self._ensure_decimator()      # filter design + scipy import before IQ flows
         self._send(ws, "iq_stream_enable", "", "true")
 
+    def set_target_rate(self, rate: int) -> None:
+        """Change the output IQ rate (48 or 96 kHz, see rates.py).  Takes
+        effect on the stream thread before the next IQ frame; packets carry
+        their rate so the consumer switches exactly at the boundary."""
+        rate = int(rate)
+        if rate == self.target_rate and self._rate_pending is None:
+            return
+        self._rate_pending = rate
+
+    @property
+    def wanted_rate(self) -> int:
+        p = self._rate_pending
+        return int(p) if p is not None else int(self.target_rate)
+
+    def _apply_rate_pending(self) -> None:
+        p = self._rate_pending
+        if p is None:
+            return
+        self._rate_pending = None
+        if p != self.target_rate:
+            print(f"[sdrconnect] IQ rate {self.target_rate} -> {p} Hz ({self.tuner} tuner)",
+                  flush=True)
+            self.target_rate = int(p)
+            self._decim = None
+            self._t_anchor = None
+            self._retune_pending = True       # DC spur rule depends on the rate
+            self._update_offset()
+
     def _ensure_decimator(self) -> bool:
+        self._apply_rate_pending()
         if self._decim is not None:
             return True
         if self.device_rate is None or self.device_center_hz is None:
@@ -670,9 +701,11 @@ class SDRconnectSource:
         call_hz = self.calling_freq_mhz * 1e6
         off = call_hz - self.device_center_hz
         usable = self.usable_half_span_hz()
-        need = abs(off) > usable or abs(off) < _MIN_DC_OFFSET_HZ
+        # Keep the LO's DC spur out of the IQ band handed to the decoders.
+        dc_min = max(_MIN_DC_OFFSET_HZ, self.target_rate / 2.0 + 2_000.0)
+        need = abs(off) > usable or abs(off) < dc_min
         if need and self.control_tuning:
-            lo_off = min(self.lo_offset_hz, max(usable - 1.0, _MIN_DC_OFFSET_HZ))
+            lo_off = min(self.lo_offset_hz, max(usable - 1.0, dc_min))
             new_c = int(round(call_hz - lo_off))
             print(f"[sdrconnect] tuning {self.tuner} LO to {new_c/1e6:.6f} MHz "
                   f"(calling {self.calling_freq_mhz:.6f})", flush=True)
@@ -705,6 +738,10 @@ class SDRconnectSource:
             if abs(self.offset_hz) > usable:
                 self.edge_note = (f" — {abs(self.offset_hz)/1e3:.0f} kHz from the tuner centre, "
                                   "past the flat ±700 kHz of dual-tuner mode (weaker signals)")
+            elif abs(self.offset_hz) < self.target_rate / 2.0:
+                lo_mhz = self.device_center_hz / 1e6
+                self.edge_note = (f" — tuner centre {lo_mhz:.4f} MHz is inside the decoded "
+                                  "band (its DC spur can hide signals there)")
             if self.status in ("out_of_span", "single_mode"):
                 self._set_status("streaming", "Streaming" + self.edge_note)
         if self._mixer is not None:
@@ -850,7 +887,8 @@ class SDRconnectSource:
         ts_int = int(t_chunk)
         ts_frac = int((t_chunk - ts_int) * 1e12)
         try:
-            self.sample_queue.put_nowait(_SDRconnectPacket(y.reshape(-1, 1), ts_int, ts_frac))
+            self.sample_queue.put_nowait(_SDRconnectPacket(y.reshape(-1, 1), ts_int, ts_frac,
+                                                            self.target_rate))
         except queue.Full:
             self.queue_drops += 1
         if self.status != "out_of_span":

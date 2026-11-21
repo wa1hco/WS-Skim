@@ -23,7 +23,12 @@ import time
 
 import numpy as np
 
+from . import rates
+
 log = logging.getLogger(__name__)
+
+#: Receiver 2's source family (for the 48/96 kHz rate rule in rates.py).
+RX2_SOURCE_MODE = "sdrconnect"
 
 #: QSettings keys (receiver 2 on/off and its band per mode).
 ENABLED_KEY = "rx2_enabled"
@@ -85,7 +90,7 @@ class SecondReceiver:
         from .engine import Engine
         self.main = main
         f = float(calling_freq_mhz)
-        rate = int(sample_rate or getattr(main, "sample_rate", 48000))
+        rate = int(sample_rate or getattr(main, "sample_rate", rates.BASE_RATE))
         eng = Engine(center_freq_mhz=f, calling_freq_mhz=f, sample_rate=rate)
         eng.source_mode = getattr(main, "source_mode", "sdrconnect")
         eng.rx_id = self.rx_id
@@ -123,6 +128,12 @@ class SecondReceiver:
         b2 = getattr(getattr(eng, "blanker", None), "name", None)
         if b1 and b1 != b2:
             eng.set_blanker(b1)
+        # 96 kHz with MSK144 off; the engine follows the packets' rate.
+        c = self.client
+        if c is not None and hasattr(c, "set_target_rate"):
+            want = rates.wanted_rate(self.main, RX2_SOURCE_MODE)
+            if getattr(c, "wanted_rate", want) != want:
+                c.set_target_rate(want)
 
     @property
     def calling_freq_mhz(self) -> float:
@@ -170,7 +181,9 @@ class SecondReceiver:
         return self._thread is not None and self._thread.is_alive()
 
     # ── IQ (drain thread) ──────────────────────────────────────────────
-    def feed(self, samples, timestamp_int=0, timestamp_frac=0) -> None:
+    def feed(self, samples, timestamp_int=0, timestamp_frac=0, rate=None) -> None:
+        if rate and int(rate) != int(self.engine.sample_rate):
+            self.engine.set_sample_rate(int(rate))
         self.engine.process_iq_data(np.asarray(samples, dtype=np.complex64),
                                     timestamp_int, timestamp_frac)
 
@@ -184,7 +197,8 @@ class SecondReceiver:
             except queue.Empty:
                 continue
             try:
-                self.feed(pkt.samples, pkt.timestamp_int, pkt.timestamp_frac)
+                self.feed(pkt.samples, pkt.timestamp_int, pkt.timestamp_frac,
+                          getattr(pkt, "rate", None))
             except Exception as exc:              # keep receiving
                 self.errors += 1
                 self.last_error = f"{type(exc).__name__}: {exc}"
@@ -201,7 +215,7 @@ def make_client(main, freq_mhz: float, cfg: dict | None = None):
         cfg = _sdrconnect_settings()
     return SDRconnectSource(
         calling_freq_mhz=freq_mhz,
-        target_rate=int(getattr(main, "sample_rate", 48000)),
+        target_rate=rates.wanted_rate(main, RX2_SOURCE_MODE),
         host=cfg["host"], port=cfg["port"], tuner="secondary",
         control_tuning=cfg["control_tuning"], launch="never",
         device_mode="dual",

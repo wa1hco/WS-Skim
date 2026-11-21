@@ -79,6 +79,12 @@ inside each band, as WSJT-X does.
   Skim tunes the radio" ticked, WS Skim moves a tuner when its band is
   outside that.
 - Leave **Tuner** in the SDRplay window on Tuner 1 (A) when Tuner 2 is on.
+- For FT8 and FT4 each tuner decodes 96 kHz around its band (48 kHz
+  while MSK144 is on).  On 40 m that covers FT8 at 7.074 and FT4 at
+  7.0475 together: tick both FT8 and FT4 in the Mode menu.
+- If you tune SDRconnect yourself, keep each tuner's centre frequency
+  at least 50 kHz away from the band you decode, so its DC spur stays
+  out of the way.  The SDRplay window says when it is too close.
 
 Where the two bands show up:
 

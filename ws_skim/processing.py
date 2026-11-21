@@ -126,6 +126,7 @@ except Exception as _cupy_err:   # ImportError, RuntimeError, AttributeError, â€
 import numpy as np
 from scipy.ndimage import convolve1d as _nd_convolve1d
 
+from .rates import BASE_RATE
 from .channelizer import (
     apply_channelizer,
     N_CHANNELS,
@@ -1238,7 +1239,16 @@ def process_iq_data(self, iq_samples, timestamp_int, timestamp_frac):
     # Dual-pol: pass both H and V in one call so the NCO phase matrix (the most
     # expensive part) is computed once instead of twice, and the FIR filter calls
     # are batched over 2Ã—N_CHANNELS rows instead of two separate passes.
-    if dual_pol:
+    # FT8/FT4 search the wideband IQ ring and never read the channels, so
+    # skip the channelizer (a third of the per-chunk CPU) unless MSK144 runs
+    # (only at 48 kHz) or the B210 WSJT-X audio bridge taps channel 0.
+    _need_channels = ((getattr(self, 'mode', 'MSK144') == 'MSK144'
+                       and int(self.sample_rate) == BASE_RATE)
+                      or bool(getattr(self, '_wsjtx_exports', None)))
+    if not _need_channels:
+        ch_out = np.zeros((N_CHANNELS, 0), dtype=np.complex64)
+        ch_out_v = ch_out if dual_pol else None
+    elif dual_pol:
         ch_out, ch_out_v = apply_channelizer(
             cleaned, self._ch_state,
             lp_taps=self._ch_taps,

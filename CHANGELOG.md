@@ -10,6 +10,20 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **96 kHz per tuner for FT8/FT4.**  With Source → SDRplay (SDRconnect)
+  and MSK144 off, each tuner now hands the decoders 96 kHz instead of
+  48 kHz (Tuner 1 and Tuner 2 alike).  On 40 m with the band on FT8
+  7.074 that also takes in FT4 at 7.0475, which is decoded and sent on
+  WSJT-X UDP as `SKIM-RSP1-40m-FT4-48` when FT4 is ticked in the Mode
+  menu.  Band Activity shows the wider span.  Turning MSK144 on goes
+  back to 48 kHz by itself.  The Flex (DAX IQ is 48 kHz), B210, Airspy,
+  RTL-SDR, SDRangel and WAV sources stay at 48 kHz.  When WS Skim tunes
+  the radio it keeps the tuner's centre (and its DC spur) outside the
+  96 kHz band; if your SDRconnect has a tuner centred inside it, the
+  status line says so.
+- **Less CPU for FT8/FT4**: the MSK144 channelizer no longer runs when
+  MSK144 is off.  FT8+FT4 at 96 kHz takes about 1.6× the CPU of 48 kHz
+  before jt9; jt9's share grows with how busy the wider band is.
 - **RSPduo: two bands at once.**  With Source → SDRplay (SDRconnect), tick
   **Tuner 2** in the toolbar and pick its band: one WS Skim then decodes
   both RSPduo tuners, for example 40 m and 30 m FT8, with the same modes

@@ -42,6 +42,7 @@ from .plot_style import (
 )
 
 from .user_paths import config_dir as _ws_skim_config_dir
+from . import rates
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -1390,7 +1391,7 @@ def on_sdrangel_apply_clicked(self):
             device_set       = device_set,
             calling_freq_mhz = self.calling_freq_mhz,
             lo_offset_khz    = lo_offset,
-            target_rate      = self.sample_rate,
+            target_rate      = rates.BASE_RATE,
             exe_path         = exe_path or None,
             dev_sample_rate  = dev_rate,
             gain_db          = gain_db,
@@ -1406,7 +1407,7 @@ def on_sdrangel_apply_clicked(self):
             device_set       = _dev_set_v,
             calling_freq_mhz = self.calling_freq_mhz,
             lo_offset_khz    = lo_offset,
-            target_rate      = self.sample_rate,
+            target_rate      = rates.BASE_RATE,
             exe_path         = exe_path or None,
             dev_sample_rate  = dev_rate,
             gain_db          = gain_db,

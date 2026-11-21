@@ -20,8 +20,8 @@ Baseline: `main` at 720d425 (v0.1.4-test.21, single-tuner SDRplay source).
 - **Release**: one release (test.22) once the GUI band pickers are in.
 - **Decoder bandwidth**: Jeff asked for about 96 kHz per tuner, because
   48 kHz on the Flex feels cramped. That change reaches further than a
-  contained fix (see "96 kHz per tuner" below), so test.22 ships two
-  tuners at 48 kHz each.
+  contained fix (see "96 kHz per tuner" below), so test.22 shipped two
+  tuners at 48 kHz each; test.23 adds 96 kHz for FT8/FT4.
 
 ## As built (test.22)
 
@@ -69,49 +69,50 @@ Baseline: `main` at 720d425 (v0.1.4-test.21, single-tuner SDRplay source).
     tuners);
   - a soak run (phase E).
 
-## 96 kHz per tuner (investigated, not in test.22)
+## 96 kHz per tuner (built in test.23)
 
-**What works at 96 kHz today:**
-- **The FT8/FT4 path.** A bare `Engine(sample_rate=96000)` finds an FT8
-  signal at +30 kHz and sends its sections to jt9. The channelizer buffer
-  was sized for 48 kHz chunks; test.22 now sizes it by rate.
-- **The SDRconnect source.** `target_rate` is already a parameter, and
-  the span guard now follows it.
+**Rule (`ws_skim/rates.py`):** a receiver runs at 96 kHz when MSK144 is
+off and its source is SDRconnect; otherwise at 48 kHz. MSK144's
+channelizer, TFMF and candidate-extract constants stay 48 kHz-only.
 
-**What needs work first:**
-- **MSK144 only works at 48 kHz.**
-  - `channelizer.DECIMATE_FACTOR = 4` turns 48 kHz into 12 kHz channels.
-    At 96 kHz the channels would be 24 kHz, so the detectors and jt9
-    would get the wrong rate.
-  - The TFMF (sync map) constants are also fixed at 48 kHz:
-    `_TFMF_DISP_FS_HZ = 48_000`, stride 24, template 1536.
-  - So is `FS = 48000` in `processing.py`'s candidate extract.
-  - Fix: derive the decimation from the rate (rate/12000) and the TFMF
-    constants from the rate, then rerun the MSK144 corpus as a
-    regression check.
-- **Receiver 1's rate is fixed when the main window is built.**
-  - The window *is* the Engine. `Engine.__init__` sizes the IQ ring, the
-    timebase, the FFT axes, the spectrogram arrays
-    (`max_history × fft_size`) and the display buffers.
-  - Switching between 48 and 96 kHz on a source or mode change needs an
-    `Engine.set_sample_rate()` that rebuilds all of these. The GUI
-    windows must then re-read their shapes.
-- **CPU.** In the box test, FT8 at 96 kHz used about 2.4× the CPU of
-  48 kHz: 29.8 vs 12.1 core-seconds for the same 17 s. Most of that is
-  the Costas search over twice the bins, plus the channelizer that FT8
-  mode still runs. Skipping the channelizer in FT8/FT4-only mode would
-  win some of it back.
+**How the rate changes at run time:**
+- The radio thread (`runtime._reconcile_rate`) and `SecondReceiver.sync_modes`
+  ask the SDRconnect client for the wanted rate (`set_target_rate`).
+- The client's stream thread rebuilds its decimator before the next IQ
+  frame (2 MS/s: ÷5 then ×6/25 for 96 kHz) and stamps the rate on every
+  packet (`_SDRconnectPacket.rate`).
+- The drain loop (receiver 1) and `SecondReceiver.feed` (receiver 2) call
+  `Engine.set_sample_rate()` when a packet's rate differs, so queued
+  old-rate samples are never processed at the new rate.
+- `Engine.set_sample_rate()` rebuilds everything sized by the rate: the
+  FFT (`fft_size` scales with the rate, so waterfall rows and bins keep
+  their width), spectrogram and time-domain buffers, channelizer, the
+  30 s IQ ring, the time base (re-anchored) and the FT8/FT4 period
+  state. A period or two is lost on a switch.
+- Every other source creates its client at 48 kHz, and the radio loop
+  puts the engine back at 48 kHz when the source is not SDRconnect.
 
-**Suggested order:**
-1. Skip the channelizer in period-only modes.
-2. Add `Engine.set_sample_rate()`: 96 kHz for FT8/FT4, and 48 kHz
-   whenever MSK144 is on.
-3. Derive the MSK144 channelizer and TFMF constants from the rate, if
-   96 kHz MSK144 is wanted.
+**Also in test.23:**
+- The channelizer is skipped unless MSK144 runs at 48 kHz (or the B210
+  WSJT-X audio bridge taps channel 0). FT8/FT4 never read it.
+- With "WS Skim tunes the radio", the tuner LO is kept at least
+  `rate/2 + 2 kHz` from the calling frequency, so the DC spur is outside
+  the decoded band; otherwise the status line notes it.
+- Section planning was already rate-general (`EDGE_FRACTION × fs`). At
+  96 kHz centred on 7.074, `pick_dial_mhz("FT4")` picks 7.0475 and its
+  dial section is always decoded. The UDP id is `SKIM-RSP1-40m-FT4-48`
+  (the kHz-in-band rule rounds 7047.5 to 48).
+- Band Activity follows the rate through `BandWaterfall.push(…, fs)`.
 
-**A known benefit:** on 40 m the FT4 dial (7.0475) is 26.5 kHz from
-FT8's 7.074. That is just outside a 48 kHz span centred on 7.074, but
-inside a 96 kHz one.
+**CPU (box, 32 s of noise, FT8+FT4, Python only):** 2.8 s at 48 kHz and
+4.6 s at 96 kHz, both with the channelizer skipped. jt9 cost grows with
+the number of sections, which grows with the activity inside the wider
+band.
+
+**Not done:** 96 kHz for MSK144 (needs rate-derived channelizer and
+TFMF constants plus a corpus rerun), and for the B210, Airspy, RTL-SDR
+and SDRangel sources (their decimators are built once; switching needs
+a source restart). Flex DAX IQ is fixed at 48 kHz.
 
 ## Goal
 

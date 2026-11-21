@@ -115,6 +115,7 @@ closeEvent(self, event)
 """
 
 from . import env as _ws_env
+from . import rates
 import logging
 import queue
 import time
@@ -211,7 +212,7 @@ def _connect_airspy_client(self):
         from .airspy_source import AirspyHFSource
         self.airspy_client = AirspyHFSource(
             center_freq_mhz=self.calling_freq_mhz,
-            target_rate=self.sample_rate,
+            target_rate=rates.BASE_RATE,
         )
         print("[airspy] AirspyHFSource created", flush=True)
     except Exception as exc:
@@ -281,7 +282,7 @@ def _connect_rtlsdr_client(self):
         from .rtlsdr_source import NesdrSmartSource
         self.rtlsdr_client = NesdrSmartSource(
             center_freq_mhz=self.calling_freq_mhz,
-            target_rate=self.sample_rate,
+            target_rate=rates.BASE_RATE,
         )
         print("[rtlsdr] NesdrSmartSource created", flush=True)
     except Exception as exc:
@@ -363,7 +364,7 @@ def _connect_sdrconnect_client(self):
             cfg['device_mode'] = 'dual'
         self.sdrconnect_client = SDRconnectSource(
             calling_freq_mhz=self.calling_freq_mhz,
-            target_rate=self.sample_rate,
+            target_rate=rates.wanted_rate(self, "sdrconnect"),
             host=cfg['host'], port=cfg['port'], tuner=cfg['tuner'],
             lna_state=cfg['lna_state'], control_tuning=cfg['control_tuning'],
             launch=cfg['launch'], device_mode=cfg['device_mode'],
@@ -392,6 +393,16 @@ def _start_sdrconnect_source(self) -> bool:
         print(f"[sdrconnect] start error: {exc}", flush=True)
         import traceback; traceback.print_exc()
         return False
+
+
+def _reconcile_rate(self):
+    """Ask SDRconnect for 96 kHz with MSK144 off, 48 kHz with it on."""
+    sc = getattr(self, 'sdrconnect_client', None)
+    if sc is None or not hasattr(sc, 'set_target_rate'):
+        return
+    want = rates.wanted_rate(self, "sdrconnect")
+    if getattr(sc, 'wanted_rate', want) != want:
+        sc.set_target_rate(want)
 
 
 def _reconcile_rx2(self, force: bool = False):
@@ -483,7 +494,7 @@ def _connect_sdrangel_client(self):
             device_set       = _dev_set,
             calling_freq_mhz = self.calling_freq_mhz,
             lo_offset_khz    = _lo_offset,
-            target_rate      = self.sample_rate,
+            target_rate      = rates.BASE_RATE,
             exe_path         = _exe_path,
             dev_sample_rate  = _dev_rate,
             gain_db          = _gain,
@@ -502,7 +513,7 @@ def _connect_sdrangel_client(self):
             device_set       = _dev_set_v,
             calling_freq_mhz = self.calling_freq_mhz,
             lo_offset_khz    = _lo_offset,
-            target_rate      = self.sample_rate,
+            target_rate      = rates.BASE_RATE,
             exe_path         = _exe_path,
             dev_sample_rate  = _dev_rate,
             gain_db          = _gain,
@@ -634,7 +645,7 @@ def _connect_usrp_client(self):
             _gain1 = _gain
         self.usrp_client = USRPSource(
             center_freq_mhz=self.calling_freq_mhz,
-            target_rate=self.sample_rate,
+            target_rate=rates.BASE_RATE,
             gain_db=_gain,
             antenna=_ant,
             dual_channel=True,        # RX 1 always enabled for polarization diversity
@@ -785,7 +796,7 @@ def _connect_radio_client(self):
         self.radio_client = flex_client_class(
             radio_ip=_radio_ip,
             center_freq_mhz=self.center_freq_mhz,
-            sample_rate=self.sample_rate,
+            sample_rate=rates.BASE_RATE,
             dax_channel=1,
             bind_client_id=getattr(self, 'bind_client_id', None),
         )
@@ -1027,7 +1038,7 @@ def _process_wav_source_step(self):
 
     if self._wav_samples is None or self._wav_path_loaded != wav_path or nonce_loaded != nonce:
         try:
-            samples, _ = _load_wav_complex(wav_path, self.sample_rate)
+            samples, _ = _load_wav_complex(wav_path, rates.BASE_RATE)
             self._wav_samples = samples
             self._wav_path_loaded = wav_path
             self._wav_index = 0
@@ -1331,6 +1342,11 @@ def run_radio_source(self):
             if self.source_mode != "usrp" and getattr(self, '_wsjtx_exports', None):
                 _teardown_wsjtx_audio_export(self)
 
+            # Only SDRconnect switches to 96 kHz (FT8/FT4); every other
+            # source delivers 48 kHz, so put the engine back there first.
+            if self.source_mode not in rates.WIDE_SOURCES and int(self.sample_rate) != rates.BASE_RATE:
+                self.set_sample_rate(rates.BASE_RATE)
+
             if self.source_mode == "idle":
                 if self._radio_started:
                     _stop_radio_source(self)
@@ -1543,6 +1559,7 @@ def run_radio_source(self):
                 if not _start_sdrconnect_source(self):
                     time.sleep(1.0)
                     continue
+                _reconcile_rate(self)
                 _reconcile_rx2(self)
                 try:
                     drained = 0
@@ -1557,7 +1574,11 @@ def run_radio_source(self):
                                     break
                             else:
                                 break
-                        # SDRconnect int16 → ±1.0 and 48 kHz done in SDRconnectSource.
+                        # SDRconnect int16 → ±1.0 and 48/96 kHz done in SDRconnectSource;
+                        # follow the packets' rate exactly at the switch.
+                        _rate = getattr(packet, 'rate', None)
+                        if _rate and int(_rate) != int(self.sample_rate):
+                            self.set_sample_rate(int(_rate))
                         chunk = _polarization_combine(np.asarray(packet.samples, dtype=np.complex64))
                         self.process_iq_data(chunk, packet.timestamp_int, packet.timestamp_frac)
                         drained += 1

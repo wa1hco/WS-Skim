@@ -501,6 +501,86 @@ class Engine:
         self.freq_axis = self.fft_bin_axis_mhz + self.center_freq_mhz
         self.display_center_freq_mhz = -1.0  # force report_freq() on first display update
 
+    def set_sample_rate(self, sample_rate: int) -> bool:
+        """Change the IQ rate at run time (48 kHz <-> 96 kHz, see rates.py).
+
+        Call from the thread that feeds :meth:`process_iq_data`, between
+        chunks, when the source starts delivering the new rate.  Everything
+        sized by the rate is rebuilt empty: the FFT (scaled so a waterfall
+        row and bin keep their width), spectrogram and time-domain buffers,
+        channelizer, the 30 s IQ ring and the time base (re-anchored on the
+        next chunk).  FT8/FT4 restart their period clocks; a period or two
+        is lost.  Returns True if the rate changed.
+        """
+        rate = int(sample_rate)
+        if rate <= 0:
+            raise ValueError(f"bad sample rate {sample_rate!r}")
+        if rate == int(self.sample_rate):
+            return False
+        log.info("Engine: IQ rate %d -> %d Hz", int(self.sample_rate), rate)
+        base_fft = getattr(self, "_base_fft_size", None)
+        if base_fft is None:
+            base_fft = self._base_fft_size = int(self.fft_size * 48000 // int(self.sample_rate))
+        self.sample_rate = rate
+        self.fft_size = max(256, int(base_fft * rate // 48000))
+        self.blocks_per_sec = self.sample_rate / (self.fft_size // 2)
+        self.max_history = int(round(self.history_secs * self.blocks_per_sec))
+
+        _sbuf_cap = self.fft_size * 6
+        self._sbuf = np.zeros(_sbuf_cap, dtype=np.complex64)
+        self._sbuf_v = np.zeros(_sbuf_cap, dtype=np.complex64)
+        self._sbuf_end = 0
+        self._sbuf_v_end = 0
+
+        _td_n = int(0.200 * self.sample_rate)
+        for name in ("_td_mag_buf", "_td_mag_buf_raw", "_td_mag_buf_v", "_td_mag_buf_raw_v"):
+            setattr(self, name, np.zeros(_td_n, dtype=np.float32))
+        self._td_mag_pos = self._td_mag_pos_raw = 0
+        self._td_mag_pos_v = self._td_mag_pos_raw_v = 0
+
+        shape = (self.max_history, self.fft_size)
+        for name in ("spectrogram_data", "spec_staging", "spectrogram_data_v",
+                     "spec_staging_v", "realtime_data", "realtime_data_v"):
+            setattr(self, name, np.full(shape, -130.0))
+        self.spec_staging_filled = False
+        self.realtime_filled = False
+        self._realtime_dirty = False
+        self._prev_staging_idx = None
+        self._prev_rt_idx = None
+        self.accumulated_noise_floor = np.full(self.fft_size, -125.0)
+        self.realtime_noise_floor = np.full(self.fft_size, -125.0)
+        self._fft_window = np.hanning(self.fft_size).astype(np.float32)
+        self._window_gain = float(np.sqrt(np.mean(self._fft_window ** 2)))
+
+        self._ch_taps = design_channelizer_filter(self.sample_rate)
+        _ch_buf_cap = CH_DETECT_SIZE + 2048 * max(1, -(-int(self.sample_rate) // 48000))
+        self._ch_buf = np.zeros((N_CHANNELS, _ch_buf_cap), dtype=np.complex64)
+        self._ch_buf_v = np.zeros((N_CHANNELS, _ch_buf_cap), dtype=np.complex64)
+        self._rebuild_channelizer_state()
+
+        self._iq_ring = np.zeros((int(30 * self.sample_rate), 2), dtype=np.complex64)
+        self._iq_ring_pos = 0
+        self._iq_abs_sample = 0
+        self._iq_ring_gen = getattr(self, "_iq_ring_gen", 0) + 1
+        self._iq_gaps = []
+        self._status_iq_hist = None
+        self.timebase = TimeBase(self.sample_rate, period_secs=15.0)
+        self._timebase_anchor_pending = True
+        try:
+            self.blanker.reset(self)
+        except Exception:
+            pass
+        self._reset_period_state()
+
+        self.fft_bin_axis_mhz = np.fft.fftshift(
+            np.fft.fftfreq(self.fft_size, 1 / self.sample_rate)) / 1e6
+        self.freq_axis = self.fft_bin_axis_mhz + self.center_freq_mhz
+        self.display_center_freq_mhz = -1.0
+        if getattr(self, "_block_runtime", None) is not None:
+            self._block_runtime = None          # re-created lazily at the new rate
+            self._block_iq_in_stream = None
+        return True
+
     def set_mode(self, mode: str) -> None:
         """Switch between MSK144 and one FT8/FT4 period mode at runtime."""
         from .ft8_engine import MODES, is_period_mode

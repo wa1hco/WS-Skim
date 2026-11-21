@@ -120,3 +120,11 @@ jobs:
           tests/test_two_tuner.py::test_tuner2_reports_single_tuner_mode
           tests/test_two_tuner.py::test_dual_mode_uses_the_flat_part_of_the_low_if_span
           tests/test_two_tuner.py::test_dual_mode_edge_streams_with_a_note_and_retunes_when_allowed
+          tests/test_rate_96k.py::test_rate_is_96k_for_ft8_ft4_on_sdrconnect_and_48k_otherwise
+          tests/test_rate_96k.py::test_set_sample_rate_rebuilds_rate_sized_state_and_keeps_processing
+          tests/test_rate_96k.py::test_channelizer_is_skipped_unless_msk144_runs
+          tests/test_rate_96k.py::test_40m_ft4_dial_7_0475_is_inside_96k_but_not_48k
+          tests/test_rate_96k.py::test_sdrconnect_switches_to_96k_and_packets_carry_the_rate
+          tests/test_rate_96k.py::test_tuner2_follows_the_rate_rule_and_its_packets
+          tests/test_rate_96k.py::test_dc_spur_kept_out_of_the_96k_band_when_tuning_is_allowed
+          tests/test_rate_96k.py::test_band_activity_waterfall_span_follows_the_rate
