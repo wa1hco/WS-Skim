@@ -437,6 +437,28 @@ class Reporter:
         if changed:
             self._refresh_passband_instances()
 
+    def set_receiver_context(self, source: str, center_hz: int | None,
+                             bandwidth_hz: int | None) -> None:
+        """A second receiver's passband (RSPduo tuner 2), next to the main one.
+
+        Its decodes carry ``source`` (e.g. ``"sdrconnect2"``) and become
+        their own WSJT-X instances (``SKIM-RSP2-…``).  ``center_hz=None``
+        drops the receiver and closes its instances.
+        """
+        extra = getattr(self, "_extra_rx", None)
+        if extra is None:
+            extra = self._extra_rx = {}
+        tag = source_tag(source)
+        if center_hz is None or not bandwidth_hz:
+            if extra.pop(tag, None) is None:
+                return
+        else:
+            want = (int(center_hz), int(bandwidth_hz))
+            if extra.get(tag) == want:
+                return
+            extra[tag] = want
+        self._refresh_passband_instances()
+
     def instance_ids(self) -> list[str]:
         """Live emulated WSJT-X ids, for the read-only GUI list."""
         with self._udp_lock:
@@ -631,14 +653,16 @@ class Reporter:
         """
         if not (self.center_hz and self.bandwidth_hz):
             return
-        tag = source_tag(self.source)
-        prefix = f"SKIM-{tag}-"
+        live = [(f"SKIM-{source_tag(self.source)}-", self.center_hz, self.bandwidth_hz)]
+        for tag, (c_hz, bw_hz) in dict(getattr(self, "_extra_rx", {})).items():
+            live.append((f"SKIM-{tag}-", c_hz, bw_hz))
+
+        def _keep(mid, rec):
+            return any(mid.startswith(prefix) and in_passband(rec["dial_hz"], c, bw)
+                       for prefix, c, bw in live)
+
         with self._udp_lock:
-            stale = [
-                mid for mid, rec in self._instances.items()
-                if not mid.startswith(prefix)
-                or not in_passband(rec["dial_hz"], self.center_hz, self.bandwidth_hz)
-            ]
+            stale = [mid for mid, rec in self._instances.items() if not _keep(mid, rec)]
         if stale:
             self._retire_instances(stale)
 
@@ -720,7 +744,7 @@ class Reporter:
         # as WSJT-X does on start-up).
         if self.wsjtx_enabled and self.my_call and self._sock:
             rf_hz, dial_hz, audio_hz = rf_dial_audio(decode, freq_hz or self.center_hz)
-            mid = instance_id(self.source, dial_hz, mode)
+            mid = instance_id(decode.get("source") or self.source, dial_hz, mode)
             rx_df = int(round(audio_hz or 1500))
             new, _changed = self._register_instance(mid, dial_hz, mode, rx_df=rx_df)
             if new:

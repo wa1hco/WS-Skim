@@ -178,6 +178,26 @@ def _usrp_startup_status(self):
     return msg
 
 
+
+def _handle_decoded(self, result: dict, calling_mhz: float) -> None:
+    """One successful decode (either receiver) → Roster, Band Activity, reporter."""
+    # View → Roster (the WAV path, if any, is kept for its
+    # right-click "Open in Analysis Window").
+    from .roster.model import add_queue_record
+    add_queue_record(self.decode_panel, result, calling_mhz)
+    # MSK144 pings → View → Band Activity (FT8/FT4 come from
+    # their period results there).  Receiver 2 has its own pane.
+    _ba = getattr(self, '_band_activity_win', None)
+    if _ba is not None:
+        from .band_activity_window import note_decode_record
+        note_decode_record(_ba, result)
+    # Forward to reporter (WSJT-X UDP + PSKReporter).
+    # Suppress reporting when replaying a WAV file — test signals
+    # and simulations must not appear on PSKReporter or DX cluster.
+    rpt = getattr(self, 'reporter', None)
+    if rpt is not None and getattr(self, 'source_mode', 'wav') != 'wav':
+        rpt.report_decode(result)
+
 def update_displays(self):
     """Update all display panels."""
     if len(self.realtime_data) == 0:
@@ -407,22 +427,16 @@ def update_displays(self):
             # Only add successful decodes to the panel — no_decode/timeout/error are noise.
             outcome = result.get('outcome', 'decoded')
             if outcome == 'decoded' or result.get('decoded'):
-                # View → Roster (the WAV path, if any, is kept for its
-                # right-click "Open in Analysis Window").
-                from .roster.model import add_queue_record
-                add_queue_record(self.decode_panel, result, self.calling_freq_mhz)
-                # MSK144 pings → View → Band Activity (FT8/FT4 come from
-                # their period results there).
-                _ba = getattr(self, '_band_activity_win', None)
-                if _ba is not None:
-                    from .band_activity_window import note_decode_record
-                    note_decode_record(_ba, result)
-                # Forward to reporter (WSJT-X UDP + PSKReporter).
-                # Suppress reporting when replaying a WAV file — test signals
-                # and simulations must not appear on PSKReporter or DX cluster.
-                rpt = getattr(self, 'reporter', None)
-                if rpt is not None and getattr(self, 'source_mode', 'wav') != 'wav':
-                    rpt.report_decode(result)
+                _handle_decoded(self, result, self.calling_freq_mhz)
+
+    # Receiver 2 (RSPduo tuner 2): same Roster / Band Activity / reporting.
+    if getattr(self, 'rx2', None) is not None:
+        from .receivers import drain_decodes
+
+        def _rx2(rec, calling_mhz):
+            if rec.get('outcome', 'decoded') == 'decoded' or rec.get('decoded'):
+                _handle_decoded(self, rec, calling_mhz)
+        drain_decodes(self, _rx2)
 
     # ── Detection heatmap + markers — skip when panel is hidden ──────────────
     _detect_win = getattr(self, '_detect_win', None)
@@ -689,6 +703,8 @@ def update_displays(self):
         self._status_panel_t = _now_m
         from .status_panel import update_status_panel
         update_status_panel(self)
+        from .rx2_controls import update_visibility
+        update_visibility(self)
 
     if tuned_freq_mhz is not None:
         self.tuned_freq_label.setText(f"{tuned_freq_mhz:.3f} MHz")
@@ -769,10 +785,15 @@ def update_displays(self):
                     'airspy': 'Airspy HF+', 'rtlsdr': 'RTL-SDR',
                     'sdrconnect': 'SDRplay',
                 }
+                # The Fast Graph statistics above only fill while that
+                # window is open; IQ arriving is enough to say "receiving"
+                # (the IQ data row has the rate).
+                _flowing = int(getattr(self, '_iq_abs_sample', 0) or 0) > 0
                 _recv_lbl.setText(
                     _usrp_startup_status(self)
                     or _sdrconnect_status(self)
-                    or f"{_src_names.get(_src, _src)}  waiting…")
+                    or f"{_src_names.get(_src, _src)}  "
+                       f"{'receiving' if _flowing else 'waiting…'}")
 
     # ── Source windows (IQ/NB + per-radio panels) ────────────────────────────
     from .source_windows import update_source_windows

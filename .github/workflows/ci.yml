@@ -115,3 +115,8 @@ jobs:
           tests/test_user_paths.py
           tests/test_user_facing_docs.py
           tests/test_sdrconnect_source.py
+          tests/test_two_tuner.py::test_parallel_channelizer_kernels_from_four_threads_match_serial
+          tests/test_two_tuner.py::test_reconcile_starts_retunes_and_stops_tuner2_without_touching_tuner1
+          tests/test_two_tuner.py::test_tuner2_reports_single_tuner_mode
+          tests/test_two_tuner.py::test_dual_mode_uses_the_flat_part_of_the_low_if_span
+          tests/test_two_tuner.py::test_dual_mode_edge_streams_with_a_note_and_retunes_when_allowed

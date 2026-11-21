@@ -340,7 +340,9 @@ class Engine:
             N_CHANNELS, self._ch_taps, self.sample_rate,
             channel_offset_hz=_ch_offset_hz,
         )
-        _ch_buf_cap = CH_DETECT_SIZE + 2048
+        # Room for one chunk's channelizer output on top of a detect block;
+        # scales with the IQ rate (the channelizer decimates by a fixed 4).
+        _ch_buf_cap = CH_DETECT_SIZE + 2048 * max(1, -(-int(self.sample_rate) // 48000))
         self._ch_buf   = np.zeros((N_CHANNELS, _ch_buf_cap), dtype=np.complex64)
         self._ch_buf_end = 0
         self._ch_buf_v = np.zeros((N_CHANNELS, _ch_buf_cap), dtype=np.complex64)

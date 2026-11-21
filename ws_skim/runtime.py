@@ -356,6 +356,11 @@ def _connect_sdrconnect_client(self):
     try:
         from .sdrconnect_source import SDRconnectSource
         cfg = _sdrconnect_settings()
+        if getattr(self, '_rx2_enabled', False):
+            # Two receivers: tuner A here, tuner B in receivers.py, and a
+            # freshly opened RSPduo goes straight into dual-tuner mode.
+            cfg['tuner'] = 'primary'
+            cfg['device_mode'] = 'dual'
         self.sdrconnect_client = SDRconnectSource(
             calling_freq_mhz=self.calling_freq_mhz,
             target_rate=self.sample_rate,
@@ -389,7 +394,29 @@ def _start_sdrconnect_source(self) -> bool:
         return False
 
 
+def _reconcile_rx2(self, force: bool = False):
+    """Start / stop / retune receiver 2 (RSPduo tuner 2), twice a second."""
+    now = time.monotonic()
+    if not force and now - getattr(self, '_rx2_checked', 0.0) < 0.5:
+        return
+    self._rx2_checked = now
+    from . import receivers
+    sc = getattr(self, 'sdrconnect_client', None)
+    if (receivers.wanted(self) and getattr(self, 'rx2', None) is None
+            and sc is not None and getattr(sc, 'tuner', 'primary') != 'primary'):
+        self._rx2_error = ("Tuner 2 needs Tuner 1 on tuner A: set Tuner to "
+                           "\"A (primary)\" in View → SDRplay (SDRconnect)")
+        return
+    try:
+        receivers.reconcile(self)
+    except Exception as exc:
+        print(f"[rx2] reconcile error: {exc}", flush=True)
+
+
 def _stop_sdrconnect_source(self):
+    if getattr(self, 'rx2', None) is not None:
+        from . import receivers
+        receivers.stop(self)
     if not getattr(self, '_sdrconnect_started', False):
         return
     try:
@@ -1516,6 +1543,7 @@ def run_radio_source(self):
                 if not _start_sdrconnect_source(self):
                     time.sleep(1.0)
                     continue
+                _reconcile_rx2(self)
                 try:
                     drained = 0
                     while drained < 64 and self.source_mode == "sdrconnect":

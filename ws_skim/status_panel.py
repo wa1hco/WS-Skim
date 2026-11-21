@@ -43,6 +43,9 @@ ROWS = (
     ("centre", "Centre frequency", "Where the receiver is tuned (the middle of its span)."),
     ("iq", "IQ data", "Radio samples arriving per second, against the rate expected. "
                       "Green when at least 95% arrive."),
+    ("tuner2", "Tuner 2", "The RSPduo's second tuner (toolbar Tuner 2): its band, "
+                          "modes, IQ rate and decodes per minute.  Its WSJT-X ids "
+                          "are SKIM-RSP2-…, Tuner 1's SKIM-RSP1-…."),
     ("audio", "Audio to WSJT-X", "12 kHz audio streams WS Skim makes for WSJT-X "
                                  "(USRP B210 only)."),
     ("decodes", "Decodes", "Decodes per minute for each mode over the last minute "
@@ -191,6 +194,34 @@ def audio_text(eng) -> tuple[str, str, str]:
             WARN if dropped else OK, "")
 
 
+def tuner2_row(eng, now: float | None = None) -> Row:
+    """Receiver 2 (RSPduo tuner 2); OFF (and hidden) unless it is wanted."""
+    from . import ft8_engine, receivers
+    src = getattr(eng, "source_mode", "idle") or "idle"
+    if src not in receivers.DUAL_SOURCES or not getattr(eng, "_rx2_enabled", False):
+        return Row("tuner2", "off", OFF)
+    err = str(getattr(eng, "_rx2_error", "") or "")
+    rx = getattr(eng, "rx2", None)
+    band = getattr(eng, "_rx2_band_mhz", None)
+    combo = getattr(eng, "_rx2_combo", None)
+    label = " ".join(combo.currentText().split()) if combo is not None else (
+        f"{band:.3f} MHz" if band else "")
+    if rx is None:
+        return Row("tuner2", f"{label} · {err or 'starting…'}", ERR if err else WARN)
+    r_eng = rx.engine
+    modes = " + ".join(_modes(r_eng))
+    iq_txt, iq_level = iq_health(r_eng, now)
+    client = getattr(rx, "client", None)
+    st = str(getattr(client, "status", "") or "")
+    if st in ("single_mode", "out_of_span", "unreachable", "error"):
+        return Row("tuner2", f"{label} · {client.status_text}", ERR)
+    rates = ft8_engine.decode_rates(r_eng)
+    dec = " · ".join(f"{m} {rates[m]:.0f}/min" for m in rates) if rates else ""
+    parts = [p for p in (label, modes, iq_txt, dec) if p]
+    tip = f"SDRconnect: {getattr(client, 'status_text', '')}"
+    return Row("tuner2", " · ".join(parts), iq_level, tip)
+
+
 def status_rows(eng, now: float | None = None) -> dict[str, Row]:
     """Every row's value and level (pure: reads ``eng`` only)."""
     rows: dict[str, Row] = {}
@@ -202,6 +233,7 @@ def status_rows(eng, now: float | None = None) -> dict[str, Row]:
     rows["band"] = Row("band", band_text(eng), OK)
     rows["centre"] = Row("centre", None, OFF if src == "idle" else OK)
     rows["iq"] = Row("iq", iq_txt, iq_level)
+    rows["tuner2"] = tuner2_row(eng, now)
     a_txt, a_level, a_tip = audio_text(eng)
     rows["audio"] = Row("audio", a_txt, a_level, a_tip)
     d_txt, d_level = decodes_text(eng)
@@ -323,6 +355,6 @@ def update_status_panel(self, now: float | None = None) -> None:
             f"\n\nStatus: {LEVEL_WORDS[row.level]}"
         for x in (dot, name, value):
             x.setToolTip(full)
-        visible = not (key == "channels" and row.level == OFF)
+        visible = not (key in ("channels", "tuner2") and row.level == OFF)
         for x in (dot, name, value):
             x.setVisible(visible)

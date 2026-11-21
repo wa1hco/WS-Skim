@@ -123,8 +123,13 @@ SOURCE_TAGS = {
     "rtlsdr": "RTL",
     "rtl": "RTL",
     "sdrangel": "SDRANGEL",
-    "sdrconnect": "RSP",
-    "sdrplay": "RSP",
+    # SDRplay via SDRconnect: the receiver number is part of the tag, so
+    # the two RSPduo tuners are two WSJT-X instances per band/mode
+    # (SKIM-RSP1-40m-FT8-74, SKIM-RSP2-30m-FT8-136).  One tuner is RSP1.
+    "sdrconnect": "RSP1",
+    "sdrconnect1": "RSP1",
+    "sdrconnect2": "RSP2",
+    "sdrplay": "RSP1",
     "wav": "WAV",
 }
 
@@ -174,7 +179,7 @@ def source_tag(source: str | None) -> str:
     if "sdrangel" in folded:
         return "SDRANGEL"
     if "sdrplay" in folded or "sdrconnect" in folded:
-        return "RSP"
+        return "RSP2" if folded.rstrip().endswith("2") else "RSP1"
     token = re.sub(r"[^A-Za-z0-9]+", "", raw).upper()
     return token[:12] or "RADIO"
 

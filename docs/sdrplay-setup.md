@@ -55,3 +55,42 @@ Open it from **View → SDRplay (SDRconnect)**.  Change a setting and press
 
 The window also shows the connection state, the device, the tuner
 frequency, the sample rate, the LNA state and any data gaps.
+
+## Two bands at once (RSPduo)
+
+The RSPduo has two tuners, so one WS Skim can decode two bands at once,
+for example 40 m and 30 m FT8, or 6 m and 2 m.
+
+1. Choose **Source → SDRplay (SDRconnect)**.
+2. In the toolbar, next to **Band (Tuner 1)**, tick **Tuner 2** and pick
+   its band.
+
+That is all.  Tuner 2 decodes the same modes as Tuner 1 (Mode menu), and
+each mode remembers its own Tuner 2 band.  WS Skim picks the frequencies
+inside each band, as WSJT-X does.
+
+- **SDRconnect started by WS Skim** opens the RSPduo in dual-tuner mode by
+  itself.
+- **Your own SDRconnect window** must be in dual-tuner mode: choose the
+  "RSPduo (…) (Dual)" entry in its device list.  WS Skim never switches
+  a radio you opened; if SDRconnect is in single-tuner mode, the Tuner 2
+  line on the main window says so.
+- In dual-tuner mode each tuner covers about 1.4 MHz cleanly.  With "WS
+  Skim tunes the radio" ticked, WS Skim moves a tuner when its band is
+  outside that.
+- Leave **Tuner** in the SDRplay window on Tuner 1 (A) when Tuner 2 is on.
+
+Where the two bands show up:
+
+- **Main window**: a **Tuner 2** row with its band, modes, data rate and
+  decodes per minute.
+- **View → Band Activity**: a second pane for Tuner 2 under Tuner 1's, on
+  the same time axis.  Drag the divider to share the space.
+- **View → Roster**: one list for both bands; the band checkboxes split
+  them.
+- **WSJT-X UDP**: Tuner 1's decodes come from `SKIM-RSP1-…` instances and
+  Tuner 2's from `SKIM-RSP2-…` (for example `SKIM-RSP1-40m-FT8-74` and
+  `SKIM-RSP2-30m-FT8-136`), so WS Hub, GridTracker and JTAlert see one
+  WSJT-X per band and mode.  PSKReporter and the DX cluster get both.
+
+The FT8 Sync Map and the MSK144 diagnostic windows show Tuner 1 only.

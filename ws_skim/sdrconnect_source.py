@@ -83,6 +83,18 @@ _PT_IQ = {"primary": 2, "secondary": 5}
 
 # Usable half-span: keep the 48 kHz output (±24 kHz) clear of the band edge.
 _EDGE_GUARD_HZ = 30_000.0
+# RSPduo dual-tuner mode is Low-IF with a 1.536 MHz IF filter per tuner:
+# SDRconnect shows 2 MS/s, but only about ±0.70 MHz of it is flat.
+_DUAL_FLAT_HALF_HZ = 700_000.0
+
+#: Shown on tuner 2 while SDRconnect has the RSPduo open in single-tuner mode.
+SINGLE_MODE_MSG = ("SDRconnect is in single-tuner mode — choose the "
+                   "RSPduo (…) (Dual) entry in SDRconnect for Tuner 2")
+
+
+def is_dual_device(name: str) -> bool:
+    """True for SDRconnect's dual-tuner device entry, ``RSPduo (…) (Dual)``."""
+    return str(name or "").strip().lower().endswith("(dual)")
 # Minimum distance of the calling frequency from the device LO (DC spur).
 _MIN_DC_OFFSET_HZ = 5_000.0
 
@@ -359,7 +371,7 @@ class SDRconnectSource:
         self.sample_queue: "queue.Queue[_SDRconnectPacket]" = queue.Queue(maxsize=4000)
 
         # Live state (read by the GUI)
-        self.status = "idle"          # idle|launching|connecting|connected|streaming|unreachable|out_of_span|error
+        self.status = "idle"          # idle|launching|connecting|connected|streaming|unreachable|out_of_span|single_mode|error
         self.status_text = "Not started"
         self.device_center_hz: Optional[float] = None
         self.device_rate: Optional[float] = None
@@ -391,6 +403,7 @@ class SDRconnectSource:
         self._ws = None
         self._lock = threading.Lock()
         self._retune_pending = False
+        self._mode_switch_pending = False
         self._decim: Optional[Decimator] = None
         self._mixer: Optional[_Mixer] = None
         self._t_anchor: Optional[float] = None
@@ -424,6 +437,17 @@ class SDRconnectSource:
         self._thread = None
         self._stop_launched()
         self._set_status("idle", "Stopped")
+
+    def set_device_mode(self, mode: str) -> None:
+        """Ask for single/dual tuner mode.  Applied at once only to an
+        SDRconnect that WS Skim launched itself (never to the user's own
+        SDRconnect window, which it only reports on); otherwise when a
+        device is next selected."""
+        want = "dual" if str(mode).lower().startswith("d") else "single"
+        with self._lock:
+            if want != self.device_mode:
+                self.device_mode = want
+                self._mode_switch_pending = True
 
     def retune(self, calling_freq_mhz: float):
         """Follow a WS Skim band change (applied by the worker thread)."""
@@ -571,7 +595,8 @@ class SDRconnectSource:
         if self.antenna and self.antenna != self.active_antenna:
             self._set(ws, "active_antenna", self.antenna)
             self._get(ws, "active_antenna")
-        if (self.control_tuning and self.requested_rate
+        # Dual-tuner mode has a fixed 2 MS/s per tuner: never set the rate.
+        if (self.control_tuning and self.requested_rate and not self.dual_mode
                 and self.device_rate and abs(self.device_rate - self.requested_rate) > 1):
             self._set(ws, "device_sample_rate", int(self.requested_rate))
             self._get(ws, "device_sample_rate")
@@ -596,6 +621,25 @@ class SDRconnectSource:
         self._t_anchor = None
         return True
 
+    def _switch_device_mode(self, ws) -> None:
+        ours = self._proc is not None and self._proc.poll() is None
+        if not ours or self.dual_mode == (self.device_mode == "dual"):
+            return
+        name = self._choose_device()
+        if not name or name == self.active_device:
+            return
+        print(f"[sdrconnect] switching our SDRconnect to {name!r}", flush=True)
+        self._send(ws, "selected_device_name", "", name)
+        self._pump_until(ws, lambda: False, 1.0)
+        self._send(ws, "device_stream_enable", "", "true")
+        self._get(ws, "active_device")
+        self._get(ws, "device_sample_rate")
+        self._get(ws, "device_center_frequency")
+        self._decim = None
+        self._t_anchor = None
+        self._pump_until(ws, lambda: False, 0.5)
+        self._retune_pending = True           # re-place the LO for the new mode
+
     def _choose_device(self) -> str:
         devs = [d for d in self.valid_devices if d and "iq file" not in d.lower()]
         want = "(dual)" if self.device_mode == "dual" else "(single)"
@@ -604,13 +648,28 @@ class SDRconnectSource:
                 return d
         return devs[0] if devs else ""
 
+    @property
+    def dual_mode(self) -> bool:
+        """SDRconnect has the RSPduo open in dual-tuner mode."""
+        return is_dual_device(self.active_device)
+
+    def usable_half_span_hz(self) -> float:
+        """How far the calling frequency may sit from the LO (Hz)."""
+        if self.device_rate is None:
+            return 0.0
+        guard = max(_EDGE_GUARD_HZ, self.target_rate / 2.0 + 6_000.0)
+        half = self.device_rate / 2.0
+        if self.dual_mode:
+            half = min(half, _DUAL_FLAT_HALF_HZ)
+        return half - guard
+
     def _apply_tuning(self, ws, force: bool = False):
         """Tune the device LO near the calling frequency when needed."""
         if self.device_rate is None or self.device_center_hz is None:
             return
         call_hz = self.calling_freq_mhz * 1e6
         off = call_hz - self.device_center_hz
-        usable = self.device_rate / 2.0 - _EDGE_GUARD_HZ
+        usable = self.usable_half_span_hz()
         need = abs(off) > usable or abs(off) < _MIN_DC_OFFSET_HZ
         if need and self.control_tuning:
             lo_off = min(self.lo_offset_hz, max(usable - 1.0, _MIN_DC_OFFSET_HZ))
@@ -621,21 +680,40 @@ class SDRconnectSource:
             self._get(ws, "device_center_frequency")
 
     def _update_offset(self):
+        if self._single_mode_secondary():
+            self._set_status("single_mode", SINGLE_MODE_MSG)
+        elif self.status == "single_mode":
+            self._set_status("connected", "Connected to SDRconnect")
         if self.device_rate is None or self.device_center_hz is None:
             return
         call_hz = self.calling_freq_mhz * 1e6
         self.offset_hz = call_hz - self.device_center_hz
-        usable = self.device_rate / 2.0 - _EDGE_GUARD_HZ
-        if abs(self.offset_hz) > usable:
+        usable = self.usable_half_span_hz()
+        # Hard limit: the stream itself.  In dual-tuner mode the part past
+        # ±0.70 MHz still streams but is in the IF filter's roll-off.
+        hard = self.device_rate / 2.0 - max(_EDGE_GUARD_HZ, self.target_rate / 2.0 + 6_000.0)
+        self.edge_note = ""
+        if self._single_mode_secondary():
+            self._set_status("single_mode", SINGLE_MODE_MSG)
+        elif abs(self.offset_hz) > hard:
             self._set_status(
                 "out_of_span",
                 f"{self.calling_freq_mhz:.3f} MHz is outside SDRconnect's span "
                 f"({self.device_center_hz/1e6:.3f} MHz ± {self.device_rate/2e6:.3f}) — "
                 "tune SDRconnect near it or let WS Skim tune")
-        elif self.status == "out_of_span":
-            self._set_status("streaming", "Streaming")
+        else:
+            if abs(self.offset_hz) > usable:
+                self.edge_note = (f" — {abs(self.offset_hz)/1e3:.0f} kHz from the tuner centre, "
+                                  "past the flat ±700 kHz of dual-tuner mode (weaker signals)")
+            if self.status in ("out_of_span", "single_mode"):
+                self._set_status("streaming", "Streaming" + self.edge_note)
         if self._mixer is not None:
             self._mixer.set_freq(self.offset_hz)
+
+    def _single_mode_secondary(self) -> bool:
+        """Tuner 2 asked for while SDRconnect runs the RSPduo single-tuner."""
+        return (self.tuner == "secondary" and bool(self.active_device)
+                and "rspduo" in self.active_device.lower() and not self.dual_mode)
 
     def _on_text(self, m: str):
         # Cheap skip of the high-rate meter events.
@@ -670,6 +748,7 @@ class SDRconnectSource:
                 self.device_started = val.lower() == "true"
             elif prop == "active_device":
                 self.active_device = val
+                self._update_offset()
             elif prop == "valid_antennas":
                 self.valid_antennas = [v.strip() for v in val.split(",") if v.strip()]
             elif prop == "active_antenna":
@@ -696,6 +775,10 @@ class SDRconnectSource:
         self._t_anchor = None
         last_iq = time.monotonic()
         while not self._stop.is_set():
+            if getattr(self, "_mode_switch_pending", False):
+                with self._lock:
+                    self._mode_switch_pending = False
+                self._switch_device_mode(ws)
             if self._retune_pending:
                 with self._lock:
                     self._retune_pending = False
@@ -705,7 +788,8 @@ class SDRconnectSource:
             try:
                 m = ws.recv(timeout=0.25)
             except TimeoutError:
-                if time.monotonic() - last_iq > 3.0 and self.status in ("connected", "streaming"):
+                if (time.monotonic() - last_iq > 3.0 and self.status in ("connected", "streaming")
+                    and not self._single_mode_secondary()):
                     self._set_status("connected",
                                      "Connected, no IQ — press Play (▶) in SDRconnect")
                 continue
@@ -772,7 +856,7 @@ class SDRconnectSource:
         if self.status != "out_of_span":
             self._set_status("streaming",
                              f"Streaming {self.active_device or 'SDRplay'}"
-                             f" ({self.tuner} tuner)")
+                             f" ({self.tuner} tuner){getattr(self, 'edge_note', '')}")
         return True
 
 

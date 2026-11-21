@@ -10,6 +10,27 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **RSPduo: two bands at once.**  With Source → SDRplay (SDRconnect), tick
+  **Tuner 2** in the toolbar and pick its band: one WS Skim then decodes
+  both RSPduo tuners, for example 40 m and 30 m FT8, with the same modes
+  (Mode menu) on both.  Tuner 2 has its own pane in View → Band Activity
+  (same time axis), its own row on the main window, and shares the Roster,
+  PSKReporter and DX cluster.  WSJT-X UDP ids now name the tuner:
+  `SKIM-RSP1-40m-FT8-74` and `SKIM-RSP2-30m-FT8-136` (test.21's
+  `SKIM-RSP-…` ids change once to `SKIM-RSP1-…`).  An SDRconnect that WS
+  Skim started switches the RSPduo to dual-tuner mode by itself; your own
+  SDRconnect window is never switched, and the Tuner 2 row says when it is
+  in single-tuner mode.  In dual-tuner mode, when WS Skim tunes the
+  radio, it keeps each band within ±0.70 MHz of its tuner (the flat part
+  of the RSPduo's 1.5 MHz IF filter); further out still decodes, with a
+  note that signals are weaker there.  It never changes the sample rate
+  in dual-tuner mode.  Each decoder still takes 48 kHz per tuner.
+- **Two receivers in one process**: a lock keeps numba's parallel
+  channelizer kernels from running on two threads at once (needed where
+  numba has no OpenMP/TBB, e.g. some Windows installs), and
+  `decodes.jsonl` / `launches.jsonl` writes are serialised; FT8/FT4 lines
+  in `decodes.jsonl` carry `"rx": 1` or `2`.
+
 - **Source → SDRplay (SDRconnect): SDRplay radios such as the RSPduo.**
   WS Skim gets the raw IQ from SDRplay's SDRconnect program over its
   WebSocket server.  If SDRconnect is not running, WS Skim starts it in the
@@ -23,8 +44,7 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   LNA state, antenna, whether WS Skim tunes) and shows the connection
   state, tuner frequency, rate and data gaps; when SDRconnect cannot be
   reached the status says what to do.  Reconnects by itself if
-  SDRconnect restarts.  Both RSPduo tuners feeding two bands at once is
-  the next step.  Setup is in docs/sdrplay-setup.md.
+  SDRconnect restarts.  Setup is in docs/sdrplay-setup.md.
 
 - **View → Roster is a WS Hub-style browser window.**  The Qt decode table
   is replaced by a local web page that opens in a Chrome or Edge app
@@ -105,6 +125,16 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   `rejected.jsonl` next to `decodes.jsonl` for review.
 
 ### Fixed
+
+- **The Receiver row said "waiting…" while the radio was streaming**
+  unless the old Fast Graph window was open.  It now says "receiving" as
+  soon as IQ arrives (the IQ data row has the rate).
+
+- **FT8/FT4 started on the wrong band.**  With FT8 or FT4 saved as the
+  mode, WS Skim started with the band pulldown showing your band (e.g. 40 m
+  7.074) but decoding and tuning 160 m 1.840 until you picked a band again.
+  The start-up step used the MSK144 list's position in the FT8 list.  An
+  SDRplay radio was retuned to 1.74 MHz at start; it now stays on your band.
 
 - **FT8 Activity time axis no longer zooms.**  A mouse-wheel zoom over the
   plot used to stretch time too, so the ticks bunched up on the left and the

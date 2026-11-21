@@ -57,6 +57,7 @@ GEOMETRY_KEY = "band_activity_geometry"
 MINUTES_KEY = "band_activity_minutes"
 WATERFALL_KEY = "band_activity_waterfall"
 DETECTIONS_KEY = "band_activity_detections"
+SPLITTER_KEY = "band_activity_splitter"
 #: Keys of the FT8 Activity window this one replaces (read once to migrate).
 OLD_GEOMETRY_KEY = "activity_geometry"
 OLD_PERIODS_KEY = "activity_periods"
@@ -662,32 +663,27 @@ def build_window(self, view_action):
     top.addStretch(1)
     layout.addLayout(top)
 
-    axis = pg.DateAxisItem(orientation="left", utcOffset=0)
-    plot = pg.PlotWidget(axisItems={"left": axis})
-    plot.setBackground("w")
-    plot.showAxis("top")
-    plot.hideAxis("bottom")
-    plot.setLabel("top", "Frequency (MHz)")
-    plot.setLabel("left", "Time (UTC)")
-    style_plot(plot)
-    for name in ("top", "left"):
-        plot.getAxis(name).setPen("k")
-        plot.getAxis(name).setTextPen("k")
-    plot.getAxis("left").setWidth(TIME_AXIS_WIDTH)      # room for "22:13:30"
-    plot.showGrid(x=True, y=True, alpha=0.18)
-    vb = plot.getViewBox()
-    vb.disableAutoRange()
-    # Wheel and drag zoom frequency only; time follows the History setting.
-    vb.setMouseEnabled(x=True, y=False)
-
-    img = pg.ImageItem()
-    img.setColorMap(WATERFALL_CMAP)
-    img.setZValue(0)
-    plot.addItem(img)
-    markers = MarkersItem()
-    markers.setZValue(10)
-    plot.addItem(markers)
-    layout.addWidget(plot, stretch=1)
+    plot, img, markers = _make_plot()
+    # Tuner 2 (RSPduo): its own pane below, on the same UTC time axis.
+    plot2, img2, markers2 = _make_plot(time_label=False)
+    pane2_box = QtWidgets.QWidget()
+    p2l = QtWidgets.QVBoxLayout(pane2_box)
+    p2l.setContentsMargins(0, 2, 0, 0)
+    p2l.setSpacing(2)
+    status2 = QtWidgets.QLabel("Tuner 2")
+    p2l.addWidget(status2)
+    p2l.addWidget(plot2, stretch=1)
+    splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+    splitter.setChildrenCollapsible(False)
+    splitter.addWidget(plot)
+    splitter.addWidget(pane2_box)
+    pane2_box.hide()
+    state = s.value(SPLITTER_KEY)
+    if state:
+        splitter.restoreState(state)
+    splitter.splitterMoved.connect(
+        lambda *_a: _settings().setValue(SPLITTER_KEY, splitter.saveState()))
+    layout.addWidget(splitter, stretch=1)
 
     span_s = spin.value() * 60.0
     wf = getattr(self, "_band_wf", None)
@@ -715,6 +711,17 @@ def build_window(self, view_action):
     win._ba_last_res = {}
     win._ba_highlight = set()
     win._ba_wf_version = None
+    win._ba_rx = 1
+    win._ba_splitter = splitter
+
+    wf2 = getattr(self, "_band_wf2", None)
+    if wf2 is None:
+        wf2 = BandWaterfall(span_s)
+        self._band_wf2 = wf2
+    else:
+        wf2.set_span(span_s)
+    pane2 = _Pane(win, plot2, img2, markers2, wf2, status2, pane2_box)
+    win._ba_pane2 = pane2
 
     def on_wf(on):
         _settings().setValue(WATERFALL_KEY, bool(on))
@@ -728,14 +735,16 @@ def build_window(self, view_action):
     def on_minutes(n):
         n = clamp_minutes(n)
         _settings().setValue(MINUTES_KEY, n)
-        win._ba_wf.set_span(n * 60.0)
-        win._ba_store.set_span(n * 60.0)
+        for pane in _panes(win):
+            pane._ba_wf.set_span(n * 60.0)
+            pane._ba_store.set_span(n * 60.0)
         redraw(win)
 
     wf_cb.toggled.connect(on_wf)
     det_cb.toggled.connect(on_det)
     spin.valueChanged.connect(on_minutes)
     plot.scene().sigMouseMoved.connect(lambda pos: _hover(win, pos))
+    plot2.scene().sigMouseMoved.connect(lambda pos: _hover(pane2, pos))
 
     self._band_activity_win = win
     win.hide()
@@ -748,19 +757,88 @@ def build_window(self, view_action):
     return win
 
 
+def _make_plot(time_label: bool = True):
+    """One waterfall pane: ``(PlotWidget, ImageItem, MarkersItem)``."""
+    axis = pg.DateAxisItem(orientation="left", utcOffset=0)
+    plot = pg.PlotWidget(axisItems={"left": axis})
+    plot.setBackground("w")
+    plot.showAxis("top")
+    plot.hideAxis("bottom")
+    plot.setLabel("top", "Frequency (MHz)")
+    if time_label:
+        plot.setLabel("left", "Time (UTC)")
+    style_plot(plot)
+    for name in ("top", "left"):
+        plot.getAxis(name).setPen("k")
+        plot.getAxis(name).setTextPen("k")
+    plot.getAxis("left").setWidth(TIME_AXIS_WIDTH)      # room for "22:13:30"
+    plot.showGrid(x=True, y=True, alpha=0.18)
+    vb = plot.getViewBox()
+    vb.disableAutoRange()
+    # Wheel and drag zoom frequency only; time follows the History setting.
+    vb.setMouseEnabled(x=True, y=False)
+
+    img = pg.ImageItem()
+    img.setColorMap(WATERFALL_CMAP)
+    img.setZValue(0)
+    plot.addItem(img)
+    markers = MarkersItem()
+    markers.setZValue(10)
+    plot.addItem(markers)
+    return plot, img, markers
+
+
+class _Pane:
+    """Tuner 2's pane: its own plot, waterfall, detections and status line,
+    sharing the window's Waterfall / Detections / History controls."""
+
+    def __init__(self, win, plot, img, markers, wf, status, box):
+        self._ba_win = win
+        self._ba_box = box
+        self._ba_eng = None
+        self._ba_rx = 2
+        self._ba_status = status
+        self._ba_wf_cb = win._ba_wf_cb
+        self._ba_det_cb = win._ba_det_cb
+        self._ba_spin = win._ba_spin
+        self._ba_plot = plot
+        self._ba_img = img
+        self._ba_markers = markers
+        self._ba_wf = wf
+        self._ba_store = DetectionStore(win._ba_store.span_s)
+        self._ba_regions = []
+        self._ba_subbands = []
+        self._ba_subband_key = None
+        self._ba_x_key = None
+        self._ba_last_res = {}
+        self._ba_highlight = win._ba_highlight
+        self._ba_wf_version = None
+
+    def isVisible(self) -> bool:                    # noqa: N802 (Qt name)
+        return self._ba_win.isVisible() and self._ba_box.isVisible()
+
+
+def _panes(win) -> list:
+    p2 = getattr(win, "_ba_pane2", None)
+    return [win] + ([p2] if p2 is not None else [])
+
+
 def _update_wanted(win) -> None:
     """The engine records waterfall rows whenever Waterfall is ticked, even
     while the window is hidden, minimised or being moved, so the picture is
     still there when it comes back.  A gap while unticked shows as blank rows."""
-    wf = getattr(win, "_ba_wf", None)
-    if wf is None:
-        return
-    wf.wanted = bool(win._ba_wf_cb.isChecked())
+    for pane in _panes(win):
+        wf = getattr(pane, "_ba_wf", None)
+        if wf is not None:
+            wf.wanted = bool(win._ba_wf_cb.isChecked())
 
 
 def set_highlighted_calls(win, calls) -> None:
     """Calls whose markers get a black outline (hook for a 'needed' list)."""
     win._ba_highlight = {str(c).upper() for c in (calls or []) if str(c).strip()}
+    p2 = getattr(win, "_ba_pane2", None)
+    if p2 is not None:
+        p2._ba_highlight = win._ba_highlight
     redraw(win)
 
 
@@ -768,8 +846,11 @@ def note_decode_record(win, rec: dict) -> None:
     """Main decode queue → MSK144 detections (GUI thread)."""
     if win is None:
         return
+    pane = win
+    if rec.get("rx") == 2 and getattr(win, "_ba_pane2", None) is not None:
+        pane = win._ba_pane2
     try:
-        win._ba_store.add(detection_from_record(rec))
+        pane._ba_store.add(detection_from_record(rec))
     except Exception:
         pass
 
@@ -782,18 +863,42 @@ def _latest_results(eng) -> dict:
     return out
 
 
+def _collect(pane, eng) -> None:
+    for mode, res in _latest_results(eng).items():
+        if res is pane._ba_last_res.get(mode):
+            continue
+        pane._ba_last_res[mode] = res
+        pane._ba_store.add_period_result(res)
+
+
+def _sync_pane2(eng, win) -> None:
+    """Show Tuner 2's pane while receiver 2 is wanted; follow its engine."""
+    p2 = getattr(win, "_ba_pane2", None)
+    if p2 is None:
+        return
+    rx = getattr(eng, "rx2", None)
+    p2._ba_eng = rx.engine if rx is not None else None
+    if p2._ba_eng is not None:
+        p2._ba_eng._band_wf = p2._ba_wf
+    from . import receivers
+    show = bool(getattr(eng, "_rx2_enabled", False)) and (
+        getattr(eng, "source_mode", "idle") in receivers.DUAL_SOURCES)
+    if p2._ba_box.isHidden() == show:
+        p2._ba_box.setVisible(show)
+    if p2._ba_eng is not None:
+        _collect(p2, p2._ba_eng)
+
+
 def tick(eng, win, now: float | None = None) -> None:
     """Once a second: collect FT8/FT4 periods; repaint while visible."""
     try:
-        for mode, res in _latest_results(eng).items():
-            if res is win._ba_last_res.get(mode):
-                continue
-            win._ba_last_res[mode] = res
-            win._ba_store.add_period_result(res)
+        _collect(win, eng)
+        _sync_pane2(eng, win)
         if win.isVisible():
             redraw(win, now=now)
         else:
-            win._ba_store.trim(now)
+            for pane in _panes(win):
+                pane._ba_store.trim(now)
     except Exception as e:                       # never let a bad frame kill the panel
         win._ba_status.setText(f"redraw error: {e}")
 
@@ -835,6 +940,14 @@ def _x_span(win, snap) -> tuple[float, float] | None:
 
 
 def redraw(win, now: float | None = None) -> None:
+    """Repaint the window's panes (both receivers share the time axis)."""
+    t_top = _redraw_pane(win, now)
+    p2 = getattr(win, "_ba_pane2", None)
+    if p2 is not None and p2._ba_box.isVisible():
+        _redraw_pane(p2, t_top if now is None else now)
+
+
+def _redraw_pane(win, now: float | None = None) -> float:
     show_wf = win._ba_wf_cb.isChecked()
     show_det = win._ba_det_cb.isChecked()
     snap = win._ba_wf.snapshot() if show_wf else None
@@ -871,6 +984,7 @@ def redraw(win, now: float | None = None) -> None:
             win._ba_x_key = key
         _sync_subbands(win, xs)
     _update_status(win, snap, show_wf, show_det)
+    return t_top
 
 
 def _sync_subbands(win, xs) -> None:
@@ -911,7 +1025,19 @@ def _update_status(win, snap, show_wf: bool, show_det: bool) -> None:
                      else f"waterfall {snap[3]:.3f}–{snap[4]:.3f} MHz")
     if not parts:
         parts.append("Tick Waterfall or Detections to show the band")
-    win._ba_status.setText("  ·  ".join(parts))
+    text = "  ·  ".join(parts)
+    rx = getattr(win, "_ba_rx", 1)
+    if rx == 2 or getattr(win, "_ba_pane2", None) is not None and not win._ba_pane2._ba_box.isHidden():
+        name = f"Tuner {rx}"
+        eng = getattr(win, "_ba_eng", None)
+        f = getattr(eng, "calling_freq_mhz", None)
+        if f:
+            from .wsjtx_udp import band_label
+            name += f" — {band_label(int(round(float(f) * 1e6)))} {float(f):.3f}"
+        if eng is None and rx == 2:
+            text = "waiting for Tuner 2…"
+        text = f"{name}:  {text}"
+    win._ba_status.setText(text)
 
 
 def subband_at(win, f_mhz: float):

@@ -711,19 +711,24 @@ DECODES_MAX_BYTES = 64 * 1024 * 1024
 REJECTED_MAX_BYTES = 4 * 1024 * 1024
 
 
+#: One writer at a time for the shared JSONL files (two receivers append).
+JSONL_LOCK = threading.RLock()
+
+
 def append_bounded(path, lines, max_bytes: int) -> None:
     """Append ``lines`` to ``path``; first move a file over ``max_bytes``
     to ``<path>.1`` (replacing the older one)."""
     from pathlib import Path
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        if path.stat().st_size >= max_bytes:
-            path.replace(path.with_name(path.name + ".1"))
-    except FileNotFoundError:
-        pass
-    with open(path, "a") as f:
-        f.write("\n".join(lines) + "\n")
+    with JSONL_LOCK:
+        try:
+            if path.stat().st_size >= max_bytes:
+                path.replace(path.with_name(path.name + ".1"))
+        except FileNotFoundError:
+            pass
+        with open(path, "a") as f:
+            f.write("\n".join(lines) + "\n")
 
 
 def rejected_record(x) -> dict:
@@ -761,7 +766,7 @@ def publish_decodes(eng, decodes) -> None:
             "timestamp": rec["timestamp"], "period_ts": rec["timestamp"],
             "mode": d.mode, "radio_khz": round(rec["radio_khz"], 3),
             "audio_hz": d.audio_hz, "dt_s": d.dt_s, "message": d.message,
-            "jt9_snr_db": d.snr_db,
+            "jt9_snr_db": d.snr_db, "rx": int(getattr(eng, "rx_id", 1) or 1),
         }))
     if not lines:
         return

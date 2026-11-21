@@ -147,6 +147,12 @@ _JT9_FTOL_ANALYSIS = 400   # Hz — wider default for analysis window (human cli
 # weak signals.  2026-05-12 bumped to -d 2 to match WSJT-X.
 _JT9_DEPTH   = 2
 
+def _jsonl_lock():
+    """The shared JSONL writer lock (two receivers append to the same files)."""
+    from .ft8_engine import JSONL_LOCK
+    return JSONL_LOCK
+
+
 def production_output_dir() -> Path:
     """Directory where decode WAVs / ``decodes.jsonl`` / ``launches.jsonl``
     are written.
@@ -792,7 +798,7 @@ def extract_and_decode(
         # detector.  Absent when older runs predate the metric capture.
         if launch_metrics:
             entry.update(launch_metrics)
-        with open(out_dir / "launches.jsonl", "a") as lf:
+        with _jsonl_lock(), open(out_dir / "launches.jsonl", "a") as lf:
             lf.write(json.dumps(entry) + "\n")
 
     try:
@@ -850,7 +856,7 @@ def extract_and_decode(
                     "jt9_line":   jt9_line,
                     "theta_deg":  round(theta_deg, 1) if dual_pol else None,
                 }
-                with open(out_dir / "decodes.jsonl", "a") as lf:
+                with _jsonl_lock(), open(out_dir / "decodes.jsonl", "a") as lf:
                     lf.write(json.dumps(decode_entry) + "\n")
 
                 _log_launch("decoded", message=full_msg, jt9_snr=snr, jt9_line=jt9_line)
@@ -984,7 +990,7 @@ def extract_and_decode(
                         "jt9_line":   decoded,
                         "theta_deg":  round(theta_deg, 1) if dual_pol else None,
                     }
-                    with open(out_dir / "decodes.jsonl", "a") as lf:
+                    with _jsonl_lock(), open(out_dir / "decodes.jsonl", "a") as lf:
                         lf.write(json.dumps(decode_entry) + "\n")
 
                     _log_launch("decoded", message=bare_msg, jt9_snr=snr, jt9_line=decoded)

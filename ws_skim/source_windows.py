@@ -991,7 +991,9 @@ def setup_sdrconnect_window(self, view_action):
         "An SDRconnect that already has a device open is not changed.")
     conn_form.addRow("RSPduo Mode:", self._sdrc_mode_combo)
     self._sdrc_tuner_combo = _combo(_SDRC_TUNER_CHOICES, cfg['tuner'])
-    self._sdrc_tuner_combo.setToolTip("Which RSPduo tuner WS Skim listens to (Tuner 2 needs dual-tuner mode)")
+    self._sdrc_tuner_combo.setToolTip("Which RSPduo tuner WS Skim listens to (Tuner 2 needs dual-tuner mode).  "
+                                      "To decode two bands, leave this on Tuner 1 (A) and tick "
+                                      "Tuner 2 in the main window's toolbar.")
     conn_form.addRow("Tuner:", self._sdrc_tuner_combo)
     self._sdrc_lna_spin = QtWidgets.QSpinBox()
     self._sdrc_lna_spin.setRange(-1, 27)
@@ -1036,6 +1038,11 @@ def setup_sdrconnect_window(self, view_action):
     st_form.addRow("Antenna:",       _stat_label(self, "_sdrc_ant_val"))
     _add_stream_rows(st_form, self, "_sdrc")
     st_form.addRow("Input:",         _stat_label(self, "_sdrc_in_val"))
+    self._sdrc_rx2_val = _stat_label(self, "_sdrc_rx2_val")
+    self._sdrc_rx2_val.setWordWrap(True)
+    self._sdrc_rx2_val.setToolTip("Tuner 2 is switched on and given its band in the "
+                                  "main window's toolbar")
+    st_form.addRow("Tuner 2:",       self._sdrc_rx2_val)
     layout.addWidget(st_grp)
     layout.addStretch()
 
@@ -1061,6 +1068,9 @@ def on_sdrconnect_apply_clicked(self):
     _connect_sdrconnect_client(self)        # new client; the radio thread starts it
     if old is not None:
         threading.Thread(target=old.stop, name="sdrconnect-stop", daemon=True).start()
+    if getattr(self, 'rx2', None) is not None:     # Tuner 2 restarts with the new settings
+        from .receivers import stop as _stop_rx2
+        threading.Thread(target=_stop_rx2, args=(self,), name="rx2-stop", daemon=True).start()
     self.statusBar().showMessage("SDRconnect settings saved — reconnecting", 4000)
 
 
@@ -1092,6 +1102,16 @@ def _update_sdrconnect_window(self, sig_str, noise_str, rate_str, drops_str):
                      f"{sc.queue_drops} queue, {sc.resyncs} gaps" if drops else "0")
     _set_queue_label(self, '_sdrc_queue_val', sc.sample_queue)
     _setlbl(self, '_sdrc_in_val', f"{sc.messages} msgs, {sc.bytes_in/1e6:.0f} MB")
+    rx2 = getattr(self, 'rx2', None)
+    c2 = getattr(rx2, 'client', None)
+    if not getattr(self, '_rx2_enabled', False):
+        t2 = "off (tick Tuner 2 in the main window's toolbar)"
+    elif c2 is None:
+        t2 = getattr(self, '_rx2_error', '') or "starting…"
+    else:
+        lo = (f" · LO {c2.device_center_hz/1e6:.6f} MHz" if c2.device_center_hz else "")
+        t2 = f"{c2.calling_freq_mhz:.4f} MHz · {c2.status_text}{lo}"
+    _setlbl(self, '_sdrc_rx2_val', t2)
 
 
 # ── Window 6: SDRangel ───────────────────────────────────────────────────────

@@ -390,7 +390,8 @@ def setup_ui(self):
     band_toolbar = self.addToolBar("Band")
     band_toolbar.setMovable(False)
     band_toolbar.setFloatable(False)
-    band_toolbar.addWidget(QtWidgets.QLabel("  Band: "))
+    self._band_label = QtWidgets.QLabel("  Band: ")
+    band_toolbar.addWidget(self._band_label)
     self._band_combo = QtWidgets.QComboBox()
     self._bands = MSK144_BANDS           # set_band_list() swaps it per mode
     for _bl, _, _ in MSK144_BANDS:
@@ -409,6 +410,9 @@ def setup_ui(self):
     self._band_combo.blockSignals(False)
     self._band_combo.currentIndexChanged.connect(self.on_band_changed)
     band_toolbar.addWidget(self._band_combo)
+    # RSPduo Tuner 2 (shown only for the SDRplay source).
+    from .rx2_controls import setup as _setup_rx2
+    _setup_rx2(self, band_toolbar)
 
     # ── Colour map (shared by all image items) ────────────────────────────────
     pg.setConfigOptions(antialias=True)
@@ -918,7 +922,10 @@ def setup_ui(self):
     self.statusBar().showMessage('Initializing...')
 
     # Apply initial band state: enable/disable source menu actions for saved band.
-    self.on_band_changed(_saved_band_idx)
+    # The startup mode may already have swapped in its own band list
+    # (set_band_list), so use the pulldown's current entry: _saved_band_idx
+    # indexes the MSK144 list and picked 160 m for FT8 users.
+    self.on_band_changed(self._band_combo.currentIndex())
 
     # ── Restore last source mode ──────────────────────────────────────────────
     # Defer to a singleShot(0) so the event loop runs first: windows paint,
@@ -1267,6 +1274,9 @@ def on_band_changed(self, idx: int):
     # Mode → MSK144 is offered only on 6 m, 2 m and 1.25 m.
     from .ft8_window import update_msk144_action
     update_msk144_action(self)
+    # Tuner 2's default band follows Tuner 1 until one is picked.
+    from .rx2_controls import refresh_bands
+    refresh_bands(self)
 
 
 def _on_about(self):

@@ -116,6 +116,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+import threading
+
 import numpy as np
 import numba
 from scipy.signal import firwin
@@ -123,6 +125,14 @@ from scipy.signal import firwin
 log = logging.getLogger(__name__)
 
 # -- Public constants ----------------------------------------------------------
+#: Serialises the ``@njit(parallel=True)`` kernels below across threads.
+#: Two receivers (RSPduo tuner 1 and 2) run their channelizers on separate
+#: threads; numba's fallback ``workqueue`` threading layer (used when
+#: neither OpenMP nor TBB is available, e.g. some Windows installs) aborts
+#: the process if two threads enter a parallel region at once.  Each kernel
+#: already uses every core, so serialising them costs little.
+PARALLEL_KERNEL_LOCK = threading.Lock()
+
 N_CHANNELS         = 48
 CHANNEL_SPACING_HZ = 1000.0
 CHANNEL_OFFSET_HZ  = 0.0       # module default; pass channel_offset_hz to make_channelizer_state
@@ -288,7 +298,8 @@ def _fir_filt_2d_c64(b: np.ndarray, x: np.ndarray, zi: np.ndarray):
     x_ext   = np.concatenate([zi, x], axis=1)
     b_rev   = np.ascontiguousarray(b[::-1])
     y       = np.empty((n_ch, N), dtype=np.complex64)
-    _nb_fir_2d_c64(b_rev, x_ext, y)
+    with PARALLEL_KERNEL_LOCK:
+        _nb_fir_2d_c64(b_rev, x_ext, y)
     new_zi  = x_ext[:, -(ntaps - 1):].copy()
     return y, new_zi
 
@@ -310,7 +321,8 @@ def _fir_filt_2d(b: np.ndarray, x: np.ndarray, zi: np.ndarray):
     x_ext   = np.concatenate([zi, x], axis=1)          # (n_ch, ntaps-1+N)
     b_rev   = np.ascontiguousarray(b[::-1])             # contiguous reversed taps
     y       = np.empty((n_ch, N), dtype=np.float32)
-    _nb_fir_2d(b_rev, x_ext, y)
+    with PARALLEL_KERNEL_LOCK:
+        _nb_fir_2d(b_rev, x_ext, y)
     new_zi  = x_ext[:, -(ntaps - 1):].copy()           # (n_ch, ntaps-1)
     return y, new_zi
 
@@ -424,7 +436,8 @@ def _mix_fir_lp_sp(b_rev, raw, mix_phase, mix_step, zi):
     y             = np.empty((n_ch, N),       dtype=np.complex64)
     new_zi        = np.empty((n_ch, ntaps-1), dtype=np.complex64)
     new_mix_phase = np.empty(n_ch,            dtype=np.complex64)
-    _nb_mix_fir_sp(b_rev, raw, mix_phase, mix_step, zi, y, new_zi, new_mix_phase)
+    with PARALLEL_KERNEL_LOCK:
+        _nb_mix_fir_sp(b_rev, raw, mix_phase, mix_step, zi, y, new_zi, new_mix_phase)
     return y, new_zi, new_mix_phase
 
 
@@ -441,8 +454,9 @@ def _mix_fir_lp_dp(b_rev, raw_h, raw_v, mix_phase, mix_step, zi_h, zi_v):
     new_zi_h      = np.empty((n_ch, ntaps-1), dtype=np.complex64)
     new_zi_v      = np.empty((n_ch, ntaps-1), dtype=np.complex64)
     new_mix_phase = np.empty(n_ch,            dtype=np.complex64)
-    _nb_mix_fir_dp(b_rev, raw_h, raw_v, mix_phase, mix_step,
-                   zi_h, zi_v, y_h, y_v, new_zi_h, new_zi_v, new_mix_phase)
+    with PARALLEL_KERNEL_LOCK:
+        _nb_mix_fir_dp(b_rev, raw_h, raw_v, mix_phase, mix_step,
+                       zi_h, zi_v, y_h, y_v, new_zi_h, new_zi_v, new_mix_phase)
     return y_h, y_v, new_zi_h, new_zi_v, new_mix_phase
 
 
