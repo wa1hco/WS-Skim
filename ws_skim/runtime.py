@@ -319,6 +319,86 @@ def _stop_rtlsdr_source(self):
     self._rtlsdr_started = False
 
 
+def _sdrconnect_settings():
+    """SDRplay (SDRconnect) source settings from QSettings, with defaults."""
+    from .visualizer import _SETTINGS as _S
+    from .sdrconnect_source import DEFAULT_HOST, DEFAULT_PORT
+
+    def _int(key, default):
+        try:
+            return int(_S.value(key, default))
+        except (ValueError, TypeError):
+            return default
+
+    def _bool(key, default):
+        v = _S.value(key, default)
+        if isinstance(v, str):
+            return v.strip().lower() in ('1', 'true', 'yes', 'on')
+        return bool(v)
+
+    return {
+        'host':           str(_S.value('sdrconnect_host', DEFAULT_HOST)).strip() or DEFAULT_HOST,
+        'port':           _int('sdrconnect_port', DEFAULT_PORT),
+        'tuner':          str(_S.value('sdrconnect_tuner', 'primary')),
+        'lna_state':      _int('sdrconnect_lna_state', -1),
+        'control_tuning': _bool('sdrconnect_control_tuning', True),
+        'launch':         str(_S.value('sdrconnect_launch', 'headless')),
+        'device_mode':    str(_S.value('sdrconnect_device_mode', 'single')),
+        'antenna':        str(_S.value('sdrconnect_antenna', '')),
+    }
+
+
+def _connect_sdrconnect_client(self):
+    """Create the SDRplay (SDRconnect) source (called from on_select_source_sdrconnect)."""
+    if getattr(self, 'sdrconnect_client', None) is not None:
+        self.sdrconnect_client.retune(self.calling_freq_mhz)
+        return
+    try:
+        from .sdrconnect_source import SDRconnectSource
+        cfg = _sdrconnect_settings()
+        self.sdrconnect_client = SDRconnectSource(
+            calling_freq_mhz=self.calling_freq_mhz,
+            target_rate=self.sample_rate,
+            host=cfg['host'], port=cfg['port'], tuner=cfg['tuner'],
+            lna_state=cfg['lna_state'], control_tuning=cfg['control_tuning'],
+            launch=cfg['launch'], device_mode=cfg['device_mode'],
+            antenna=cfg['antenna'],
+        )
+        print("[sdrconnect] SDRconnectSource created", flush=True)
+    except Exception as exc:
+        print(f"[sdrconnect] SDRconnectSource creation failed: {exc}", flush=True)
+        self.sdrconnect_client = None
+
+
+def _start_sdrconnect_source(self) -> bool:
+    if getattr(self, '_sdrconnect_started', False):
+        return True
+    if getattr(self, 'sdrconnect_client', None) is None:
+        return False
+    try:
+        _set_dual_pol(self, False)
+        self.sdrconnect_client.start()      # non-blocking; status shows progress
+        self._sdrconnect_started = True
+        if hasattr(self, '_jt9_markers'):
+            self._jt9_markers.clear()
+        _clear_decode_panel_on_source_start(self)
+        return True
+    except Exception as exc:
+        print(f"[sdrconnect] start error: {exc}", flush=True)
+        import traceback; traceback.print_exc()
+        return False
+
+
+def _stop_sdrconnect_source(self):
+    if not getattr(self, '_sdrconnect_started', False):
+        return
+    try:
+        self.sdrconnect_client.stop()
+    except Exception:
+        pass
+    self._sdrconnect_started = False
+
+
 def _connect_sdrangel_client(self):
     """Instantiate SDRAngelSource(s) on first use (called from on_select_source_sdrangel).
 
@@ -1227,10 +1307,14 @@ def run_radio_source(self):
             if self.source_mode == "idle":
                 if self._radio_started:
                     _stop_radio_source(self)
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 time.sleep(0.1)
                 continue
 
             if self.source_mode == "wav":
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 if self._radio_started:
                     _stop_radio_source(self)
                 if getattr(self, '_airspy_started', False):
@@ -1245,6 +1329,8 @@ def run_radio_source(self):
                 continue
 
             if self.source_mode == "rtlsdr":
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 if self._radio_started:
                     _stop_radio_source(self)
                 if getattr(self, '_airspy_started', False):
@@ -1279,6 +1365,8 @@ def run_radio_source(self):
                 continue
 
             if self.source_mode == "airspy":
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 if self._radio_started:
                     _stop_radio_source(self)
                 if getattr(self, '_usrp_started', False):
@@ -1311,6 +1399,8 @@ def run_radio_source(self):
                 continue
 
             if self.source_mode == "usrp":
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 if self._radio_started:
                     _stop_radio_source(self)
                 if getattr(self, '_airspy_started', False):
@@ -1344,6 +1434,8 @@ def run_radio_source(self):
                 continue
 
             if self.source_mode == "sdrangel":
+                if getattr(self, '_sdrconnect_started', False):
+                    _stop_sdrconnect_source(self)
                 if self._radio_started:
                     _stop_radio_source(self)
                 if getattr(self, '_airspy_started', False):
@@ -1410,6 +1502,44 @@ def run_radio_source(self):
                     import traceback; traceback.print_exc()
                 continue
 
+            if self.source_mode == "sdrconnect":
+                if self._radio_started:
+                    _stop_radio_source(self)
+                if getattr(self, '_airspy_started', False):
+                    _stop_airspy_source(self)
+                if getattr(self, '_rtlsdr_started', False):
+                    _stop_rtlsdr_source(self)
+                if getattr(self, '_usrp_started', False):
+                    _stop_usrp_source(self)
+                if getattr(self, '_sdrangel_started', False):
+                    _stop_sdrangel_source(self)
+                if not _start_sdrconnect_source(self):
+                    time.sleep(1.0)
+                    continue
+                try:
+                    drained = 0
+                    while drained < 64 and self.source_mode == "sdrconnect":
+                        try:
+                            packet = self.sdrconnect_client.sample_queue.get_nowait()
+                        except queue.Empty:
+                            if drained == 0:
+                                try:
+                                    packet = self.sdrconnect_client.sample_queue.get(timeout=1.0)
+                                except queue.Empty:
+                                    break
+                            else:
+                                break
+                        # SDRconnect int16 → ±1.0 and 48 kHz done in SDRconnectSource.
+                        chunk = _polarization_combine(np.asarray(packet.samples, dtype=np.complex64))
+                        self.process_iq_data(chunk, packet.timestamp_int, packet.timestamp_frac)
+                        drained += 1
+                except Exception as exc:
+                    print(f"[sdrconnect] queue/process error: {exc}", flush=True)
+                    import traceback; traceback.print_exc()
+                continue
+
+            if getattr(self, '_sdrconnect_started', False):
+                _stop_sdrconnect_source(self)
             if not _start_radio_source(self):
                 time.sleep(1.0)
                 continue
@@ -1592,6 +1722,7 @@ def run_radio_source(self):
     _stop_radio_source(self)
     _stop_usrp_source(self)
     _stop_sdrangel_source(self)
+    _stop_sdrconnect_source(self)
 
 
 def _get_tuned_frequency_mhz(self):
@@ -1613,6 +1744,9 @@ def _get_tuned_frequency_mhz(self):
     if self.source_mode == "sdrangel":
         # UDP Sink output is centered on calling_freq (lo_offset applied inside SDRangel).
         return self.calling_freq_mhz, "SDRangel", None
+    if self.source_mode == "sdrconnect":
+        # The LO offset is mixed out in SDRconnectSource: output is centred on calling_freq.
+        return self.calling_freq_mhz, "SDRplay", None
 
     tuned_freq_mhz = None
     tuned_source = None
@@ -1676,6 +1810,7 @@ def closeEvent(self, event):
         (getattr(self, '_airspy_win',     None), 'airspy_geometry',     None),
         (getattr(self, '_rtlsdr_win',     None), 'rtlsdr_geometry',     None),
         (getattr(self, '_sdrangel_win',   None), 'sdrangel_geometry',   None),
+        (getattr(self, '_sdrconnect_win', None), 'sdrconnect_geometry', None),
         (getattr(self, '_screenshot_win', None), 'screenshot_geometry', None),
     ]:
         if win is not None:
@@ -1705,6 +1840,8 @@ def closeEvent(self, event):
         _stop_usrp_source(self)
     if getattr(self, '_sdrangel_started', False):
         _stop_sdrangel_source(self)
+    if getattr(self, '_sdrconnect_started', False):
+        _stop_sdrconnect_source(self)
 
     if hasattr(self, 'client_thread') and self.client_thread.isRunning():
         self.client_thread.quit()
@@ -1726,7 +1863,7 @@ def closeEvent(self, event):
                   '_iq_nb_win',
                   '_reporting_win', '_band_map_win',
                   '_flex_win', '_usrp_win', '_airspy_win', '_rtlsdr_win',
-                  '_sdrangel_win', '_screenshot_win'):
+                  '_sdrangel_win', '_sdrconnect_win', '_screenshot_win'):
         _w = getattr(self, _attr, None)
         if _w is not None:
             _w.close()

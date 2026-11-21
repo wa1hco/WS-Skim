@@ -61,7 +61,8 @@ ROWS = (
 
 _SOURCE_NAMES = {
     "radio": "Flex Radio", "usrp": "USRP B210", "airspy": "Airspy HF+",
-    "rtlsdr": "RTL-SDR", "sdrangel": "SDRangel", "wav": "WAV file", "idle": "none",
+    "rtlsdr": "RTL-SDR", "sdrangel": "SDRangel",
+    "sdrconnect": "SDRplay (SDRconnect)", "wav": "WAV file", "idle": "none",
 }
 
 #: Average the IQ rate over at least this long.

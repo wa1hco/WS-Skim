@@ -10,6 +10,22 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Source → SDRplay (SDRconnect): SDRplay radios such as the RSPduo.**
+  WS Skim gets the raw IQ from SDRplay's SDRconnect program over its
+  WebSocket server.  If SDRconnect is not running, WS Skim starts it in the
+  background (or with its window, or never — your choice), opens the
+  radio and starts streaming; an SDRconnect you already run is just
+  connected to.  WS Skim tunes the chosen RSPduo tuner (1 or 2) to the
+  band you pick when the band is outside what the tuner is receiving, and
+  mixes and decimates the 2 MHz (or other) stream to WS Skim's 48 kHz in
+  about a tenth of one CPU core.  The new View → SDRplay (SDRconnect)
+  window holds the settings (host, port, start mode, RSPduo mode, tuner,
+  LNA state, antenna, whether WS Skim tunes) and shows the connection
+  state, tuner frequency, rate and data gaps; when SDRconnect cannot be
+  reached the status says what to do.  Reconnects by itself if
+  SDRconnect restarts.  Both RSPduo tuners feeding two bands at once is
+  the next step.  Setup is in docs/sdrplay-setup.md.
+
 - **View → Roster is a WS Hub-style browser window.**  The Qt decode table
   is replaced by a local web page that opens in a Chrome or Edge app
   window (Firefox or your usual browser if those are not installed), with

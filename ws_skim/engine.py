@@ -208,6 +208,8 @@ class Engine:
         self.sdrangel_client   = None
         self.sdrangel_client_v = None
         self._sdrangel_started = False
+        self.sdrconnect_client = None
+        self._sdrconnect_started = False
 
         # Overlap-add buffer for waterfall FFT (H, and V for dual-pol)
         _sbuf_cap = self.fft_size * 6

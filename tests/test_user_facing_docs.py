@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 USER_FACING = (
     ROOT / "README.md",
     ROOT / "docs" / "flexradio-setup.md",
+    ROOT / "docs" / "sdrplay-setup.md",
 )
 
 _FORBIDDEN = (

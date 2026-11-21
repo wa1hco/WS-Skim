@@ -926,6 +926,174 @@ def setup_rtlsdr_window(self, view_action):
     layout.addStretch()
 
 
+# ── Window 5b: SDRplay (SDRconnect) ──────────────────────────────────────────
+
+_SDRC_LAUNCH_CHOICES = (
+    ("headless", "Yes, in the background (no window)"),
+    ("window",   "Yes, with its window"),
+    ("never",    "No, I start it myself"),
+)
+_SDRC_TUNER_CHOICES = (("primary", "Tuner 1 (A)"), ("secondary", "Tuner 2 (B)"))
+_SDRC_MODE_CHOICES = (("single", "Single tuner"), ("dual", "Dual tuner"))
+
+
+def setup_sdrconnect_window(self, view_action):
+    """Build the SDRplay (SDRconnect) source window: settings plus live status."""
+    from .ui import _PanelWindow
+    from .runtime import _sdrconnect_settings
+
+    win = _PanelWindow("WS Skim — SDRplay (SDRconnect)", view_action, self,
+                       'sdrconnect_geometry')
+    win.setMinimumSize(360, 420)
+    layout = QtWidgets.QVBoxLayout(win)
+    layout.setContentsMargins(8, 8, 8, 8)
+    layout.setSpacing(6)
+    self._sdrconnect_win = win
+    cfg = _sdrconnect_settings()
+
+    help_lbl = QtWidgets.QLabel(
+        "WS Skim gets IQ from SDRplay's SDRconnect program.  If SDRconnect is "
+        "not running, WS Skim starts it.  If you run SDRconnect's window "
+        "yourself, press Play and turn on WebSocket Server (⋯ menu).")
+    help_lbl.setWordWrap(True)
+    help_lbl.setStyleSheet("QLabel { color: #444444; }")
+    layout.addWidget(help_lbl)
+
+    conn_grp, conn_form = _form_group("Settings")
+    self._sdrc_host_edit = QtWidgets.QLineEdit(cfg['host'])
+    self._sdrc_host_edit.setToolTip("Computer running SDRconnect (127.0.0.1 = this one)")
+    conn_form.addRow("Host:", self._sdrc_host_edit)
+    self._sdrc_port_spin = QtWidgets.QSpinBox()
+    self._sdrc_port_spin.setRange(1, 65535)
+    self._sdrc_port_spin.setValue(cfg['port'])
+    self._sdrc_port_spin.setToolTip("SDRconnect WebSocket port (5454 unless you changed it)")
+    conn_form.addRow("WebSocket Port:", self._sdrc_port_spin)
+
+    def _combo(choices, current):
+        cb = QtWidgets.QComboBox()
+        for key, label in choices:
+            cb.addItem(label, key)
+        idx = max(0, cb.findData(current))
+        cb.setCurrentIndex(idx)
+        return cb
+
+    self._sdrc_launch_combo = _combo(_SDRC_LAUNCH_CHOICES, cfg['launch'])
+    self._sdrc_launch_combo.setToolTip(
+        "Start SDRconnect when this source is picked and it isn't running.\n"
+        "A background copy WS Skim started is closed again when you switch\n"
+        "source or quit (it holds the radio).  A window WS Skim opened, or\n"
+        "an SDRconnect you started, is left running.")
+    conn_form.addRow("Start SDRconnect:", self._sdrc_launch_combo)
+    self._sdrc_mode_combo = _combo(_SDRC_MODE_CHOICES, cfg['device_mode'])
+    self._sdrc_mode_combo.setToolTip(
+        "RSPduo mode used when WS Skim picks the device (a fresh SDRconnect).\n"
+        "Single: one tuner, up to 10 MHz wide.  Dual: both tuners, 2 MHz each.\n"
+        "An SDRconnect that already has a device open is not changed.")
+    conn_form.addRow("RSPduo Mode:", self._sdrc_mode_combo)
+    self._sdrc_tuner_combo = _combo(_SDRC_TUNER_CHOICES, cfg['tuner'])
+    self._sdrc_tuner_combo.setToolTip("Which RSPduo tuner WS Skim listens to (Tuner 2 needs dual-tuner mode)")
+    conn_form.addRow("Tuner:", self._sdrc_tuner_combo)
+    self._sdrc_lna_spin = QtWidgets.QSpinBox()
+    self._sdrc_lna_spin.setRange(-1, 27)
+    self._sdrc_lna_spin.setSpecialValueText("Leave as set")
+    self._sdrc_lna_spin.setValue(cfg['lna_state'])
+    self._sdrc_lna_spin.setToolTip(
+        "RF gain reduction step.  0 is the MOST gain; higher numbers add\n"
+        "attenuation.  'Leave as set' keeps SDRconnect's setting.")
+    conn_form.addRow("LNA State:", self._sdrc_lna_spin)
+    self._sdrc_antenna_combo = QtWidgets.QComboBox()
+    self._sdrc_antenna_combo.setEditable(False)
+    self._sdrc_antenna_combo.addItem("Leave as set", "")
+    for ant in ("Tuner 1 50 ohm", "HiZ Port"):
+        self._sdrc_antenna_combo.addItem(ant, ant)
+    if cfg['antenna'] and self._sdrc_antenna_combo.findData(cfg['antenna']) < 0:
+        self._sdrc_antenna_combo.addItem(cfg['antenna'], cfg['antenna'])
+    self._sdrc_antenna_combo.setCurrentIndex(max(0, self._sdrc_antenna_combo.findData(cfg['antenna'])))
+    self._sdrc_antenna_combo.setToolTip("Antenna port (RSPduo Tuner 1 has 50 ohm and Hi-Z)")
+    conn_form.addRow("Antenna:", self._sdrc_antenna_combo)
+    self._sdrc_tune_check = QtWidgets.QCheckBox("WS Skim tunes the radio to the band")
+    self._sdrc_tune_check.setChecked(cfg['control_tuning'])
+    self._sdrc_tune_check.setToolTip(
+        "When the band's frequency is outside what SDRconnect is receiving,\n"
+        "WS Skim moves the tuner there (100 kHz below the frequency).\n"
+        "Untick to leave tuning to you in SDRconnect.")
+    conn_form.addRow(self._sdrc_tune_check)
+    apply_btn = QtWidgets.QPushButton("Apply and Reconnect")
+    apply_btn.clicked.connect(lambda: on_sdrconnect_apply_clicked(self))
+    conn_form.addRow(apply_btn)
+    layout.addWidget(conn_grp)
+
+    st_grp, st_form = _form_group("Status")
+    _stat_label(self, "_sdrc_status_val", color="#1a1a1a")
+    self._sdrc_status_val.setWordWrap(True)
+    self._sdrc_status_val.setStyleSheet("QLabel { color: #1a1a1a; }")
+    st_form.addRow("State:",         self._sdrc_status_val)
+    st_form.addRow("Device:",        _stat_label(self, "_sdrc_device_val"))
+    st_form.addRow("Tuner LO:",      _stat_label(self, "_sdrc_lo_val"))
+    st_form.addRow("Device Rate:",   _stat_label(self, "_sdrc_hw_rate_val"))
+    st_form.addRow("Decimation:",    _stat_label(self, "_sdrc_decim_val"))
+    st_form.addRow("LNA State:",     _stat_label(self, "_sdrc_lna_val"))
+    st_form.addRow("Antenna:",       _stat_label(self, "_sdrc_ant_val"))
+    _add_stream_rows(st_form, self, "_sdrc")
+    st_form.addRow("Input:",         _stat_label(self, "_sdrc_in_val"))
+    layout.addWidget(st_grp)
+    layout.addStretch()
+
+
+def on_sdrconnect_apply_clicked(self):
+    """Save SDRconnect settings and reconnect with them."""
+    import threading
+    from .visualizer import _SETTINGS
+    _SETTINGS.setValue('sdrconnect_host', self._sdrc_host_edit.text().strip() or '127.0.0.1')
+    _SETTINGS.setValue('sdrconnect_port', int(self._sdrc_port_spin.value()))
+    _SETTINGS.setValue('sdrconnect_launch', self._sdrc_launch_combo.currentData())
+    _SETTINGS.setValue('sdrconnect_device_mode', self._sdrc_mode_combo.currentData())
+    _SETTINGS.setValue('sdrconnect_tuner', self._sdrc_tuner_combo.currentData())
+    _SETTINGS.setValue('sdrconnect_lna_state', int(self._sdrc_lna_spin.value()))
+    _SETTINGS.setValue('sdrconnect_antenna', self._sdrc_antenna_combo.currentData() or '')
+    _SETTINGS.setValue('sdrconnect_control_tuning', bool(self._sdrc_tune_check.isChecked()))
+    _SETTINGS.sync()
+
+    old = getattr(self, 'sdrconnect_client', None)
+    self._sdrconnect_started = False
+    self.sdrconnect_client = None
+    from .runtime import _connect_sdrconnect_client
+    _connect_sdrconnect_client(self)        # new client; the radio thread starts it
+    if old is not None:
+        threading.Thread(target=old.stop, name="sdrconnect-stop", daemon=True).start()
+    self.statusBar().showMessage("SDRconnect settings saved — reconnecting", 4000)
+
+
+def _update_sdrconnect_window(self, sig_str, noise_str, rate_str, drops_str):
+    sc = getattr(self, 'sdrconnect_client', None)
+    if sc is None:
+        _setlbl(self, '_sdrc_status_val', "Not selected" if self.source_mode != 'sdrconnect'
+                else "Source not available (see console)")
+        return
+    _setlbl(self, '_sdrc_status_val', sc.status_text)
+    color = {"streaming": "#1a6b1a", "unreachable": "#b71c1c", "error": "#b71c1c",
+             "out_of_span": "#c76000"}.get(sc.status, "#1a1a1a")
+    self._sdrc_status_val.setStyleSheet(f"QLabel {{ color: {color}; }}")
+    _setlbl(self, '_sdrc_device_val', f"{sc.active_device or '—'}  ({sc.tuner})")
+    if sc.device_center_hz:
+        _setlbl(self, '_sdrc_lo_val', f"{sc.device_center_hz/1e6:.6f} MHz  "
+                                      f"(offset {sc.offset_hz/1e3:+.1f} kHz)")
+    else:
+        _setlbl(self, '_sdrc_lo_val', "—")
+    _setlbl(self, '_sdrc_hw_rate_val', f"{sc.device_rate/1e6:.3f} MHz" if sc.device_rate else "—")
+    _setlbl(self, '_sdrc_decim_val', sc.decimator_desc)
+    lna = "—" if sc.lna_state_actual is None else str(sc.lna_state_actual)
+    if sc.lna_state_max is not None:
+        lna += f" of 0–{sc.lna_state_max} (0 = most gain)"
+    _setlbl(self, '_sdrc_lna_val', lna)
+    _setlbl(self, '_sdrc_ant_val', sc.active_antenna or "—")
+    drops = sc.queue_drops + sc.resyncs
+    _set_stream_vals(self, "_sdrc", rate_str, sig_str, noise_str,
+                     f"{sc.queue_drops} queue, {sc.resyncs} gaps" if drops else "0")
+    _set_queue_label(self, '_sdrc_queue_val', sc.sample_queue)
+    _setlbl(self, '_sdrc_in_val', f"{sc.messages} msgs, {sc.bytes_in/1e6:.0f} MB")
+
+
 # ── Window 6: SDRangel ───────────────────────────────────────────────────────
 
 def setup_sdrangel_window(self, view_action):
@@ -1507,13 +1675,15 @@ def on_usrp_gain_ch1_changed(self, value):
 
 # ── Auto show/hide radio windows on source change ─────────────────────────────
 
-_RADIO_WINDOWS = ('_flex_win', '_usrp_win', '_airspy_win', '_rtlsdr_win', '_sdrangel_win')
+_RADIO_WINDOWS = ('_flex_win', '_usrp_win', '_airspy_win', '_rtlsdr_win', '_sdrangel_win',
+                  '_sdrconnect_win')
 _SOURCE_WINDOW  = {
     'radio':    '_flex_win',
     'usrp':     '_usrp_win',
     'airspy':   '_airspy_win',
     'rtlsdr':   '_rtlsdr_win',
     'sdrangel': '_sdrangel_win',
+    'sdrconnect': '_sdrconnect_win',
 }
 
 
@@ -1573,6 +1743,26 @@ def update_source_windows(self):
         _update_rtlsdr_window(self, sig_str, noise_str, rate_str, drops_str)
     if getattr(self, '_sdrangel_win', None) is not None and self._sdrangel_win.isVisible():
         _update_sdrangel_window(self, sig_str, noise_str, rate_str, drops_str)
+    if getattr(self, '_sdrconnect_win', None) is not None and self._sdrconnect_win.isVisible():
+        _update_sdrconnect_window(self, sig_str, noise_str, rate_str, drops_str)
+    _sdrconnect_status_bar(self)
+
+
+def _sdrconnect_status_bar(self):
+    """Put the SDRconnect problem in the status bar once each time it changes."""
+    sc = getattr(self, 'sdrconnect_client', None)
+    if getattr(self, 'source_mode', None) != 'sdrconnect' or sc is None:
+        self._sdrc_last_status = None
+        return
+    key = (sc.status, sc.status_text)
+    if key == getattr(self, '_sdrc_last_status', None):
+        return
+    self._sdrc_last_status = key
+    if sc.status in ('unreachable', 'out_of_span', 'error', 'launching'):
+        try:
+            self.statusBar().showMessage(sc.status_text, 15000)
+        except Exception:
+            pass
 
 
 def _update_iq_nb_window(self):

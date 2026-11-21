@@ -123,6 +123,8 @@ SOURCE_TAGS = {
     "rtlsdr": "RTL",
     "rtl": "RTL",
     "sdrangel": "SDRANGEL",
+    "sdrconnect": "RSP",
+    "sdrplay": "RSP",
     "wav": "WAV",
 }
 
@@ -171,6 +173,8 @@ def source_tag(source: str | None) -> str:
         return "RTL"
     if "sdrangel" in folded:
         return "SDRANGEL"
+    if "sdrplay" in folded or "sdrconnect" in folded:
+        return "RSP"
     token = re.sub(r"[^A-Za-z0-9]+", "", raw).upper()
     return token[:12] or "RADIO"
 

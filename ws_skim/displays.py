@@ -138,6 +138,19 @@ def _cand_map_brush(epoch_samples: float, coherence):
     return pg.mkBrush(pg.hsvColor(hue, 1.0, 1.0, 0.25 + 0.75 * coh))
 
 
+def _sdrconnect_status(self):
+    """SDRconnect status line for the receiver label while it isn't streaming
+    (not reachable, launching, no IQ, out of span), else None."""
+    if getattr(self, 'source_mode', None) != 'sdrconnect':
+        return None
+    sc = getattr(self, 'sdrconnect_client', None)
+    if sc is None:
+        return "SDRplay — source not available (see console)"
+    if getattr(sc, 'status', '') == 'streaming':
+        return None
+    return f"SDRplay — {getattr(sc, 'status_text', '')}"
+
+
 def _usrp_startup_status(self):
     """B210 startup status line for the receiver label, or None once streaming
     (so the normal flow status takes over).  Driven by USRPSource.startup_phase
@@ -707,6 +720,7 @@ def update_displays(self):
                 _src_names = {
                     'radio': 'Flex Radio', 'usrp': 'USRP B210',
                     'airspy': 'Airspy HF+', 'rtlsdr': 'RTL-SDR',
+                    'sdrconnect': 'SDRplay',
                 }
                 _base = _src_names.get(_src, _src)
 
@@ -741,6 +755,7 @@ def update_displays(self):
 
                 _recv_lbl.setText(
                     _usrp_startup_status(self)
+                    or _sdrconnect_status(self)
                     or f"{_base}{_pkt_str}{_nb_str}{_tx_str}")
     else:
         _recv_lbl = getattr(self, '_receiver_label', None)
@@ -752,9 +767,11 @@ def update_displays(self):
                 _src_names = {
                     'radio': 'Flex Radio', 'usrp': 'USRP B210',
                     'airspy': 'Airspy HF+', 'rtlsdr': 'RTL-SDR',
+                    'sdrconnect': 'SDRplay',
                 }
                 _recv_lbl.setText(
                     _usrp_startup_status(self)
+                    or _sdrconnect_status(self)
                     or f"{_src_names.get(_src, _src)}  waiting…")
 
     # ── Source windows (IQ/NB + per-radio panels) ────────────────────────────

@@ -74,6 +74,7 @@ def setup_screenshot_window(self, view_action):
         ('_usrp_win',         "USRP B210",             "map144_usrp_b210"),
         ('_airspy_win',       "Airspy HF+",            "map144_airspy"),
         ('_rtlsdr_win',       "RTL-SDR",               "map144_rtlsdr"),
+        ('_sdrconnect_win',   "SDRplay (SDRconnect)",  "ws_skim_sdrplay"),
     ]
     self._screenshot_win._window_entries = _WINDOWS
 

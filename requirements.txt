@@ -27,3 +27,7 @@ flexclient>=0.1
 # on Linux (PipeWire/paplay path).  Lazy-imported only when the PortAudio
 # transport is selected.
 sounddevice>=0.4.6
+
+# websockets — SDRplay (SDRconnect) source talks to SDRconnect's WebSocket API.
+# Pure Python; the sync client is used (>= 13 has recv(timeout=)).
+websockets>=13

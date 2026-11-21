@@ -39,6 +39,7 @@ from .ui import (
     on_select_source_rtlsdr,
     on_select_source_usrp,
     on_select_source_sdrangel,
+    on_select_source_sdrconnect,
     on_band_changed,
     _retune_active_source,
     _on_about,
@@ -78,6 +79,7 @@ class WSSkimVisualizer(Engine, QtWidgets.QMainWindow):
     on_select_source_rtlsdr = on_select_source_rtlsdr
     on_select_source_usrp     = on_select_source_usrp
     on_select_source_sdrangel = on_select_source_sdrangel
+    on_select_source_sdrconnect = on_select_source_sdrconnect
     on_band_changed           = on_band_changed
     _retune_active_source = _retune_active_source
     _on_about             = _on_about

@@ -59,9 +59,9 @@ from .plot_style import (
 # (used exclusively for 6m in this installation).
 MSK144_BANDS = [
     # (display label,    freq MHz,  compatible source_mode values)
-    ("6m   50.260 MHz",   50.260, {'usrp', 'rtlsdr', 'radio', 'sdrangel'}),
-    ("2m  144.150 MHz",  144.150, {'usrp', 'rtlsdr', 'sdrangel'}),
-    ("1¼m 222.090 MHz",  222.090, {'usrp', 'rtlsdr', 'sdrangel'}),
+    ("6m   50.260 MHz",   50.260, {'usrp', 'rtlsdr', 'radio', 'sdrangel', 'sdrconnect'}),
+    ("2m  144.150 MHz",  144.150, {'usrp', 'rtlsdr', 'sdrangel', 'sdrconnect'}),
+    ("1¼m 222.090 MHz",  222.090, {'usrp', 'rtlsdr', 'sdrangel', 'sdrconnect'}),
 ]
 #: MSK144 (meteor scatter) is offered only on these bands, MHz (6 m, 2 m,
 #: 1.25 m).  WSJT-X's default list also has 432.360 and Region 1's 70.230,
@@ -92,9 +92,10 @@ def msk144_band_for(freq_mhz):
 # FT8 / FT4 dial frequencies (WSJT-X defaults, USB).  HF is reachable with the
 # Flex (it follows the SmartSDR pan; the pick here sets the dial the decode
 # list measures offsets from), the Airspy HF+ and SDRangel.
-_HF  = {'radio', 'airspy', 'sdrangel'}
-_6M  = {'usrp', 'rtlsdr', 'radio', 'sdrangel'}
-_VHF = {'usrp', 'rtlsdr', 'sdrangel'}
+# SDRplay radios (via SDRconnect) cover 1 kHz – 2 GHz, so every band.
+_HF  = {'radio', 'airspy', 'sdrangel', 'sdrconnect'}
+_6M  = {'usrp', 'rtlsdr', 'radio', 'sdrangel', 'sdrconnect'}
+_VHF = {'usrp', 'rtlsdr', 'sdrangel', 'sdrconnect'}
 FT8_BANDS = [
     ("160m   1.840 MHz",   1.840, _HF),
     ("80m    3.573 MHz",   3.573, _HF),
@@ -228,6 +229,7 @@ def setup_ui(self):
     from .source_windows import (
         setup_iq_nb_window, setup_flex_window, setup_usrp_window,
         setup_airspy_window, setup_rtlsdr_window, setup_sdrangel_window,
+        setup_sdrconnect_window,
     )
     from .reporting_window import setup_reporting_window
     from .map65_window import setup_map65_window
@@ -285,6 +287,14 @@ def setup_ui(self):
     self.source_action_group.addAction(self.source_sdrangel_action)
     file_menu.addAction(self.source_sdrangel_action)
 
+    self.source_sdrconnect_action = QtWidgets.QAction("SDRplay (SDRconnect)", self)
+    self.source_sdrconnect_action.setCheckable(True)
+    self.source_sdrconnect_action.setToolTip(
+        "SDRplay radios such as the RSPduo, through SDRplay's SDRconnect program")
+    self.source_sdrconnect_action.triggered.connect(self.on_select_source_sdrconnect)
+    self.source_action_group.addAction(self.source_sdrconnect_action)
+    file_menu.addAction(self.source_sdrconnect_action)
+
     self.source_wav_action = QtWidgets.QAction("WAV File", self)
     self.source_wav_action.setCheckable(True)
     self.source_wav_action.triggered.connect(self.on_select_source_wav)
@@ -321,10 +331,12 @@ def setup_ui(self):
     airspy_action      = QtWidgets.QAction("Airspy HF+",           self)
     rtlsdr_action      = QtWidgets.QAction("RTL-SDR",              self)
     sdrangel_action    = QtWidgets.QAction("SDRangel",             self)
+    sdrconnect_action  = QtWidgets.QAction("SDRplay (SDRconnect)", self)
     # Toggle-style View entries — checked state mirrors window visibility.
     for act in (fg_action, det_action, sync_det_action, cand_map_action, iq_nb_action,
                 reporting_action, map65_action, band_map_action,
-                flex_action, usrp_action, airspy_action, rtlsdr_action, sdrangel_action):
+                flex_action, usrp_action, airspy_action, rtlsdr_action, sdrangel_action,
+                sdrconnect_action):
         act.setCheckable(True)
         act.setChecked(True)
         view_menu.addAction(act)
@@ -763,6 +775,7 @@ def setup_ui(self):
     setup_airspy_window(self,     airspy_action)
     setup_rtlsdr_window(self,     rtlsdr_action)
     setup_sdrangel_window(self,   sdrangel_action)
+    setup_sdrconnect_window(self, sdrconnect_action)
     setup_screenshot_window(self, screenshot_action)
 
     # ── Wire View menu actions ────────────────────────────────────────────────
@@ -809,6 +822,9 @@ def setup_ui(self):
     sdrangel_action.triggered.connect(
         lambda checked: self._sdrangel_win.show() if checked else self._sdrangel_win.hide()
     )
+    sdrconnect_action.triggered.connect(
+        lambda checked: self._sdrconnect_win.show() if checked else self._sdrconnect_win.hide()
+    )
     screenshot_action.triggered.connect(
         lambda checked: self._screenshot_win.show() if checked else self._screenshot_win.hide()
     )
@@ -827,6 +843,7 @@ def setup_ui(self):
         (self._airspy_win,     'airspy_geometry',     QtCore.QRect(450, 870, 360, 340)),
         (self._rtlsdr_win,     'rtlsdr_geometry',     QtCore.QRect(450, 870, 360, 340)),
         (self._sdrangel_win,   'sdrangel_geometry',   QtCore.QRect(450, 100, 360, 400)),
+        (self._sdrconnect_win, 'sdrconnect_geometry', QtCore.QRect(450, 100, 400, 560)),
         (self._screenshot_win, 'screenshot_geometry', QtCore.QRect(50,  50,  340, 440)),
     ]
     # Main window: now a compact status page.  Its old geometry (the tall
@@ -875,7 +892,8 @@ def setup_ui(self):
     else:                  self._band_map_win.hide()
 
     # Radio windows start hidden
-    for win in (self._flex_win, self._usrp_win, self._airspy_win, self._rtlsdr_win, self._sdrangel_win):
+    for win in (self._flex_win, self._usrp_win, self._airspy_win, self._rtlsdr_win,
+                self._sdrangel_win, self._sdrconnect_win):
         win.hide()
         if win._view_action is not None:
             win._view_action.setChecked(False)
@@ -918,6 +936,8 @@ def setup_ui(self):
         QtCore.QTimer.singleShot(0, self.on_select_source_rtlsdr)
     elif _last_mode == 'sdrangel':
         QtCore.QTimer.singleShot(0, self.on_select_source_sdrangel)
+    elif _last_mode == 'sdrconnect':
+        QtCore.QTimer.singleShot(0, self.on_select_source_sdrconnect)
     elif _last_mode == 'wav':
         # Do not auto-start WAV playback on restart — user must explicitly
         # choose a file.  Auto-playing can cause a crash when a previous
@@ -1155,6 +1175,17 @@ def on_select_source_sdrangel(self):
     self._receiver_label.setText("SDRangel")
 
 
+def on_select_source_sdrconnect(self):
+    from .runtime import _connect_sdrconnect_client
+    from .source_windows import show_source_window
+    _connect_sdrconnect_client(self)
+    self.source_mode = "sdrconnect"
+    self.selected_wav_path = None
+    self.source_sdrconnect_action.setChecked(True)
+    show_source_window(self, "sdrconnect")
+    self._receiver_label.setText("SDRplay")
+
+
 def _retune_active_source(self, freq_mhz: float):
     """Retune the currently streaming source to freq_mhz, if it supports it."""
     mode = getattr(self, 'source_mode', 'idle')
@@ -1174,6 +1205,11 @@ def _retune_active_source(self, freq_mhz: float):
         sc = getattr(self, 'sdrangel_client', None)
         if sc is not None and getattr(self, '_sdrangel_started', False):
             # UDP Sink output is centered on calling_freq; no center_freq override needed.
+            sc.retune(freq_mhz)
+    elif mode == 'sdrconnect':
+        sc = getattr(self, 'sdrconnect_client', None)
+        if sc is not None:
+            # Output stays centred on calling_freq; the worker retunes the LO if needed.
             sc.retune(freq_mhz)
     # Flex (radio): center is controlled by the radio hardware — no retune
 
@@ -1199,6 +1235,7 @@ def on_band_changed(self, idx: int):
     self.source_airspy_action.setEnabled('airspy'    in supported)
     self.source_rtlsdr_action.setEnabled('rtlsdr'    in supported)
     self.source_sdrangel_action.setEnabled('sdrangel' in supported)
+    self.source_sdrconnect_action.setEnabled('sdrconnect' in supported)
 
     # If the active source is now unsupported, uncheck it visually
     # (user must explicitly switch; we don't auto-stop the hardware).
@@ -1209,6 +1246,7 @@ def on_band_changed(self, idx: int):
         'airspy':   getattr(self, 'source_airspy_action',   None),
         'rtlsdr':   getattr(self, 'source_rtlsdr_action',   None),
         'sdrangel': getattr(self, 'source_sdrangel_action', None),
+        'sdrconnect': getattr(self, 'source_sdrconnect_action', None),
     }
     if mode in _mode_action and mode not in supported:
         act = _mode_action[mode]
@@ -1286,6 +1324,7 @@ def _on_fast_graph_click(self, x_sec, y_mhz, modifiers, window='current'):
         'airspy': 'Airspy HF+',
         'rtlsdr': 'RTL-SDR',
         'usrp':   'USRP B210',
+        'sdrconnect': 'SDRplay (SDRconnect)',
     }
     if mode == 'wav' and src_wav:
         from pathlib import Path as _Path

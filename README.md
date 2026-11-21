@@ -82,7 +82,7 @@ under the **Source** menu. Reporting is set up under **View → Reporting**.
 - Reporting of decodes to PSKReporter, GridTracker, N1MM Logger+,
   JTAlert, and DX cluster nodes via the WSJT-X UDP protocol (plus
   PSKReporter IPFIX and DX cluster telnet).
-- FlexRadio DAX IQ and USRP B210 radio sources.
+- FlexRadio DAX IQ, USRP B210 and SDRplay (through SDRconnect) radio sources.
 - A B210 audio/IQ router (`scripts/run-router.sh` / `scripts/windows/run-router.bat`) that
   feeds selected WSJT-X dials as virtual audio, with optional MAP65 /
   QMAP IQ export. MAP65 I/Q export is also available in the GUI
@@ -118,6 +118,7 @@ The plans live on `main`. The feature work itself is not done yet.
 | ------ | --------- | ----- |
 | FlexRadio | DAX IQ via SmartSDR (TCP/UDP) | Linux and Windows. Documented for the 6000 series. |
 | USRP B210 (Ettus) | UHD | Primarily Linux. |
+| SDRplay (RSPduo and others) | SDRconnect WebSocket server | Linux and Windows. WS Skim starts SDRconnect if needed; see [docs/sdrplay-setup.md](docs/sdrplay-setup.md). |
 | IQ WAV file | stereo float32, left=I, right=Q | Linux and Windows, for testing. |
 
 There is no macOS support for the main application.
@@ -141,7 +142,8 @@ Developer and analysis scripts live under `tools/dev/`
 (`analyze_*.py`, `compare_decoders.py`, `generate_msk144.py`, and
 others). B210/UHD install helpers stay under `tools/`.
 
-FlexRadio setup is in [docs/flexradio-setup.md](docs/flexradio-setup.md).
+FlexRadio setup is in [docs/flexradio-setup.md](docs/flexradio-setup.md);
+SDRplay setup is in [docs/sdrplay-setup.md](docs/sdrplay-setup.md).
 Developer notes for running from a git checkout (command-line options,
 environment variables, test signals) are in
 [docs/dev/linux.md](docs/dev/linux.md) and
