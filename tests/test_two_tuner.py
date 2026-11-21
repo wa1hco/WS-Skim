@@ -185,6 +185,10 @@ def test_two_receivers_decode_two_bands_with_rsp1_rsp2_ids(tmp_path, monkeypatch
         rpt.set_context(source="sdrconnect", center_hz=7_074_100, bandwidth_hz=FS)
         assert any(i.startswith("SKIM-RSP2-") for i in rpt.instance_ids())
         receivers.stop(e1)
+        # Decodes still queued in the reporter must not re-open RSP2.
+        for _ in range(3):
+            rpt.report_decode(dict(rec2))
+        time.sleep(0.5)
         assert not any(i.startswith("SKIM-RSP2-") for i in rpt.instance_ids())
         assert any(i.startswith("SKIM-RSP1-") for i in rpt.instance_ids())
     finally:

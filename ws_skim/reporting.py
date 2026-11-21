@@ -742,9 +742,14 @@ class Reporter:
         # dial is the section / calling frequency; Decode delta_frequency is
         # RF − dial.  A region's first decode announces it (Heartbeat first,
         # as WSJT-X does on start-up).
-        if self.wsjtx_enabled and self.my_call and self._sock:
+        src = decode.get("source") or self.source
+        # A second receiver's decode still in the queue after that receiver
+        # stopped must not re-open its (already closed) WSJT-X instance.
+        live_rx = (src == self.source
+                   or source_tag(src) in (getattr(self, "_extra_rx", None) or {}))
+        if self.wsjtx_enabled and self.my_call and self._sock and live_rx:
             rf_hz, dial_hz, audio_hz = rf_dial_audio(decode, freq_hz or self.center_hz)
-            mid = instance_id(decode.get("source") or self.source, dial_hz, mode)
+            mid = instance_id(src, dial_hz, mode)
             rx_df = int(round(audio_hz or 1500))
             new, _changed = self._register_instance(mid, dial_hz, mode, rx_df=rx_df)
             if new:
