@@ -648,6 +648,34 @@ def setup_flex_window(self, view_action):
     self._flex_radio_ip_edit.textChanged.connect(_on_radio_ip_changed)
     radio_form.addRow("Radio IP:", self._flex_radio_ip_edit)
 
+    # WS Skim's own panadapter (default off: follow the operator's SmartSDR pan).
+    from .flex_pan import SETTING_KEY as _OWN_KEY
+    try:
+        _own_saved = str(_SETTINGS.value(_OWN_KEY, 'false')).lower() in ('true', '1')
+    except Exception:
+        _own_saved = False
+    self._flex_own_pan = _own_saved
+    self._flex_own_pan_cb = QtWidgets.QCheckBox("WS Skim makes its own panadapter")
+    self._flex_own_pan_cb.setChecked(_own_saved)
+    self._flex_own_pan_cb.setStyleSheet(f"QCheckBox {{ font-family: {_FONT}; font-size: {_FSZ}; }}")
+    self._flex_own_pan_cb.setToolTip(
+        "On: WS Skim opens a panadapter of its own on the radio (it shows in\n"
+        "SmartSDR and on the front panel, with a muted slice), keeps it on the\n"
+        "selected band with the FT8 and FT4 frequencies inside, and receives it\n"
+        "at 96 kHz (48 kHz while MSK144 is on).  It is removed when WS Skim\n"
+        "stops.  Your own panadapters, slices and transmit settings are not\n"
+        "touched.\n\n"
+        "Off: WS Skim receives whatever your SmartSDR panadapter shows, at 48 kHz.")
+
+    def _on_own_pan_toggled(checked: bool):
+        self._flex_own_pan = bool(checked)
+        _SETTINGS.setValue(_OWN_KEY, bool(checked))
+        if getattr(self, 'radio_client', None) is not None:
+            self._flex_restart_pending = True   # the radio thread reconnects
+
+    self._flex_own_pan_cb.toggled.connect(_on_own_pan_toggled)
+    radio_form.addRow(self._flex_own_pan_cb)
+
     radio_form.addRow("Status:",   _sl("_flex_status_val", "Idle", "#c76000"))
     radio_form.addRow("Model:",    _sl("_flex_model_val"))
     radio_form.addRow("Serial:",   _sl("_flex_serial_val"))
@@ -1936,7 +1964,10 @@ def _update_flex_window(self, sig_str, noise_str, rate_str, drops_str):
 
     # Status
     if rc is None:
-        status, color = "Idle", "#555555"
+        _err = getattr(self, '_flex_last_error', '')
+        status, color = (_err, "#b71c1c") if _err else ("Idle", "#555555")
+    elif getattr(rc, 'owned_error', None):
+        status, color = rc.owned_error, "#b71c1c"
     elif tcp is None:
         status, color = "Discovering...", "#c76000"
     elif not getattr(tcp, '_running', False):
@@ -2007,7 +2038,10 @@ def _update_flex_window(self, sig_str, noise_str, rate_str, drops_str):
         _setlbl(self, '_flex_stream_id_val', f"0x{sid:08x}" if sid else "—")
         _setlbl(self, '_flex_udp_port_val',  str(dax.listen_port))
         slice_id = dax.slice_id
-        if slice_id is None:
+        _owned = getattr(rc, 'owned', None)
+        if _owned is not None and _owned.pan_id:
+            mode = f"Own pan, {(_owned.rate or 48000) // 1000} kHz"
+        elif slice_id is None:
             mode = "—"
         elif slice_id == 0:
             mode = "Panadapter"

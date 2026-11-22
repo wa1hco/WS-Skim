@@ -115,6 +115,7 @@ jobs:
           tests/test_user_paths.py
           tests/test_user_facing_docs.py
           tests/test_sdrconnect_source.py
+          tests/test_flex_owned_pan.py
           tests/test_two_tuner.py::test_parallel_channelizer_kernels_from_four_threads_match_serial
           tests/test_two_tuner.py::test_reconcile_starts_retunes_and_stops_tuner2_without_touching_tuner1
           tests/test_two_tuner.py::test_tuner2_reports_single_tuner_mode

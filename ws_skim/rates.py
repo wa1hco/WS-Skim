@@ -15,10 +15,20 @@ from __future__ import annotations
 BASE_RATE = 48_000
 #: The rate used for FT8/FT4 only, on sources that can deliver it.
 WIDE_RATE = 96_000
-#: Sources whose decimator can switch between the two at run time.
-#: (Flex DAX IQ is fixed at 48 kHz; the others restart to change rate and
-#: stay at 48 kHz for now.)
+#: Sources whose rate can switch between the two at run time.  The Flex
+#: ("radio") joins them only when WS Skim makes its own panadapter (then it
+#: owns the DAX IQ stream and may set its rate); following the operator's
+#: SmartSDR panadapter it stays at 48 kHz.  The others restart to change
+#: rate and stay at 48 kHz for now.
 WIDE_SOURCES = ("sdrconnect",)
+
+
+def is_wide_source(eng, source: str | None = None) -> bool:
+    """True when ``source`` can run ``eng`` at 96 kHz right now."""
+    src = source if source is not None else getattr(eng, "source_mode", "")
+    if src in WIDE_SOURCES:
+        return True
+    return src == "radio" and bool(getattr(eng, "_flex_own_pan", False))
 
 
 def needs_base_rate(eng) -> bool:
@@ -32,6 +42,6 @@ def needs_base_rate(eng) -> bool:
 def wanted_rate(eng, source: str | None = None) -> int:
     """The IQ rate ``eng`` should run at on ``source`` (default its own)."""
     src = source if source is not None else getattr(eng, "source_mode", "")
-    if src in WIDE_SOURCES and not needs_base_rate(eng):
+    if is_wide_source(eng, src) and not needs_base_rate(eng):
         return WIDE_RATE
     return BASE_RATE

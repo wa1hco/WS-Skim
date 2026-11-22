@@ -1218,7 +1218,13 @@ def _retune_active_source(self, freq_mhz: float):
         if sc is not None:
             # Output stays centred on calling_freq; the worker retunes the LO if needed.
             sc.retune(freq_mhz)
-    # Flex (radio): center is controlled by the radio hardware — no retune
+    elif mode == 'radio':
+        # Following SmartSDR's panadapter: the radio sets the centre.  With
+        # WS Skim's own panadapter, steer it to the new band.
+        rc = getattr(self, 'radio_client', None)
+        if rc is not None and getattr(rc, 'own_pan', False):
+            from . import flex_pan
+            flex_pan.reconcile(self)
 
 
 def on_band_changed(self, idx: int):

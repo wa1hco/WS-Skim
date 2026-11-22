@@ -53,6 +53,7 @@ Fields:
                                  ±1.0 full scale after consumer normalisation.
 """
 
+from typing import Optional
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -76,4 +77,5 @@ class VitaPacket:
     sequence:       int
     samples:        np.ndarray  # complex64 array, shape (N, num_channels); channel 0 = primary
     rx_wall:        float = 0.0  # time.time() when the UDP datagram was received (0 = unknown)
+    rate:           Optional[int] = None  # DAX IQ rate from the packet class code (None = unknown)
 

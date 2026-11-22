@@ -10,6 +10,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Fixed
 
+- **Flex: a bad status line could stop all radio replies.**  An error
+  while reading one line from the radio ended WS Skim's reader, after
+  which every command timed out.  The reader now skips the line and
+  carries on.
 - **No second roster window after an upgrade or restart.**  A roster
   window left open reconnects by itself (and reloads to show the new
   version), so WS Skim now waits a few seconds at startup and opens a
@@ -18,14 +22,26 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Flex: WS Skim can make its own panadapter.**  Tick **WS Skim makes
+  its own panadapter** in View → Flex Radio.  WS Skim opens a pan of its
+  own (with a muted slice) on the radio, keeps it on the band from the
+  Band pulldown with FT8 and FT4 inside (40 m: 7.074 and 7.0475, centre
+  between them), and receives it on a free DAX IQ channel (2–4) at
+  96 kHz, 48 kHz while MSK144 is on.  If someone drags that pan away,
+  WS Skim moves it back.  It is removed when WS Skim stops, or at the
+  next start if WS Skim was closed by a crash.  Your own pans, slices
+  and DAX channel 1 are not touched.  Unticked (the default), WS Skim
+  follows your SmartSDR pan at 48 kHz as before.  See
+  docs/flexradio-setup.md.
 - **96 kHz per tuner for FT8/FT4.**  With Source → SDRplay (SDRconnect)
   and MSK144 off, each tuner now hands the decoders 96 kHz instead of
   48 kHz (Tuner 1 and Tuner 2 alike).  On 40 m with the band on FT8
   7.074 that also takes in FT4 at 7.0475, which is decoded and sent on
   WSJT-X UDP as `SKIM-RSP1-40m-FT4-48` when FT4 is ticked in the Mode
   menu.  Band Activity shows the wider span.  Turning MSK144 on goes
-  back to 48 kHz by itself.  The Flex (DAX IQ is 48 kHz), B210, Airspy,
-  RTL-SDR, SDRangel and WAV sources stay at 48 kHz.  When WS Skim tunes
+  back to 48 kHz by itself.  The Flex runs 96 kHz when WS Skim makes
+  its own panadapter (above); the B210, Airspy, RTL-SDR, SDRangel and WAV
+  sources stay at 48 kHz.  When WS Skim tunes
   the radio it keeps the tuner's centre (and its DC spur) outside the
   96 kHz band; if your SDRconnect has a tuner centred inside it, the
   status line says so.

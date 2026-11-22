@@ -95,6 +95,7 @@ from typing import Optional
 import numpy as np
 
 from .common import VITA_UDP_PORT, log
+from .owned_pan import rate_from_class_id
 from .models import VitaPacket
 
 class VITAReceiver:
@@ -268,6 +269,9 @@ class VITAReceiver:
             timestamp_frac=timestamp_frac,
             tsf=tsf,
             sequence=sequence,
-            samples=samples
+            samples=samples,
+            # Class code 0x02E4 = 48 kHz, 0x02E5 = 96 kHz (measured on an 8600):
+            # lets the consumer switch rate exactly at the first packet.
+            rate=rate_from_class_id(class_id),
         )
 

@@ -80,12 +80,14 @@ stop()
 """
 
 import queue
+import threading
 import time
 from typing import Optional
 
 from .common import FLEX_TCP_PORT, VITA_UDP_PORT, _pick_udp_listen_port, log
 from .discovery import discover
 from .models import FlexRadio, VitaPacket
+from .owned_pan import OwnedPan, RadioState
 from .setup import DAXIQSetup
 from .tcp_client import FlexTCPClient
 from .vita import VITAReceiver
@@ -102,7 +104,9 @@ class FlexDAXIQ:
                  dax_channel: int = 1,
                  listen_port: int = VITA_UDP_PORT,
                  bind_client_id: Optional[str] = None,
-                 bind_client_handle: Optional[str] = None):
+                 bind_client_handle: Optional[str] = None,
+                 own_pan: bool = False,
+                 owned_store_path: Optional[str] = None):
         self.radio_ip        = radio_ip
         self.center_freq_mhz = center_freq_mhz
         self.sample_rate     = sample_rate
@@ -114,6 +118,18 @@ class FlexDAXIQ:
         self._dax_setup      = None
         self._vita           = None
         self.transmitting    = False   # True while interlock state is TX_ACTIVE/PTT_REQUESTED
+        # Owned-panadapter mode ("WS Skim makes its own panadapter").
+        self.own_pan          = bool(own_pan)
+        self.owned_store_path = owned_store_path
+        self.owned            = None    # OwnedPan once created
+        self._owned_state     = None    # RadioState fed from status lines
+        self._owned_req_lock  = threading.Lock()
+        self._owned_want_center = None  # latest requested centre (MHz)
+        self._owned_want_rate   = None  # latest requested DAX IQ rate
+        self._owned_wake      = threading.Event()
+        self._owned_stop      = threading.Event()
+        self._owned_thread    = None
+        self.owned_error      = None    # last owned-pan problem, for the UI
 
     def _log_bound_context_diagnostics(self):
         """Log bound-context diagnostics via supported list commands."""
@@ -228,10 +244,12 @@ class FlexDAXIQ:
             self.dax_channel,
             self.listen_port,
         )
-        time.sleep(0.5)  # let status burst populate existing pan/slice state
-
-        # Setup DAXIQ
-        stream_id = self._dax_setup.setup(self.center_freq_mhz)
+        if self.own_pan:
+            stream_id = self._start_owned_pan(radio)
+        else:
+            time.sleep(0.5)  # let status burst populate existing pan/slice state
+            # Setup DAXIQ
+            stream_id = self._dax_setup.setup(self.center_freq_mhz)
 
         # Start VITA receiver
         self._vita = VITAReceiver(
@@ -271,11 +289,135 @@ class FlexDAXIQ:
                 if self.transmitting != was_tx:
                     log.debug(f"TX state → {'TX' if self.transmitting else 'RX'} ({state})")
         self._tcp._status_cb = _interlock_cb
+        if self.owned is not None:
+            self._owned_thread = threading.Thread(
+                target=self._owned_loop, name="flex-owned-pan", daemon=True)
+            self._owned_thread.start()
+
+    # ── owned panadapter ──────────────────────────────────────────────────
+    def _start_owned_pan(self, radio) -> int:
+        """Create WS Skim's own pan + muted slice + DAX IQ stream; return the stream id."""
+        ds = self._dax_setup
+        # Keep the shared status monitor off the operator's pan/stream while
+        # ours is being made (it would otherwise latch the first pan it sees).
+        ds._own_stream_id = -1
+        ds.pan_id = -1
+        state = RadioState()
+        self._owned_state = state
+        prev_cb = self._tcp._status_cb
+        def _feed(line: str):
+            state.feed(line)
+            if prev_cb:
+                prev_cb(line)
+        self._tcp._status_cb = _feed
+        for cmd in ("sub pan all", "sub slice all", "sub dax all", "sub daxiq all", "sub radio all"):
+            try:
+                self._tcp.send_command(cmd, timeout=3.0)
+            except RuntimeError as e:
+                log.debug(f"{cmd}: {e}")
+        time.sleep(1.0)   # let the status burst arrive
+
+        owned = OwnedPan(self._tcp.send_command, state,
+                         client_ip=self._tcp.get_local_ip(), udp_port=self.listen_port,
+                         store_path=self.owned_store_path, radio_key=str(radio.ip))
+        if owned.remove_leftover():
+            owned.refresh()
+        owned.require_snapshot()
+        with state.lock:
+            others = sorted(state.pans)
+            rxant = state.pans[others[0]].get("rxant") if others else None
+        center = self._owned_want_center or self.center_freq_mhz
+        rate = self._owned_want_rate or self.sample_rate
+        try:
+            pan = owned.create(center, rxant=rxant)
+            ds.pan_id = pan
+            ds.slice_id = owned.slice_id
+            ds.pan_frequency_mhz = owned.reported_center_mhz or center
+            stream_id = owned.start_stream(rate)
+        except Exception:
+            self.owned = owned
+            self._teardown_owned()
+            raise
+        ds.stream_id = stream_id
+        ds._own_stream_id = stream_id
+        ds.dax_channel = owned.dax_channel
+        self.dax_channel = owned.dax_channel
+        ds.pan_bandwidth_hz = float(owned.rate or rate)
+        self.sample_rate = owned.rate or rate
+        self.owned = owned
+        return stream_id
+
+    def retune(self, center_mhz: float) -> None:
+        """Steer the owned pan to ``center_mhz`` (no-op when following SmartSDR)."""
+        with self._owned_req_lock:
+            self._owned_want_center = round(float(center_mhz), 6)
+        self._owned_wake.set()
+
+    def set_target_rate(self, rate: int) -> None:
+        """Ask for a DAX IQ rate on the owned stream (48000 / 96000)."""
+        with self._owned_req_lock:
+            self._owned_want_rate = int(rate)
+        self._owned_wake.set()
+
+    @property
+    def wanted_rate(self) -> int:
+        with self._owned_req_lock:
+            return int(self._owned_want_rate or self.sample_rate)
+
+    @property
+    def wanted_center_mhz(self):
+        with self._owned_req_lock:
+            return self._owned_want_center
+
+    def _owned_loop(self):
+        """Worker: applies centre/rate requests and keeps the centre where we put it.
+
+        Runs off the sample thread so a slow or missing radio reply never
+        stalls decoding."""
+        while not self._owned_stop.is_set():
+            self._owned_wake.wait(timeout=1.0)
+            self._owned_wake.clear()
+            if self._owned_stop.is_set():
+                break
+            owned = self.owned
+            if owned is None:
+                break
+            try:
+                with self._owned_req_lock:
+                    c, r = self._owned_want_center, self._owned_want_rate
+                if c is not None and (owned.target_center_mhz is None
+                                      or abs(c - owned.target_center_mhz) > 1e-6):
+                    owned.steer(c)
+                if r is not None and r != owned.rate:
+                    owned.set_rate(r)
+                owned.check()
+                if owned.reported_center_mhz is not None:
+                    self._dax_setup.pan_frequency_mhz = owned.reported_center_mhz
+                if owned.rate:
+                    self._dax_setup.pan_bandwidth_hz = float(owned.rate)
+                self.owned_error = ("WS Skim's panadapter was removed on the radio"
+                                    if owned.gone else None)
+            except Exception as e:      # keep the worker alive
+                log.warning(f"owned pan worker: {e}")
+
+    def _teardown_owned(self):
+        self._owned_stop.set()
+        self._owned_wake.set()
+        owned = self.owned
+        if owned is not None:
+            try:
+                owned.teardown()
+            except Exception as e:
+                log.warning(f"owned pan teardown: {e}")
+        if self._dax_setup is not None:
+            self._dax_setup.stream_id = None   # already removed above
 
     def stop(self):
         if self._vita:
             self._vita.stop()
-        if self._dax_setup:
+        if self.owned is not None:
+            self._teardown_owned()
+        elif self._dax_setup:
             self._dax_setup.teardown()
         if self._tcp:
             self._tcp.disconnect()

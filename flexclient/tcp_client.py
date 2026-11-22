@@ -212,7 +212,13 @@ class FlexTCPClient:
                 buf += chunk
                 while b"\n" in buf:
                     line, buf = buf.split(b"\n", 1)
-                    self._handle_line(line.decode("utf-8", errors="replace"))
+                    try:
+                        self._handle_line(line.decode("utf-8", errors="replace"))
+                    except Exception as e:
+                        # A bad line or a failing status callback must not end
+                        # this thread: every later command reply would then
+                        # time out ("responses stop arriving").
+                        log.warning(f"TCP line handling error (ignored): {e}")
             except Exception as e:
                 if self._running:
                     log.error(f"TCP recv error: {e}")

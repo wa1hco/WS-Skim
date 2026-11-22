@@ -792,14 +792,24 @@ def _connect_radio_client(self):
         _radio_ip_edit = getattr(self, '_flex_radio_ip_edit', None)
         _radio_ip = _radio_ip_edit.text().strip() if _radio_ip_edit is not None else ''
         _radio_ip = _radio_ip or None
-        print(f"[radio] calling FlexDAXIQ(radio_ip={_radio_ip!r})", flush=True)
+        _own = bool(getattr(self, '_flex_own_pan', False))
+        print(f"[radio] calling FlexDAXIQ(radio_ip={_radio_ip!r}, own_pan={_own})", flush=True)
+        _kw = {}
+        if _own:
+            from .user_paths import config_dir as _cfg_dir
+            _kw = dict(own_pan=True,
+                       owned_store_path=str(_cfg_dir() / 'flex_owned_pan.json'))
         self.radio_client = flex_client_class(
             radio_ip=_radio_ip,
             center_freq_mhz=self.center_freq_mhz,
             sample_rate=rates.BASE_RATE,
             dax_channel=1,
             bind_client_id=getattr(self, 'bind_client_id', None),
+            **_kw,
         )
+        if _own:
+            from . import flex_pan
+            flex_pan.reconcile(self)   # centre + rate before start() creates the pan
         t_connect = _time.monotonic()
         print(f"[radio] FlexDAXIQ connected ({t_connect - t_import:.2f}s in ctor; {t_connect - t0:.2f}s total)", flush=True)
     except Exception as exc:
@@ -919,12 +929,14 @@ def _start_radio_source(self) -> bool:
         _set_dual_pol(self, False)
         self.radio_client.start()
         self._radio_started = True
+        self._flex_last_error = ''
         if hasattr(self, '_jt9_markers'):
             self._jt9_markers.clear()
         _clear_decode_panel_on_source_start(self)
         return True
     except Exception as exc:
         print(f"Radio client start error: {exc}", flush=True)
+        self._flex_last_error = str(exc)[:80]
         import traceback
         traceback.print_exc()
         try:
@@ -943,6 +955,34 @@ def _stop_radio_source(self):
     except Exception:
         pass
     self._radio_started = False
+
+
+def _reconcile_flex_pan(self):
+    """Owned Flex panadapter: keep its centre on the band and its rate right."""
+    now = time.monotonic()
+    if now - getattr(self, '_flex_pan_checked', 0.0) < 0.5:
+        return
+    self._flex_pan_checked = now
+    try:
+        from . import flex_pan
+        flex_pan.reconcile(self)
+    except Exception as exc:
+        print(f"[radio] owned-pan reconcile error: {exc}", flush=True)
+
+
+def _restart_radio_client(self):
+    """Re-create the Flex client after "makes its own panadapter" changed.
+
+    Runs on the radio thread: stops the old client (an owned pan and its
+    stream are removed) and builds a new one with the current setting.
+    """
+    self._flex_restart_pending = False
+    if self.radio_client is None:
+        return
+    print("[radio] panadapter option changed; restarting the Flex connection", flush=True)
+    _stop_radio_source(self)
+    self.radio_client = None
+    _connect_radio_client(self)
 
 
 def _reset_wav_timeline(self):
@@ -1342,9 +1382,10 @@ def run_radio_source(self):
             if self.source_mode != "usrp" and getattr(self, '_wsjtx_exports', None):
                 _teardown_wsjtx_audio_export(self)
 
-            # Only SDRconnect switches to 96 kHz (FT8/FT4); every other
-            # source delivers 48 kHz, so put the engine back there first.
-            if self.source_mode not in rates.WIDE_SOURCES and int(self.sample_rate) != rates.BASE_RATE:
+            # Only SDRconnect, and the Flex with its own panadapter, switch to
+            # 96 kHz (FT8/FT4); every other source delivers 48 kHz, so put the
+            # engine back there first.
+            if not rates.is_wide_source(self) and int(self.sample_rate) != rates.BASE_RATE:
                 self.set_sample_rate(rates.BASE_RATE)
 
             if self.source_mode == "idle":
@@ -1589,9 +1630,12 @@ def run_radio_source(self):
 
             if getattr(self, '_sdrconnect_started', False):
                 _stop_sdrconnect_source(self)
+            if getattr(self, '_flex_restart_pending', False):
+                _restart_radio_client(self)
             if not _start_radio_source(self):
                 time.sleep(1.0)
                 continue
+            _reconcile_flex_pan(self)
 
 
             # Drain packets and batch them before calling process_iq_data.
@@ -1636,6 +1680,16 @@ def run_radio_source(self):
                         else:
                             break
 
+                    # Owned panadapter: the stream's rate can change (96/48 kHz);
+                    # the packet class code says which, so switch exactly here.
+                    _prate = getattr(packet, 'rate', None)
+                    if (_prate and int(_prate) != int(self.sample_rate)
+                            and getattr(self.radio_client, 'own_pan', False)):
+                        if _batch_chunks:
+                            self._chunk_rx_wall = _batch_rx_wall
+                            self.process_iq_data(np.concatenate(_batch_chunks), 0, 0)
+                            _batch_chunks, _batch_ts_int, _batch_ts_frac, _batch_n = [], None, None, 0
+                        self.set_sample_rate(int(_prate))
                     # Normalise FlexRadio DAXIQ samples from ±32768 ADC scale to ±1.0.
                     # Flex is always single-channel; apply polarization combine (ch0 passthrough).
                     pkt_chunk = (_polarization_combine(np.asarray(packet.samples, dtype=np.complex64))
