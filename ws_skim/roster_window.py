@@ -30,6 +30,11 @@ from .roster.server import RosterServer
 #: Settings keys.
 GEOMETRY_KEY = "roster_geometry"
 VISIBLE_KEY = "roster_visible"
+# Wait this long at startup for an already-open roster window to reconnect.
+REOPEN_WAIT_MS = 5000
+WATCH_MS = 1000
+# No page connected for this many seconds means the user closed the window.
+CLOSED_AFTER_TICKS = 10
 LOG_PATH_KEY = "roster_log_path"
 CHECKLIST_KEY = "roster_checklist"
 WIN_X_KEY = "roster_win_x"
@@ -198,9 +203,44 @@ def setup_roster_window(self, view_action) -> None:
 
     def _on_toggle(checked):
         s.setValue(VISIBLE_KEY, bool(checked))
-        if checked and should_open_browser():
+        if checked and should_open_browser() and server.client_count == 0:
             _open_page(server, s)
 
     view_action.triggered.connect(_on_toggle)
-    if visible and should_open_browser():
-        _open_page(server, s)
+
+    # A roster window left open from the last run (for example across an
+    # upgrade) reconnects by itself within a few seconds, so wait before
+    # deciding to open one.  Closing the roster window unticks View → Roster,
+    # so WS Skim doesn't reopen a window the user closed.
+    state = {"seen": False, "idle": 0}
+
+    def _startup_open():
+        if (view_action.isChecked() and should_open_browser()
+                and server.client_count == 0):
+            _open_page(server, s)
+
+    def _watch_clients():
+        if server.client_count > 0:
+            state["seen"] = True
+            state["idle"] = 0
+            if not view_action.isChecked():
+                handle.show()
+                s.setValue(VISIBLE_KEY, True)
+            return
+        if not state["seen"] or not view_action.isChecked():
+            return
+        state["idle"] += 1
+        if state["idle"] >= CLOSED_AFTER_TICKS:
+            state["seen"] = False
+            state["idle"] = 0
+            handle.hide()
+            s.setValue(VISIBLE_KEY, False)
+
+    from PyQt5 import QtCore
+    timer = QtCore.QTimer(self)
+    timer.setInterval(WATCH_MS)
+    timer.timeout.connect(_watch_clients)
+    timer.start()
+    self._roster_watch_timer = timer
+    if visible:
+        QtCore.QTimer.singleShot(REOPEN_WAIT_MS, _startup_open)

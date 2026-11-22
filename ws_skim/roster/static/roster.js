@@ -524,10 +524,16 @@ function connect() {
   rosSyncMaxAgeControl();
   rosSyncModeChecks();
   const es = new EventSource("/events");
-  es.onopen = () => { $("conn").textContent = "● live"; $("conn").className = "up"; };
+  let dropped = false;
+  es.onopen = () => {
+    // Back after WS Skim restarted (e.g. an upgrade): reload so this window
+    // shows the new version's page instead of WS Skim opening a second one.
+    if (dropped) { location.reload(); return; }
+    $("conn").textContent = "● live"; $("conn").className = "up";
+  };
   es.onmessage = (e) => {
     try { renderState(JSON.parse(e.data)); } catch (_) {}
   };
-  es.onerror = () => { $("conn").textContent = "● disconnected"; $("conn").className = "down"; };
+  es.onerror = () => { dropped = true; $("conn").textContent = "● disconnected"; $("conn").className = "down"; };
 }
 connect();

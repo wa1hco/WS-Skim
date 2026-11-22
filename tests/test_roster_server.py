@@ -143,3 +143,23 @@ def test_stop_without_start_does_not_block():
     done = threading.Event()
     threading.Thread(target=lambda: (s.stop(), done.set()), daemon=True).start()
     assert done.wait(5), "stop() blocked on a server that was never started"
+
+
+def test_client_count_tracks_open_event_streams(server):
+    """An open roster page counts as a client, so startup won't open another."""
+    import http.client
+    assert server.client_count == 0
+    conn = http.client.HTTPConnection(server.host, server.port, timeout=3)
+    conn.request("GET", "/events")
+    resp = conn.getresponse()
+    resp.fp.readline()  # first SSE line arrives once the stream is open
+    deadline = time.time() + 2
+    while server.client_count == 0 and time.time() < deadline:
+        time.sleep(0.02)
+    assert server.client_count == 1
+    resp.close()
+    conn.close()
+    deadline = time.time() + 8
+    while server.client_count and time.time() < deadline:
+        time.sleep(0.05)
+    assert server.client_count == 0

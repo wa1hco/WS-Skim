@@ -8,6 +8,14 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ## Unreleased
 
+### Fixed
+
+- **No second roster window after an upgrade or restart.**  A roster
+  window left open reconnects by itself (and reloads to show the new
+  version), so WS Skim now waits a few seconds at startup and opens a
+  window only if none came back.  Closing the roster window unticks
+  View → Roster, so WS Skim no longer reopens a window you closed.
+
 ### Added
 
 - **96 kHz per tuner for FT8/FT4.**  With Source → SDRplay (SDRconnect)

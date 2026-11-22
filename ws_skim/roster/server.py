@@ -51,7 +51,23 @@ class RosterServer:
         self._httpd: _QuietHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._clients = 0
+        self._clients_lock = threading.Lock()
         self.port = self._bind(port)
+
+    @property
+    def client_count(self) -> int:
+        """Roster pages connected to ``/events`` right now.
+
+        A roster window left open from before an upgrade or restart reconnects
+        on its own, so WS Skim checks this before opening another window.
+        """
+        with self._clients_lock:
+            return self._clients
+
+    def _client_delta(self, d: int) -> None:
+        with self._clients_lock:
+            self._clients = max(0, self._clients + d)
 
     def _bind(self, port: int | None) -> int:
         tried = []
@@ -212,6 +228,7 @@ class RosterServer:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
 
             def _events(self) -> None:
+                server._client_delta(+1)
                 try:
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
@@ -227,6 +244,8 @@ class RosterServer:
                     return
                 except Exception:
                     return
+                finally:
+                    server._client_delta(-1)
 
         return Handler
 
