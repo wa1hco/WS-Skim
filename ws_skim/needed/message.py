@@ -31,10 +31,20 @@ _DIRECTED = frozenset({
 
 
 def extract_grid(message: str | None) -> str | None:
+    """First whole token that is a Maidenhead grid.
+
+    RR73 has the shape of a grid (it is a real square in the Arctic Ocean),
+    but in a decode it is always the sign-off, so it never counts as one.
+    """
     if not message:
         return None
-    m = _GRID_RE.search(message)
-    return m.group(1).upper()[:4] if m else None
+    for tok in message.split():
+        if tok.upper() in _SIGNOFF:
+            continue
+        m = _GRID_RE.fullmatch(tok)
+        if m:
+            return m.group(1).upper()[:4]
+    return None
 
 
 def _plain(token: str) -> str | None:

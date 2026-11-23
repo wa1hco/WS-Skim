@@ -188,3 +188,16 @@ def test_roster_json_shape_and_one_row_per_station(tmp_path):
     assert snap["log"]["count"] == 1
     assert snap["checklist"]["items"]
     assert band_label_khz(14075) == "20m"
+
+
+@pytest.mark.parametrize("msg,grid", [
+    ("K1ABC W9XYZ RR73", None),
+    ("K1ABC W9XYZ RRR", None),
+    ("K1ABC W9XYZ 73", None),
+    ("CQ W9XYZ EN52", "EN52"),
+    ("K1ABC W9XYZ EN52", "EN52"),
+    ("K1ABC W9XYZ R-12", None),
+    ("K1ABC RR73; W9XYZ <KA1ABC> -08", None),
+])
+def test_rr73_is_never_a_grid(msg, grid):
+    assert interpret(msg)[3] == grid

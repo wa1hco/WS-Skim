@@ -10,6 +10,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Fixed
 
+- **RR73 was read as a grid.**  A sign-off like "K1ABC W9XYZ RR73"
+  made the roster treat RR73 as the station's grid (it has a grid's
+  shape) and show the station as a needed grid.  Only a whole word that
+  is a grid counts now, and RR73, RRR and 73 never do.
 - **Flex: a bad status line could stop all radio replies.**  An error
   while reading one line from the radio ended WS Skim's reader, after
   which every command timed out.  The reader now skips the line and
