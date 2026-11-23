@@ -142,7 +142,11 @@ def state(app) -> dict:
     tx_ours = bool(rc is not None and getattr(rc, "tx_on_own_slice", False))
     letter = getattr(rc, "own_slice_letter", None) if rc is not None else None
     warn = ""
-    if tx_ours and not st.get("transmitting"):
+    pending = bool(rc is not None and getattr(rc, "tx_handback_pending", False))
+    note = str(getattr(rc, "tx_handback_note", "") or "") if rc is not None else ""
+    if note:
+        warn = note
+    elif tx_ours and not st.get("transmitting") and not pending:
         warn = (f"Transmit is on WS Skim's slice {letter or ''}.  Click TX on your own "
                 "slice before you talk or send CW.")
     return {
@@ -152,6 +156,7 @@ def state(app) -> dict:
         "running": bool(st.get("running")),
         "transmitting": bool(st.get("transmitting")),
         "tx_on_skim_slice": tx_ours,
+        "handback_pending": pending,
         "warning": warn,
     }
 

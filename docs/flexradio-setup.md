@@ -33,6 +33,13 @@ WS Skim then:
 Your own panadapters, slices, DAX channels and transmit settings are not
 changed. Your other programs on DAX IQ channel 1 keep running.
 
+Band memory: when a new panadapter opens, the radio can move a DAX IQ
+channel onto it from one of your panadapters (seen with channel 1). WS
+Skim never changes your panadapters, so it does not put the channel back
+itself; it takes its own free channel, and View → Flex Radio tells you
+which panadapter lost which channel. If you use that channel, set it
+again in SmartSDR (WS Skim in follow mode sets it by itself).
+
 Note: if WS Skim's slice is the only slice on the radio, SmartSDR makes it
 the transmit slice. WS Skim never transmits, but open a slice of your own
 before you transmit.
@@ -77,9 +84,17 @@ WS Skim is doing.
 
 Transmitting: the radio has one transmitter and one transmit slice.
 When WSJT-X for WS Skim transmits, the transmit slice moves to WS Skim's
-slice and stays there afterwards. Before you talk or send CW, click TX on
-your own slice. WS Skim shows a warning while transmit is left on its
-slice. WS Skim itself never keys the radio or moves transmit.
+slice. As soon as that transmission ends, WS Skim gives transmit back to
+the slice that had it before (normally your slice A), so your microphone,
+key and your own WSJT-X work as usual between WS Skim's periods. That is
+the only time WS Skim moves transmit, and WS Skim itself never keys the
+radio. If the slice that had transmit is gone by then, transmit stays on
+WS Skim's slice and the roster shows a warning: click TX on your own
+slice before you talk or send CW.
+
+Do not key your own radio while WSJT-X for WS Skim is sending: it does
+not stop by itself. Untick Enable Tx (or press Halt Tx) in WSJT-X for WS
+Skim first.
 
 Change bands with WS Skim's Band pulldown, not in WSJT-X for WS Skim:
 WS Skim keeps its pan, and the slice with it, on the band it is

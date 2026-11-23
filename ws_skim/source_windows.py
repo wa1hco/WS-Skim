@@ -2334,13 +2334,15 @@ def _refresh_skim_wsjtx(self) -> None:
         if getattr(self, 'radio_client', None) is not None:
             click_to_work.apply_dax_audio(self)
         st = click_to_work.state(self)
+        rc = getattr(self, 'radio_client', None)
+        notice = str(getattr(rc, 'own_pan_notice', '') or '') if rc is not None else ''
     except Exception as exc:
         lbl.setText(f"WSJT-X for WS Skim: {exc}")
         return
     if not st.get("set_up"):
-        lbl.setText("")
+        lbl.setText(notice)
         return
-    text = st.get("text", "")
+    text = st.get("text", "") + (f"\n{notice}" if notice else "")
     if st.get("warning"):
         lbl.setText(f"{text}\n{st['warning']}")
         lbl.setStyleSheet(lbl.styleSheet().replace("#333333", "#a03000"))

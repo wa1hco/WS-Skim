@@ -32,8 +32,10 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   nCAT and nDAX helpers for that slice), plus a launcher for it.  Your
   other WSJT-X copies are not changed.  With it running, double-click a
   station in the roster: WS Skim tunes its slice to the station and,
-  when that WSJT-X decodes it, tells it to call.  WS Skim warns when
-  transmit is left on its slice.  Linux for now.  See
+  when that WSJT-X decodes it, tells it to call.  After each
+  transmission from that WSJT-X, WS Skim gives transmit back to the
+  slice that had it before (your slice), and warns if it cannot.  It
+  never keys the radio.  Linux for now.  See
   docs/flexradio-setup.md.
 - **Flex: WS Skim can make its own panadapter.**  Tick **WS Skim makes
   its own panadapter** in View → Flex Radio.  WS Skim opens a pan of its
@@ -43,7 +45,9 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
   96 kHz, 48 kHz while MSK144 is on.  If someone drags that pan away,
   WS Skim moves it back.  It is removed when WS Skim stops, or at the
   next start if WS Skim was closed by a crash.  Your own pans, slices
-  and DAX channel 1 are not touched.  Unticked (the default), WS Skim
+  and DAX channel 1 are not touched; if the radio's band memory moves a
+  DAX IQ channel off one of your pans while WS Skim's pan opens, WS
+  Skim leaves your pan alone and tells you.  Unticked (the default), WS Skim
   follows your SmartSDR pan at 48 kHz as before.  See
   docs/flexradio-setup.md.
 - **96 kHz per tuner for FT8/FT4.**  With Source → SDRplay (SDRconnect)

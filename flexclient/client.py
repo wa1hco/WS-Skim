@@ -290,6 +290,8 @@ class FlexDAXIQ:
                 self.transmitting = state in ('PTT_REQUESTED', 'TRANSMITTING', 'UNKEY_REQUESTED', 'TX_FAULT')
                 if self.transmitting != was_tx:
                     log.debug(f"TX state → {'TX' if self.transmitting else 'RX'} ({state})")
+                    if self.owned is not None:
+                        self._owned_wake.set()      # hand transmit back promptly
         self._tcp._status_cb = _interlock_cb
         if self.owned is not None:
             self._owned_thread = threading.Thread(
@@ -388,6 +390,27 @@ class FlexDAXIQ:
         return owned.slice_hold_mhz if owned is not None else None
 
     @property
+    def tx_handback_pending(self) -> bool:
+        owned = self.owned
+        return bool(owned is not None and owned.handback_pending())
+
+    @property
+    def tx_handback_note(self) -> str:
+        owned = self.owned
+        return owned.handback_note if owned is not None else ""
+
+    @property
+    def own_pan_notice(self) -> str:
+        """A DAX IQ channel the radio moved off another pan while ours was made."""
+        owned = self.owned
+        d = getattr(owned, "displaced_dax", None) if owned is not None else None
+        if not d:
+            return ""
+        return (f"When WS Skim made its panadapter, the radio moved DAX IQ channel "
+                f"{d['channel']} off panadapter 0x{d['pan']:08X}.  WS Skim left it alone; "
+                f"set it again in SmartSDR if you use it.")
+
+    @property
     def tx_on_own_slice(self) -> bool:
         owned = self.owned
         return bool(owned is not None and owned.tx_on_our_slice)
@@ -429,6 +452,7 @@ class FlexDAXIQ:
                     owned.set_dax_audio(dax[0])
                 if hold is not None:
                     owned.hold_slice(hold[1])
+                owned.handback_tx()
                 owned.check()
                 if owned.reported_center_mhz is not None:
                     self._dax_setup.pan_frequency_mhz = owned.reported_center_mhz

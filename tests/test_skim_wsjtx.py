@@ -483,3 +483,141 @@ def test_flex_window_has_set_up_button_that_explains_what_is_missing(monkeypatch
     assert shown and "own panadapter" in shown[0]
     host._skim_wsjtx_timer.stop()
     host.deleteLater()
+
+
+# ── transmit hand-back (Jeff's decision, Nov 23) ────────────────────────────
+
+def _tx_cmds(radio):
+    return [c for c in radio.cmds if re.search(r"\btx(=|\b)", c) or c.startswith("xmit")]
+
+
+def _skim_sends(radio, o, ilk_states=("PTT_REQUESTED", "TRANSMITTING", "UNKEY_REQUESTED", "READY")):
+    """What nCAT + the radio do when WSJT-X for WS Skim keys: tx moves to our
+    slice (the operator's loses it), the interlock runs through its states."""
+    radio.emit(f"slice {OP_SLICE} tx=0")
+    radio.emit(f"slice {o.slice_id} tx=1")
+    radio.slices[OP_SLICE]["tx"] = "0"; radio.slices[o.slice_id]["tx"] = "1"
+    for st in ilk_states:
+        radio.emit(f"interlock state={st} tx_client_handle=0x00000001")
+        if st != "READY":
+            assert o.handback_tx() is None          # never while sending
+
+
+def test_handback_gives_tx_to_the_slice_that_had_it_after_unkey():
+    radio = FakeRadio()
+    o = _owned(radio)
+    o.create(24.912)
+    radio.emit(f"slice {OP_SLICE} tx=1")
+    radio.emit("interlock state=READY")
+    _skim_sends(radio, o)
+    assert o.handback_pending()
+    assert o.handback_tx() == OP_SLICE
+    assert _tx_cmds(radio) == [f"slice set {OP_SLICE} tx=1"]
+    assert o.handback_tx() is None                  # once per transmission
+    # Next period: tx moves to our slice again, hand back again.
+    radio.emit(f"slice {OP_SLICE} tx=1")
+    _skim_sends(radio, o)
+    assert o.handback_tx() == OP_SLICE
+    assert _tx_cmds(radio) == [f"slice set {OP_SLICE} tx=1"] * 2
+    assert not any(c.startswith("xmit") for c in radio.cmds)
+
+
+def test_no_handback_when_our_slice_never_transmitted():
+    radio = FakeRadio()
+    o = _owned(radio)
+    o.create(24.912)
+    radio.emit(f"slice {OP_SLICE} tx=1")
+    radio.emit(f"slice {OP_SLICE} tx=0")
+    radio.emit(f"slice {o.slice_id} tx=1")          # operator clicked TX on B
+    radio.emit("interlock state=READY")
+    for _ in range(3):
+        assert o.handback_tx() is None
+    assert _tx_cmds(radio) == []
+
+
+def test_no_handback_when_the_earlier_slice_is_gone():
+    radio = FakeRadio()
+    o = _owned(radio)
+    o.create(24.912)
+    radio.emit(f"slice {OP_SLICE} tx=1")
+    _skim_sends(radio, o)
+    radio.emit(f"slice {OP_SLICE} in_use=0")        # operator closed slice A
+    assert o.handback_tx() is None
+    assert _tx_cmds(radio) == []
+    assert "gone" in o.handback_note
+
+
+def test_no_handback_when_radio_gave_us_tx_as_only_slice():
+    radio = FakeRadio()
+    radio.slices.pop(OP_SLICE); radio.state.slices.pop(OP_SLICE, None)
+    o = _owned(radio)
+    o.create(24.912)
+    radio.emit(f"slice {o.slice_id} tx=1")
+    for st in ("TRANSMITTING", "READY"):
+        radio.emit(f"interlock state={st}")
+    assert o.handback_tx() is None
+    assert _tx_cmds(radio) == []
+
+
+def test_handback_can_be_switched_off_and_never_touches_other_slices():
+    radio = FakeRadio()
+    radio.slices[5] = {"pan": 0x40000000, "freq": 14.2, "tx": "0", "audio_mute": "0"}
+    radio.dump()
+    o = _owned(radio)
+    o.create(24.912)
+    radio.emit(f"slice {OP_SLICE} tx=1")
+    _skim_sends(radio, o)
+    o.handback_enabled = False
+    assert o.handback_tx() is None and _tx_cmds(radio) == []
+    o.handback_enabled = True
+    assert o.handback_tx() == OP_SLICE
+    assert not any(re.match(r"slice (set|tune|t|r|remove) 5\b", c) for c in radio.cmds)
+
+
+def test_warning_text_follows_the_handback(tmp_path, monkeypatch):
+    app, lk, sock = _app(tmp_path, monkeypatch)
+    app.radio_client.tx_on_own_slice = True
+    app.radio_client.tx_handback_pending = True
+    app.radio_client.tx_handback_note = ""
+    assert click_to_work.state(app)["warning"] == ""
+    app.radio_client.tx_handback_pending = False
+    app.radio_client.tx_handback_note = "Transmit is on WS Skim's slice and the slice that had it before is gone; click TX on your own slice."
+    assert "gone" in click_to_work.state(app)["warning"]
+
+
+# ── DAX IQ channel guard during create ──────────────────────────────────────
+
+class PersistRadio(FakeRadio):
+    """Band memory: the new pan takes DAX IQ channel 1 off the operator's pan."""
+
+    def send(self, cmd, timeout=5.0):
+        out = super().send(cmd, timeout)
+        if cmd.startswith("display pan c "):
+            pid = int(out.split(",")[0], 16)
+            self.pans[pid]["daxiq_channel"] = 1
+            from test_flex_owned_pan import OP_PAN
+            self.pans[OP_PAN]["daxiq_channel"] = 0
+            self.dump()
+        return out
+
+
+def test_create_notices_a_moved_dax_channel_and_never_reassigns_it():
+    from test_flex_owned_pan import OP_PAN
+    radio = PersistRadio()
+    radio.streams.clear(); radio.state.streams.clear()
+    o = _owned(radio)
+    pan = o.create(14.074)
+    assert o.displaced_dax == {"pan": OP_PAN, "channel": 1}
+    o.start_stream(96000)
+    assert o.dax_channel == 2                            # its own channel
+    assert not any(c.startswith("dax iq set") and f"pan=0x{OP_PAN:08X}" in c for c in radio.cmds)
+    assert not any(c.startswith("dax iq set 1 ") for c in radio.cmds)
+    o.teardown()
+    assert _touches_operator(radio.cmds) == []
+
+
+def test_create_without_band_memory_notices_nothing():
+    radio = FakeRadio()
+    o = _owned(radio)
+    o.create(24.912)
+    assert o.displaced_dax is None

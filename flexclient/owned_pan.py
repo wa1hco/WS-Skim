@@ -33,8 +33,13 @@ Safety rules (an early test removed an operator's slices)
   still matches, are ever changed or removed.
 * Nothing is created when the radio reported no panadapters at all (the
   status snapshot is then not trustworthy).
-* ``tx`` is never set on any slice.  DAX channel 1 is used only when no pan
-  or stream has it.
+* ``tx`` is set in exactly one case (Jeff's decision, Nov 23, 2026): after
+  our slice transmitted and the radio is back to receive, ``slice set <n>
+  tx=1`` gives transmit back to the slice that held it before, if that
+  slice still exists and is not ours.  ``xmit`` is never sent.  DAX channel
+  1 is used only when no pan or stream has it.
+* A DAX IQ channel the radio moves off another pan while we create ours is
+  noticed and reported, never re-assigned by us.
 * For WSJT-X for WS Skim our slice may be held at a dial (``hold_slice``)
   and given a DAX audio channel (``set_dax_audio``); both only on our slice.
 """
@@ -102,6 +107,14 @@ class RadioState:
         self.daxiq_available: Optional[int] = None
         self.daxiq_capacity: Optional[int] = None
         self.lines_seen = 0
+        #: Interlock state (READY, PTT_REQUESTED, TRANSMITTING, UNKEY_REQUESTED...).
+        self.interlock_state: str = ""
+        #: Slice that last held the transmit flag.
+        self.last_tx_slice: Optional[int] = None
+        #: slice -> slice that held tx just before tx moved to it.
+        self.tx_from: Dict[int, Optional[int]] = {}
+        #: Slices that actually transmitted since tx last moved to them.
+        self.keyed: set = set()
 
     def feed(self, line: str) -> None:
         """Absorb one ``S<handle>|...`` status line (others are ignored)."""
@@ -145,6 +158,16 @@ class RadioState:
                     self.slices.pop(n, None)
                     return
                 entry = self.slices.setdefault(n, {})
+                if kv.get("tx") == "1" and entry.get("tx") != "1":
+                    prev = self.last_tx_slice
+                    if prev is None or prev == n:
+                        prev = next((m for m, sl in self.slices.items()
+                                     if m != n and sl.get("tx") == "1"), prev)
+                    if prev != n:
+                        self.tx_from[n] = prev
+                        self.keyed.discard(n)
+                if kv.get("tx") == "1":
+                    self.last_tx_slice = n
                 if "pan" in kv:
                     entry["pan"] = _hex(kv["pan"])
                 if "RF_frequency" in kv:
@@ -167,6 +190,15 @@ class RadioState:
                 entry.update({k: v for k, v in kv.items()
                               if k in ("type", "daxiq_channel", "pan", "daxiq_rate",
                                        "client_handle", "active")})
+            elif toks[0] == "interlock":
+                kv = _kv(payload)
+                st = kv.get("state")
+                if st:
+                    self.interlock_state = st
+                    if st in ("PTT_REQUESTED", "TRANSMITTING"):
+                        for m, sl in self.slices.items():
+                            if sl.get("tx") == "1":
+                                self.keyed.add(m)
             elif toks[0] == "radio":
                 kv = _kv(payload)
                 if "daxiq_available" in kv:
@@ -321,6 +353,14 @@ class OwnedPan:
         self.slice_hold_mhz: Optional[float] = None
         #: DAX audio channel put on our slice for WSJT-X for WS Skim (None: leave).
         self.dax_audio_channel: Optional[int] = None
+        #: Give transmit back to the operator's slice after our slice sent.
+        self.handback_enabled = True
+        #: Slice transmit went back to last time, and any problem (for the UI).
+        self.handback_last: Optional[int] = None
+        self.handback_note: str = ""
+        #: Set when the radio moved a DAX IQ channel off a pan that is not
+        #: ours while we created our pan (see ``create``).
+        self.displaced_dax: Optional[dict] = None
         self._last_check = 0.0
         self._last_resteer = -1e9
         self._lock = threading.RLock()
@@ -444,6 +484,8 @@ class OwnedPan:
         with self._lock:
             self.require_snapshot()
             slices_before = self.state.slice_ids()
+            with self.state.lock:
+                dax_before = {p: str(v.get("daxiq_channel") or "0") for p, v in self.state.pans.items()}
             x, y = PAN_PIXELS
             resp = self._send(f"display pan c freq={center_mhz:.6f} x={x} y={y}", timeout=6.0)
             ids = [t.strip() for t in resp.strip().split(",") if t.strip()]
@@ -487,6 +529,7 @@ class OwnedPan:
                                     slice_id)
             else:
                 log.warning("No slice came with panadapter 0x%08X; its centre may not steer", pan)
+            self._check_displaced_dax(pan, dax_before)
             if rxant:
                 try:
                     self._send(f"display pan set 0x{pan:08X} rxant={rxant}", retry=True)
@@ -526,6 +569,81 @@ class OwnedPan:
                     self.state.pans.setdefault(self.pan_id, {})["center"] = applied
             self._last_check = self._clock()
             return applied
+
+    def _check_displaced_dax(self, pan: int, before: Dict[int, str]) -> None:
+        """Band persistence can put a DAX IQ channel on a new pan, taking it
+        off another pan (seen Nov 23: channel 1 moved from the operator's
+        pan to a new 20 m pan).  We never re-assign a channel on a pan that is
+        not ours, so this only notices it: our stream later takes its own
+        free channel, which releases the moved one from our pan, and the UI
+        tells the operator which pan lost which channel."""
+        with self.state.lock:
+            ours = str(self.state.pans.get(pan, {}).get("daxiq_channel") or "0")
+            now = {p: str(v.get("daxiq_channel") or "0") for p, v in self.state.pans.items()}
+        if ours in ("0", ""):
+            return
+        for p, ch in before.items():
+            if p == pan or ch != ours:
+                continue
+            if now.get(p, "0") != ch:
+                self.displaced_dax = {"pan": p, "channel": int(ch)}
+                log.warning("The radio moved DAX IQ channel %s from panadapter 0x%08X to "
+                            "WS Skim's new panadapter 0x%08X (band memory).  WS Skim does not "
+                            "change other panadapters; it will use its own channel, and "
+                            "channel %s can be set on 0x%08X again in SmartSDR if it is used.",
+                            ch, p, pan, ch, p)
+                return
+
+    def handback_tx(self) -> Optional[int]:
+        """After our slice transmitted, give the transmit flag back to the slice
+        that held it before (the operator's).  Jeff's decision, Nov 23, 2026.
+
+        Only ``slice set <n> tx=1`` on that earlier slice, only once the
+        radio is back to receive after a transmission on our slice, and only
+        if that slice still exists and is not ours.  Never keys the radio.
+        Returns the slice transmit was given to, or None.
+        """
+        if not self.handback_enabled or self.slice_id is None:
+            return None
+        ours = self.slice_id
+        with self.state.lock:
+            sl = self.state.slices.get(ours, {})
+            if sl.get("tx") != "1" or ours not in self.state.keyed:
+                return None
+            if self.state.interlock_state not in ("READY", "RECEIVE", ""):
+                return None             # still sending (or unkeying)
+            if not self.state.interlock_state:
+                return None
+            target = self.state.tx_from.get(ours)
+            exists = target is not None and target != ours and target in self.state.slices \
+                and self.state.slices[target].get("in_use", "1") != "0"
+            self.state.keyed.discard(ours)
+        if not exists:
+            self.handback_note = ("Transmit is on WS Skim's slice and the slice that had it "
+                                  "before is gone; click TX on your own slice.")
+            log.warning("Not handing transmit back: the slice that had it before (%s) is gone",
+                        target)
+            return None
+        try:
+            self._send(f"slice set {target} tx=1", retry=True)
+        except RuntimeError as exc:
+            self.handback_note = f"Could not give transmit back to your slice: {exc}"
+            log.warning("Could not hand transmit back to slice %s: %s", target, exc)
+            return None
+        self.handback_last = target
+        self.handback_note = ""
+        log.info("Transmit handed back to slice %s after WS Skim's slice %s sent", target, ours)
+        return target
+
+    def handback_pending(self) -> bool:
+        """Our slice holds tx after sending and will give it back on unkey."""
+        if self.slice_id is None:
+            return False
+        with self.state.lock:
+            t = self.state.tx_from.get(self.slice_id)
+            return (self.state.slices.get(self.slice_id, {}).get("tx") == "1"
+                    and self.slice_id in self.state.keyed
+                    and t is not None and t in self.state.slices)
 
     #: A held slice further than this from the pan centre is let go (kHz);
     #: it would leave the received band (and drag the pan along with it).

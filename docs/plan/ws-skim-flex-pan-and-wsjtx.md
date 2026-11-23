@@ -134,7 +134,7 @@ check created was ever changed or removed.
    pan for that moment, which left the operator's pan 0x40000000 with
    `daxiq_channel=0` (nothing was streaming on channel 1; WS Skim's
    follow-mode sets it again when used).  Stage 1's create path could see
-   the same band-persistence channel move; worth a guard.
+   the same band-persistence channel move; guarded in test.27 (below).
 5. **Pan follows the slice.**  Not measurable with a test slice (see 4).
    Hamlib's `autopan=1` and Stage 1 ("a slice near the edge would drag the
    pan back") say the pan follows a slice tuned off-screen; WS Skim keeps
@@ -167,12 +167,36 @@ check created was ever changed or removed.
   B. Click TX on your own slice before you talk or send CW." while that
   is so.
 
+## TX hand-back and DAX IQ guard (test.27)
+
+- **Hand-back.**  RadioState tracks the slice that last had `tx=1`; when
+  tx moves to a slice it remembers where it came from (`tx_from`), and
+  when the interlock goes PTT_REQUESTED / TRANSMITTING it marks the slices
+  holding tx as having sent (`keyed`).  The owned-pan loop (woken on every
+  interlock change) calls `OwnedPan.handback_tx()`: only when our slice
+  holds tx, has sent since tx came to it, and the interlock is back to
+  READY/RECEIVE, it sends exactly `slice set <earlier> tx=1` — only if
+  that slice still exists and is not ours.  Otherwise it warns.  No `xmit`
+  ever.  If the radio makes our slice tx without a transmission (operator
+  clicked it, or ours is the only slice), nothing is sent.
+- **DAX IQ guard.**  Safe design = detect and report, never restore.
+  `create()` snapshots every pan's `daxiq_channel` before `display pan c`;
+  if the new pan got channel c and a pan that is not ours lost c,
+  `displaced_dax` is set, a warning is logged and View → Flex Radio shows
+  it.  Restoring would mean `dax iq set c pan=<their pan>` — a change to a
+  pan we do not own, and on the radio the channel can only be on one pan,
+  so it could also fight the operator's DAX program.  `start_stream()`
+  always picks its own free channel (2–4), so the moved channel is
+  released from our pan; the operator's own program (SmartSDR DAX, WS Skim
+  follow mode) sets it again when it is used.
+- Not built (by decision): halting WSJT-X for WS Skim when the operator
+  keys.
+
 ## Decisions for Jeff
 
-- TX hand-back: leave as is (warning only), or let WS Skim give TX back
-  to the operator's slice (or clear it from its own slice) after each
-  WSJT-X for WS Skim transmission.  Either breaks the "never set tx" rule,
-  so it needs an explicit yes.
+- TX hand-back: **decided Nov 23 — hand TX back** (Jeff: "Have WS Skim
+  hand TX back to my slice after each Skim transmission").  Built in
+  test.27, see below.
 - Operator keying mid-period: no automatic stop with CAT PTT.  Options:
   WS Skim sends Halt Tx (UDP type 8) when the interlock shows a transmit
   from another slice, or switch that WSJT-X to RTS/DTR PTT so TX Inhibit
