@@ -35,6 +35,8 @@ Safety rules (an early test removed an operator's slices)
   status snapshot is then not trustworthy).
 * ``tx`` is never set on any slice.  DAX channel 1 is used only when no pan
   or stream has it.
+* For WSJT-X for WS Skim our slice may be held at a dial (``hold_slice``)
+  and given a DAX audio channel (``set_dax_audio``); both only on our slice.
 """
 
 from __future__ import annotations
@@ -147,7 +149,8 @@ class RadioState:
                     entry["pan"] = _hex(kv["pan"])
                 if "RF_frequency" in kv:
                     entry["freq"] = _mhz(kv["RF_frequency"])
-                for k in ("in_use", "tx", "audio_mute", "rxant", "client_handle", "mode"):
+                for k in ("in_use", "tx", "audio_mute", "rxant", "client_handle", "mode",
+                          "index_letter", "dax"):
                     if k in kv:
                         entry[k] = kv[k]
             elif toks[0] == "stream" and len(toks) >= 2:
@@ -313,6 +316,11 @@ class OwnedPan:
         self.target_center_mhz: Optional[float] = None
         self.reported_center_mhz: Optional[float] = None
         self.resteer_count = 0
+        #: Where our slice is held for WSJT-X for WS Skim (MHz), or None to
+        #: park it at the pan centre.
+        self.slice_hold_mhz: Optional[float] = None
+        #: DAX audio channel put on our slice for WSJT-X for WS Skim (None: leave).
+        self.dax_audio_channel: Optional[int] = None
         self._last_check = 0.0
         self._last_resteer = -1e9
         self._lock = threading.RLock()
@@ -470,6 +478,8 @@ class OwnedPan:
                     self._send(f"slice set {slice_id} audio_mute=1", retry=True)
                 except RuntimeError as exc:
                     log.warning("Could not mute slice %s: %s", slice_id, exc)
+                if self.dax_audio_channel:
+                    self.set_dax_audio(self.dax_audio_channel)
                 with self.state.lock:
                     if self.state.slices.get(slice_id, {}).get("tx") == "1":
                         log.warning("The radio made WS Skim's slice %s the transmit slice "
@@ -505,8 +515,9 @@ class OwnedPan:
             except RuntimeError as exc:
                 log.warning("Could not set pan centre %.6f: %s", c, exc)
             if self.slice_id is not None:
+                park = self.park_mhz(c)
                 try:
-                    self._send(f"slice tune {self.slice_id} {c:.6f}", retry=True)
+                    self._send(f"slice tune {self.slice_id} {park:.6f}", retry=True)
                 except RuntimeError as exc:
                     log.warning("Could not park slice %s: %s", self.slice_id, exc)
             if applied is not None:
@@ -515,6 +526,76 @@ class OwnedPan:
                     self.state.pans.setdefault(self.pan_id, {})["center"] = applied
             self._last_check = self._clock()
             return applied
+
+    #: A held slice further than this from the pan centre is let go (kHz);
+    #: it would leave the received band (and drag the pan along with it).
+    HOLD_MAX_OFFSET_KHZ = 40.0
+
+    def park_mhz(self, center_mhz: float) -> float:
+        """Where our slice goes when the pan centre is ``center_mhz``: the
+        WSJT-X hold frequency when it is inside the received band, else the
+        centre (a band change lets go of the hold)."""
+        hold = self.slice_hold_mhz
+        if hold is not None and abs(hold - center_mhz) * 1000.0 <= self.HOLD_MAX_OFFSET_KHZ:
+            return round(hold, 6)
+        if hold is not None:
+            log.info("Letting go of slice hold %.6f (pan centre now %.6f)", hold, center_mhz)
+            self.slice_hold_mhz = None
+        return round(float(center_mhz), 6)
+
+    def hold_slice(self, freq_mhz: Optional[float]) -> bool:
+        """Tune OUR slice to ``freq_mhz`` and keep it there (None: back to the
+        centre).  Returns False when there is no slice of ours or the
+        frequency is outside the received band."""
+        with self._lock:
+            if self.slice_id is None or not self.pan_id:
+                return False
+            centre = self.target_center_mhz
+            if freq_mhz is not None and centre is not None and \
+                    abs(float(freq_mhz) - centre) * 1000.0 > self.HOLD_MAX_OFFSET_KHZ:
+                return False
+            self.slice_hold_mhz = None if freq_mhz is None else round(float(freq_mhz), 6)
+            target = self.slice_hold_mhz if self.slice_hold_mhz is not None else centre
+            if target is None:
+                return True
+            try:
+                self._send(f"slice tune {self.slice_id} {target:.6f}", retry=True)
+            except RuntimeError as exc:
+                log.warning("Could not tune slice %s: %s", self.slice_id, exc)
+                return False
+            return True
+
+    def set_dax_audio(self, channel: Optional[int]) -> bool:
+        """Put DAX audio ``channel`` on OUR slice (for WSJT-X for WS Skim)."""
+        with self._lock:
+            self.dax_audio_channel = int(channel) if channel else None
+            if self.slice_id is None or not self.dax_audio_channel:
+                return False
+            try:
+                self._send(f"slice set {self.slice_id} dax={self.dax_audio_channel}", retry=True)
+            except RuntimeError as exc:
+                log.warning("Could not set DAX audio channel %s on slice %s: %s",
+                            self.dax_audio_channel, self.slice_id, exc)
+                return False
+            return True
+
+    @property
+    def slice_letter(self) -> Optional[str]:
+        if self.slice_id is None:
+            return None
+        with self.state.lock:
+            letter = self.state.slices.get(self.slice_id, {}).get("index_letter")
+        if letter:
+            return str(letter)
+        return chr(ord("A") + int(self.slice_id)) if 0 <= int(self.slice_id) < 8 else None
+
+    @property
+    def tx_on_our_slice(self) -> bool:
+        """True when the radio's transmit slice is ours (WS Skim never sets it)."""
+        if self.slice_id is None:
+            return False
+        with self.state.lock:
+            return self.state.slices.get(self.slice_id, {}).get("tx") == "1"
 
     def verify_center(self) -> Optional[float]:
         """Re-read our pan's centre from the radio."""

@@ -45,7 +45,9 @@ MSG_HEARTBEAT = 0
 MSG_STATUS = 1
 MSG_DECODE = 2
 MSG_CLEAR = 3
+MSG_REPLY = 4
 MSG_CLOSE = 6
+MSG_CONFIGURE = 15
 
 QUINT32_MAX = 0xFFFFFFFF
 HEARTBEAT_INTERVAL_S = 15  # NetworkMessage::pulse
@@ -549,6 +551,45 @@ def rf_dial_audio(decode: dict, fallback_dial_hz: int = 0) -> tuple[int, int, fl
     return int(rf), int(dial_hz), audio_out
 
 
+def build_reply(decode: dict, id: str, modifiers: int = 0,
+                schema: int = SCHEMA) -> bytes:
+    """Reply (type 4): ask WSJT-X ``id`` to answer one of ITS OWN decodes.
+
+    ``decode`` is a Decode dict from :func:`parse` that came from that same
+    WSJT-X.  WSJT-X only acts on a Reply whose time, SNR, DT, DF, mode and
+    message match a decode it sent (3.3 keeps a list; older versions look
+    for the line in Band Activity), so the fields are echoed unchanged.
+    """
+    return (header(MSG_REPLY, id, schema)
+            + pack_u32(int(decode["time_ms"]))
+            + pack_i32(int(decode["snr"]))
+            + pack_f64(float(decode["delta_time"]))
+            + pack_u32(int(decode["delta_frequency"]))
+            + pack_utf8(decode.get("mode") or "")
+            + pack_utf8(decode.get("message") or "")
+            + pack_bool(bool(decode.get("low_confidence")))
+            + struct.pack(">B", int(modifiers) & 0xFF))
+
+
+def build_configure(id: str, mode: str | None = None, rx_df: int | None = None,
+                    dx_call: str | None = None, schema: int = SCHEMA) -> bytes:
+    """Configure (type 15): change WSJT-X ``id``'s mode / Rx DF / DX call.
+
+    Fields left as None mean "no change" (empty mode, 0xFFFFFFFF numbers,
+    null strings), as in ``NetworkMessage.hpp``.
+    """
+    return (header(MSG_CONFIGURE, id, schema)
+            + pack_utf8(mode or "")
+            + pack_u32_opt(None)             # frequency tolerance
+            + pack_utf8("")                  # submode
+            + pack_bool(False)               # fast mode
+            + pack_u32_opt(None)             # T/R period
+            + pack_u32_opt(rx_df)
+            + pack_utf8(dx_call)
+            + pack_utf8(None)                # DX grid
+            + pack_bool(False))              # generate messages
+
+
 def build_clear(id: str | None = None, schema: int = SCHEMA) -> bytes:
     """Clear (type 3) — outbound has no Window field (that is inbound-only)."""
     return header(MSG_CLEAR, id, schema)
@@ -658,6 +699,25 @@ def parse(data: bytes) -> dict | None:
             msg["message"] = r.utf8()
             msg["low_confidence"] = r.boolean()
             msg["off_air"] = r.boolean() if r._i < len(data) else False
+        elif mtype == MSG_REPLY:
+            msg["time_ms"] = r.u32()
+            msg["snr"] = r.i32()
+            msg["delta_time"] = r.f64()
+            msg["delta_frequency"] = r.u32()
+            msg["mode"] = r.utf8()
+            msg["message"] = r.utf8()
+            msg["low_confidence"] = r.boolean()
+            msg["modifiers"] = r.u8()
+        elif mtype == MSG_CONFIGURE:
+            msg["mode"] = r.utf8()
+            msg["frequency_tolerance"] = r.u32_opt()
+            msg["submode"] = r.utf8()
+            msg["fast_mode"] = r.boolean()
+            msg["tr_period"] = r.u32_opt()
+            msg["rx_df"] = r.u32_opt()
+            msg["dx_call"] = r.utf8()
+            msg["dx_grid"] = r.utf8()
+            msg["generate_messages"] = r.boolean()
         elif mtype in (MSG_CLEAR, MSG_CLOSE):
             pass
         else:

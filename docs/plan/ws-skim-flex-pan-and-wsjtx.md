@@ -1,6 +1,6 @@
 # WS Skim on the Flex: own panadapter, own slice, Skim WSJT-X
 
-Status: Stage 1 built (flexclient/owned_pan.py, ws_skim/flex_pan.py; option in View → Flex Radio, default off).  Stages 2 and 3 are plans.
+Status: Stage 1 built (flexclient/owned_pan.py, ws_skim/flex_pan.py; option in View → Flex Radio, default off).  Stage 2 checks done Nov 23 (below).  Stage 3 built (ws_skim/skim_wsjtx.py, skim_link.py, click_to_work.py; Set up WSJT-X button; roster double-click), not yet run end to end on the air.
 Live check on the 8600, Nov 22: own pan 0x40000001 + muted slice, DAX IQ ch 2, 96,000 samples/s (48,004 after switching to 48 kHz), centre 7.06235 confirmed by the radio, 52 FT8 and 6 FT4 decodes from one 15 s capture, dragged pan steered back, 20 m and back, crash leftover removed at the next start, radio left with only the operator's pan and stream.
 
 ## The scenario
@@ -79,6 +79,104 @@ until it ends.  The operator keying on SSB/CW always wins.
   Skim WSJT-X to call it (WSJT-X UDP Reply).  WSJT-X finishes and logs the
   QSO; WS Skim shows its TX state in the status bar.
 - TX inhibit rules match the user's other WSJT-X copies; operator keying wins.
+
+## Stage 2 findings (FLEX-8600M, SmartSDR v4.3.19, Nov 23, 2026)
+
+Read-mostly from desktop-jeff.  No tx set, no keying; only a test pan this
+check created was ever changed or removed.
+
+1. **Slice pinning (Linux rig control).**  Two routes exist:
+   - **nCAT** (kc2g-flex-tools, already running here): `-slice <letter>`
+     binds to the GUI client's slice with that `index_letter` once, at
+     start-up, and keeps its slice index.  Live: nCAT :4532 reads 7.255000
+     LSB (slice A, the operator's), nCAT :4533 reads 24.911000 LSB = WS
+     Skim's own slice (index 1, letter B, pan 0x40000001).  So WSJT-X with
+     "Hamlib NET rigctl" to localhost:4533 controls WS Skim's slice and
+     nothing else.
+   - **Hamlib "SmartSDR Slice A..H"** (models 23005-23012, Hamlib 4.6.5
+     and 4.7.2 here) talk straight to the radio on TCP 4992, slice chosen by
+     NUMBER (A=0..H=7), tune with `autopan=1`, PTT = `slice set <n> tx=1`
+     then `xmit`.  Not used (nCAT is already set up and binds by letter).
+   - SmartSDR CAT is Windows only.
+2. **DAX audio for the slice.**  nDAX `-slice B -daxch 2` sends
+   `slice set 1 dax=2` and `dax audio set 2 slice=1` once at start and
+   creates the PipeWire source `flex.sliceB.rx` (s16be mono 24 kHz).  Live:
+   slice 1 `dax=2 dax_clients=1`, stream `dax_rx dax_channel=2 slice=B`,
+   PipeWire source flex.sliceB.rx RUNNING.  TX audio: one shared sink
+   `flex.tx` from the slice-A nDAX; the radio sends it from whichever slice
+   transmits.  A test slice could not be used for `slice set <n> dax=` (see
+   4), so WS Skim only re-applies the channel nDAX already uses, on its own
+   slice, and only while that slice has the letter the setup was made for.
+3. **Transmit handoff (from code and API reading only, nothing keyed).**
+   nCAT `set_ptt`: if its slice is not the TX slice it sends
+   `slice set <n> tx=1`, then `xmit 1`; on release only `xmit 0`.  Hamlib
+   smartsdr does the same.  SmartSDR has one TX slice; making one TX clears
+   the others.  Nothing hands TX back, so after WSJT-X for WS Skim sends,
+   the operator's mic/CW key would transmit on WS Skim's slice until TX is
+   clicked on the operator's slice.  `transmit dax=1` is set (by nDAX A).
+   Jeff's WSJT-X 3.3.0-beta8-inhibit supports UDP TX Inhibit (types 17/18)
+   but it filters only RTS/DTR PTT, not CAT PTT, so it can't enforce
+   "operator keying wins" with nCAT.  **Needs Jeff's decision** (see
+   "Decisions for Jeff").
+4. **Survival / restart.**  From Stage 1: pan + slice survive our TCP
+   closing, WS Skim removes them on exit and at the next start after a
+   crash.  The radio gives a new slice the lowest free index (B when only
+   the operator's A exists), so a restarted WS Skim gets B again and nCAT /
+   nDAX (bound by index at their start) keep working; WS Skim re-applies
+   `dax=` on its slice.  If the letter changes (operator opened another
+   slice first), Set up WSJT-X must be pressed again and the helpers
+   started for the new letter; click-to-work refuses and says so.
+   New: **a third panadapter is closed at once by the front panel.**  With
+   the operator's pan and WS Skim's pan open, `display pan c` returned
+   0x40000002 with slice C, and within 70 ms client 0x6BBA9569
+   (SmartSDR-M) sent `slice 2 in_use=0` and `display pan 0x40000002
+   removed`.  Band persistence also moved DAX IQ channel 1 onto the new
+   pan for that moment, which left the operator's pan 0x40000000 with
+   `daxiq_channel=0` (nothing was streaming on channel 1; WS Skim's
+   follow-mode sets it again when used).  Stage 1's create path could see
+   the same band-persistence channel move; worth a guard.
+5. **Pan follows the slice.**  Not measurable with a test slice (see 4).
+   Hamlib's `autopan=1` and Stage 1 ("a slice near the edge would drag the
+   pan back") say the pan follows a slice tuned off-screen; WS Skim keeps
+   click-to-work dials within 40 kHz of its pan centre and lets go of a
+   held dial on a band change.
+
+## Stage 3 as built
+
+- **Set up WSJT-X** (View → Flex Radio): finds nCAT/nDAX for WS Skim's
+  slice letter in /proc, copies the operator's Flex WSJT-X settings
+  (`WSJT-X - flex.ini`, read only) into `WSJT-X - Skim.ini` (rig name
+  `Skim`, UDP id `WSJT-X - Skim`): Hamlib NET rigctl localhost:<nCAT
+  port>, PTT CAT, Data mode, audio in = nDAX source, out = TX sink, UDP =
+  the template's multicast group (224.0.0.73:2237, same interfaces/TTL),
+  Accept UDP requests on, band = WS Skim's band FT8 dial.  Refuses while
+  that WSJT-X runs.  Writes menu + desktop launchers "WSJT-X for WS Skim"
+  and links the shared wsjtx_log.adi when the template's log is a link.
+- **UDP design:** WS Skim joins 224.0.0.73:2237 bound to the group
+  address (so it never takes unicast meant for WS Hub on 127.0.0.1:2237),
+  keeps Status/Decodes from id `WSJT-X - Skim` only, and sends Reply /
+  Configure from a separate socket to the port WSJT-X sends from.  WS Hub
+  and GridTracker see that WSJT-X like any other.
+- **Click-to-work:** double-click a roster row (FT8/FT4) → WS Skim tunes
+  ITS slice to the standard dial holding the station (kept through
+  re-steers), sends Configure if WSJT-X is in the other mode, and when
+  WSJT-X decodes the station (within 150 s; decodes up to 30 s old
+  count) echoes that decode as Reply (type 4).  WSJT-X 3.3 accepts a
+  Reply only if it matches one of its own decodes exactly.
+- WS Skim never sets tx or keys; it shows "Transmit is on WS Skim's slice
+  B. Click TX on your own slice before you talk or send CW." while that
+  is so.
+
+## Decisions for Jeff
+
+- TX hand-back: leave as is (warning only), or let WS Skim give TX back
+  to the operator's slice (or clear it from its own slice) after each
+  WSJT-X for WS Skim transmission.  Either breaks the "never set tx" rule,
+  so it needs an explicit yes.
+- Operator keying mid-period: no automatic stop with CAT PTT.  Options:
+  WS Skim sends Halt Tx (UDP type 8) when the interlock shows a transmit
+  from another slice, or switch that WSJT-X to RTS/DTR PTT so TX Inhibit
+  works.
 
 ## Open questions
 

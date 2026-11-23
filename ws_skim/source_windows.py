@@ -676,6 +676,27 @@ def setup_flex_window(self, view_action):
     self._flex_own_pan_cb.toggled.connect(_on_own_pan_toggled)
     radio_form.addRow(self._flex_own_pan_cb)
 
+    # WSJT-X for WS Skim (click-to-work on WS Skim's own slice).
+    self._skim_wsjtx_btn = QtWidgets.QPushButton("Set up WSJT-X")
+    self._skim_wsjtx_btn.setStyleSheet(f"QPushButton {{ font-family: {_FONT}; font-size: {_FSZ}; }}")
+    self._skim_wsjtx_btn.setToolTip(
+        "Makes a separate WSJT-X, \"WSJT-X for WS Skim\", that runs on WS Skim's own\n"
+        "slice, and a launcher for it.  Then double-click a station in the roster\n"
+        "and that WSJT-X calls it.  Your other WSJT-X copies are not changed.\n"
+        "Needs \"WS Skim makes its own panadapter\" and nCAT + nDAX for WS Skim's slice.")
+    self._skim_wsjtx_btn.clicked.connect(lambda: _on_set_up_wsjtx(self))
+    radio_form.addRow(self._skim_wsjtx_btn)
+    self._skim_wsjtx_val = QtWidgets.QLabel("")
+    self._skim_wsjtx_val.setWordWrap(True)
+    self._skim_wsjtx_val.setStyleSheet(
+        f"QLabel {{ font-family: {_FONT}; font-size: {_FSZ}; color: #333333; }}")
+    radio_form.addRow(self._skim_wsjtx_val)
+    _skim_timer = QtCore.QTimer(win)
+    _skim_timer.setInterval(2000)
+    _skim_timer.timeout.connect(lambda: _refresh_skim_wsjtx(self))
+    _skim_timer.start()
+    self._skim_wsjtx_timer = _skim_timer
+
     radio_form.addRow("Status:",   _sl("_flex_status_val", "Idle", "#c76000"))
     radio_form.addRow("Model:",    _sl("_flex_model_val"))
     radio_form.addRow("Serial:",   _sl("_flex_serial_val"))
@@ -2299,3 +2320,64 @@ def _update_rtlsdr_window(self, sig_str, noise_str, rate_str, drops_str):
         for attr in ('_rtlsdr_index_val', '_rtlsdr_gain_val',
                      '_rtlsdr_hw_rate_val', '_rtlsdr_decim_val'):
             _setlbl(self, attr, "—")
+
+
+# ── WSJT-X for WS Skim (Set up WSJT-X button) ────────────────────────────────
+
+def _refresh_skim_wsjtx(self) -> None:
+    """Flex window line: WSJT-X for WS Skim state and the transmit-slice warning."""
+    lbl = getattr(self, '_skim_wsjtx_val', None)
+    if lbl is None:
+        return
+    try:
+        from . import click_to_work
+        if getattr(self, 'radio_client', None) is not None:
+            click_to_work.apply_dax_audio(self)
+        st = click_to_work.state(self)
+    except Exception as exc:
+        lbl.setText(f"WSJT-X for WS Skim: {exc}")
+        return
+    if not st.get("set_up"):
+        lbl.setText("")
+        return
+    text = st.get("text", "")
+    if st.get("warning"):
+        lbl.setText(f"{text}\n{st['warning']}")
+        lbl.setStyleSheet(lbl.styleSheet().replace("#333333", "#a03000"))
+    else:
+        lbl.setText(text)
+        lbl.setStyleSheet(lbl.styleSheet().replace("#a03000", "#333333"))
+
+
+def _on_set_up_wsjtx(self) -> None:
+    """Write WSJT-X for WS Skim's settings and launcher; explain the result."""
+    from . import skim_wsjtx, click_to_work
+    from . import wsjtx_udp as _wu
+    rc = getattr(self, 'radio_client', None)
+    letter = getattr(rc, 'own_slice_letter', None) if rc is not None else None
+    if rc is None or not getattr(rc, 'own_pan', False):
+        letter = None
+    freq_mhz = float(getattr(self, 'calling_freq_mhz', 0.0) or 0.0)
+    band = _wu.band_label(freq_mhz * 1e6) if freq_mhz else ""
+    dials = click_to_work.standard_dials_hz("FT8", band) if band else []
+    dial = dials[0] if dials else None
+    try:
+        from .roster_window import _station_from_settings
+        call, grid = _station_from_settings()
+    except Exception:
+        call, grid = "", ""
+    try:
+        plan = skim_wsjtx.plan_setup(letter, int(dial or freq_mhz * 1e6 or 14_074_000), "FT8",
+                                     my_call=call, my_grid=grid)
+        done = skim_wsjtx.set_up(plan)
+    except skim_wsjtx.SetupError as exc:
+        QtWidgets.QMessageBox.information(self._flex_win, "Set up WSJT-X", str(exc))
+        return
+    except OSError as exc:
+        QtWidgets.QMessageBox.warning(self._flex_win, "Set up WSJT-X",
+                                      f"WS Skim could not write the WSJT-X settings: {exc}")
+        return
+    click_to_work.apply_dax_audio(self)
+    click_to_work.link(self)
+    QtWidgets.QMessageBox.information(self._flex_win, "Set up WSJT-X",
+                                      skim_wsjtx.summary(plan, done))

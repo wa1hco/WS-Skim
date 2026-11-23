@@ -186,7 +186,10 @@ def setup_roster_window(self, view_action) -> None:
 
     session.set_log = _set_log  # type: ignore[method-assign]
 
-    server = RosterServer(session, choose_log=chooser.request)
+    from . import click_to_work
+    server = RosterServer(session, choose_log=chooser.request,
+                          work=lambda body: click_to_work.request(self, body),
+                          work_state=lambda: click_to_work.state(self))
     server.start()
 
     self._roster_session = session

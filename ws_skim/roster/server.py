@@ -44,10 +44,12 @@ class RosterServer:
     """Serve the roster on 127.0.0.1 and push live state over ``/events``."""
 
     def __init__(self, session: RosterSession, *, host: str = "127.0.0.1",
-                 port: int | None = None, choose_log=None):
+                 port: int | None = None, choose_log=None, work=None, work_state=None):
         self.session = session
         self.host = host
         self.choose_log = choose_log  # callable, may be a Qt signal emit
+        self.work = work              # click-to-work: callable(body) -> {"ok", "message"}
+        self.work_state = work_state  # callable() -> dict shown above the roster
         self._httpd: _QuietHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -125,7 +127,13 @@ class RosterServer:
 
     def snapshot(self) -> dict:
         with self._lock:
-            return self.session.snapshot()
+            snap = self.session.snapshot()
+        if self.work_state is not None:
+            try:
+                snap["work"] = self.work_state()
+            except Exception as exc:
+                snap["work"] = {"text": "", "warning": "", "error": str(exc)}
+        return snap
 
     def _handler(self):
         server = self
@@ -215,6 +223,17 @@ class RosterServer:
                         return
                     ok = server.session.set_log(str(raw), title=body.get("title"))
                     self._json({"ok": ok, "log": server.session.log.public()})
+                    return
+                if path == "/api/work":
+                    if server.work is None:
+                        self._json({"ok": False, "message": "Click-to-work is not available."}, 400)
+                        return
+                    try:
+                        res = server.work(body)
+                    except Exception as exc:
+                        self._json({"ok": False, "message": str(exc)}, 500)
+                        return
+                    self._json(res if isinstance(res, dict) else {"ok": bool(res)})
                     return
                 if path == "/api/checklist":
                     items = body.get("items") or body

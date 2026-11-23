@@ -26,6 +26,15 @@ Each released version has a matching git tag (e.g. ``v0.1.1-alpha``).
 
 ### Added
 
+- **Flex: work a station from the roster (WSJT-X for WS Skim).**  A new
+  **Set up WSJT-X** button in View → Flex Radio makes a separate WSJT-X,
+  "WSJT-X for WS Skim", that runs on WS Skim's own slice (through the
+  nCAT and nDAX helpers for that slice), plus a launcher for it.  Your
+  other WSJT-X copies are not changed.  With it running, double-click a
+  station in the roster: WS Skim tunes its slice to the station and,
+  when that WSJT-X decodes it, tells it to call.  WS Skim warns when
+  transmit is left on its slice.  Linux for now.  See
+  docs/flexradio-setup.md.
 - **Flex: WS Skim can make its own panadapter.**  Tick **WS Skim makes
   its own panadapter** in View → Flex Radio.  WS Skim opens a pan of its
   own (with a muted slice) on the radio, keeps it on the band from the

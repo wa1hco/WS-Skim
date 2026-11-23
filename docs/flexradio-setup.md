@@ -40,6 +40,51 @@ before you transmit.
 With the box unticked WS Skim follows your SmartSDR panadapter as before,
 at 48 kHz. Changing the box reconnects to the radio.
 
+Note: the radio's front panel (SmartSDR-M) shows at most two
+panadapters. With WS Skim's pan open, a third pan opened from a program
+is closed by the front panel right away, so keep to one pan of your own.
+
+## Work a station from the roster (WSJT-X for WS Skim)
+
+WS Skim can hand a station you see in its roster to a WSJT-X of its own,
+"WSJT-X for WS Skim", which works it on WS Skim's slice while you carry
+on with SSB, CW or your usual WSJT-X on your own slice. Linux only for
+now. It needs:
+
+- **WS Skim makes its own panadapter** ticked (above);
+- the nCAT and nDAX helpers running for WS Skim's slice letter (usually
+  B), the same way you run them for your own slices.
+
+Then:
+
+1. In **View → Flex Radio**, press **Set up WSJT-X**. WS Skim finds the
+   helpers for its slice, copies your Flex WSJT-X settings (call, grid,
+   colours, log) into a separate copy, and points that copy at WS Skim's
+   slice, its DAX audio and the same network group as your other WSJT-X.
+   It also adds a **WSJT-X for WS Skim** launcher to your menu and
+   desktop. Your own WSJT-X settings are not changed. Close WSJT-X for
+   WS Skim before pressing the button again; WS Skim won't change its
+   settings while it runs.
+2. Start **WSJT-X for WS Skim** from its launcher.
+3. In the roster, double-click a station (FT8 or FT4). WS Skim tunes its
+   slice to that station's frequency and, when WSJT-X for WS Skim decodes
+   the station (usually the next period), tells it to call, just as if
+   you had double-clicked the station in WSJT-X. WSJT-X for WS Skim then
+   runs the contact and logs it.
+
+The line under the button (and above the roster) shows what WSJT-X for
+WS Skim is doing.
+
+Transmitting: the radio has one transmitter and one transmit slice.
+When WSJT-X for WS Skim transmits, the transmit slice moves to WS Skim's
+slice and stays there afterwards. Before you talk or send CW, click TX on
+your own slice. WS Skim shows a warning while transmit is left on its
+slice. WS Skim itself never keys the radio or moves transmit.
+
+Change bands with WS Skim's Band pulldown, not in WSJT-X for WS Skim:
+WS Skim keeps its pan, and the slice with it, on the band it is
+decoding.
+
 ## How it connects
 
 - **Discovery:** finds the radio with a UDP broadcast.

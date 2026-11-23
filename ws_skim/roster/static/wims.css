@@ -418,3 +418,7 @@ button.azbtn:hover { background: #eef4fb; }
 #log-line button, #checklist-line button { font: inherit; }
 #checklist-line label { margin-right: 10px; }
 #ros-modes { margin-left: 8px; }
+
+/* Click-to-work (WSJT-X for WS Skim) */
+#ros-body tr.workable { cursor: pointer; }
+#work-line .work-warn { color: #a03000; font-weight: 600; }

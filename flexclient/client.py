@@ -126,6 +126,8 @@ class FlexDAXIQ:
         self._owned_req_lock  = threading.Lock()
         self._owned_want_center = None  # latest requested centre (MHz)
         self._owned_want_rate   = None  # latest requested DAX IQ rate
+        self._owned_want_hold   = None  # ("hold", MHz or None) for WSJT-X for WS Skim
+        self._owned_want_dax    = None  # DAX audio channel for our slice
         self._owned_wake      = threading.Event()
         self._owned_stop      = threading.Event()
         self._owned_thread    = None
@@ -359,6 +361,37 @@ class FlexDAXIQ:
             self._owned_want_rate = int(rate)
         self._owned_wake.set()
 
+    def hold_slice(self, freq_mhz) -> None:
+        """Tune WS Skim's own slice to ``freq_mhz`` and keep it there (None:
+        park it at the pan centre again).  Used by click-to-work."""
+        with self._owned_req_lock:
+            self._owned_want_hold = ("hold", None if freq_mhz is None else round(float(freq_mhz), 6))
+        self._owned_wake.set()
+
+    def set_dax_audio(self, channel, letter) -> None:
+        """DAX audio ``channel`` for WS Skim's own slice, applied only while
+        that slice has letter ``letter`` (the nDAX for that letter serves the
+        channel; on another letter it could take the channel from a slice of
+        the operator's)."""
+        with self._owned_req_lock:
+            self._owned_want_dax = (int(channel), str(letter).upper()) if channel and letter else None
+        self._owned_wake.set()
+
+    @property
+    def own_slice_letter(self):
+        owned = self.owned
+        return owned.slice_letter if owned is not None else None
+
+    @property
+    def own_slice_held_mhz(self):
+        owned = self.owned
+        return owned.slice_hold_mhz if owned is not None else None
+
+    @property
+    def tx_on_own_slice(self) -> bool:
+        owned = self.owned
+        return bool(owned is not None and owned.tx_on_our_slice)
+
     @property
     def wanted_rate(self) -> int:
         with self._owned_req_lock:
@@ -385,11 +418,17 @@ class FlexDAXIQ:
             try:
                 with self._owned_req_lock:
                     c, r = self._owned_want_center, self._owned_want_rate
+                    hold, self._owned_want_hold = self._owned_want_hold, None
+                    dax = self._owned_want_dax
                 if c is not None and (owned.target_center_mhz is None
                                       or abs(c - owned.target_center_mhz) > 1e-6):
                     owned.steer(c)
                 if r is not None and r != owned.rate:
                     owned.set_rate(r)
+                if dax and dax[0] != owned.dax_audio_channel and owned.slice_letter == dax[1]:
+                    owned.set_dax_audio(dax[0])
+                if hold is not None:
+                    owned.hold_slice(hold[1])
                 owned.check()
                 if owned.reported_center_mhz is not None:
                     self._dax_setup.pan_frequency_mhz = owned.reported_center_mhz

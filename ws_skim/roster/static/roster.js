@@ -338,9 +338,57 @@ function rosPassesFilters(c, selectedBands, selectedModes, maxAge) {
   return true;
 }
 
+let _rosRows = new Map();
+let _workReady = false;
+let _workNote = "";
+let _workNoteAt = 0;
+
+function rosWorkRow(id) {
+  const c = _rosRows.get(id);
+  if (!c) return;
+  _workNote = "Asking WSJT-X for WS Skim to work " + c.call + "…";
+  _workNoteAt = Date.now();
+  renderWork(_state);
+  fetch("/api/work", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({call: c.call, mode: c.mode, freq_hz: c.freq_hz, band: c.band, grid: c.grid})})
+    .then(r => r.json())
+    .then(res => { _workNote = (res && res.message) || ""; _workNoteAt = Date.now(); renderWork(_state); })
+    .catch(() => { _workNote = "WS Skim did not answer."; renderWork(_state); });
+}
+
+function renderWork(s) {
+  const el = $("work-line");
+  if (!el) return;
+  const w = (s && s.work) || null;
+  _workReady = !!(w && w.set_up);
+  if (!w || !w.set_up) { el.hidden = true; return; }
+  el.hidden = false;
+  if (_workNote && Date.now() - _workNoteAt > 20000) _workNote = "";
+  const parts = [esc(w.text || "")];
+  if (_workNote) parts.push(esc(_workNote));
+  else if (w.event) parts.push(esc(w.event));
+  let html = parts.join(" · ");
+  if (w.warning) html += ' <span class="work-warn">' + esc(w.warning) + "</span>";
+  el.innerHTML = html;
+}
+
 function rosWire() {
   if (_rosWired) return;
   _rosWired = true;
+  // The rows are rebuilt every second, so a browser "dblclick" can miss;
+  // two clicks on the same station within 600 ms count as a double-click.
+  let lastClick = {id: "", t: 0};
+  $("ros-body").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr"); if (!tr || !tr.dataset.row) return;
+    if (!_workReady) return;
+    const now = Date.now();
+    if (lastClick.id === tr.dataset.row && now - lastClick.t < 600) {
+      lastClick = {id: "", t: 0};
+      rosWorkRow(tr.dataset.row);
+    } else {
+      lastClick = {id: tr.dataset.row, t: now};
+    }
+  });
   $("ros-head").addEventListener("click", (e) => {
     const th = e.target.closest("th"); if (!th) return;
     const key = th.dataset.key;
@@ -426,6 +474,7 @@ function rosDraw() {
       `${needNote} · ${r.not_needed} worked · ${r.count} heard · showing ${rows.length} · ${bandNote}`;
   }
   const body = $("ros-body"); body.innerHTML = "";
+  _rosRows = new Map();
   const empty = $("ros-empty");
   if (empty) {
     if (rows.length) empty.style.display = "none";
@@ -446,8 +495,12 @@ function rosDraw() {
     if (c.chase === "unconfirmed") classes.push("unconfirmed");
     if (!c.is_needed) classes.push("dupe");
     tr.className = classes.join(" ");
-    if (c.id) tr.dataset.row = c.id;
-    if (c.need_reason) tr.title = c.need_reason;
+    if (c.id) { tr.dataset.row = c.id; _rosRows.set(c.id, c); }
+    if (_workReady && (c.mode === "FT8" || c.mode === "FT4")) {
+      tr.classList.add("workable");
+      tr.title = (c.need_reason ? c.need_reason + " " : "") + "Double-click to work " + c.call + " with WSJT-X for WS Skim.";
+    }
+    if (c.need_reason && !tr.title) tr.title = c.need_reason;
     tr.innerHTML = vis.map(col => `<td class="${col.cls}">${col.cell(c)}</td>`).join("");
     body.appendChild(tr);
   }
@@ -512,6 +565,7 @@ function renderState(s) {
   }
   renderLog(s);
   renderChecklist(s);
+  renderWork(s);
   const clock = $("clock");
   if (clock && s && s.now) {
     const d = new Date(s.now * 1000);
